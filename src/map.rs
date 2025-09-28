@@ -240,6 +240,7 @@ impl<T> HashMapNZ64<T> {
   /// Panics when allocation fails. If that happens, it is possible for the map
   /// to leak an arbitrary set of items, but the map will remain in a valid
   /// state.
+
   #[inline]
   pub fn insert(&mut self, key: NonZeroU64, value: T) -> Option<T> {
     let l = self.limit as *mut Item<T>;
@@ -291,6 +292,9 @@ impl<T> HashMapNZ64<T> {
 
     return None;
   }
+
+  /// Removes the given key from the map. Returns the previous value associated
+  /// with the given key, if one was present.
 
   #[inline]
   pub fn remove(&mut self, key: NonZeroU64) -> Option<T> {
@@ -383,9 +387,10 @@ impl<T> HashMapNZ64<T> {
 
       loop {
         unsafe { ptr::write(&raw mut (*a).hash, 0) };
-        a = a.wrapping_add(1);
 
-        if a == l { break; } // NB: The last slot is empty.
+        if a == l { break; }
+
+        a = a.wrapping_add(1);
       }
 
       self.space = c as isize;
