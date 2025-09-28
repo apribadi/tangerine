@@ -1,4 +1,4 @@
-cargo-features = [ "profile-rustflags" ]
+# cargo-features = [ "profile-rustflags" ]
 
 [package]
 authors = ["Aaron Pribadi <aaron.pribadi@gmail.com>"]
@@ -23,6 +23,6 @@ dandelion-random = { version = "0.2.0", features = ["thread_local"] }
 [dev-dependencies]
 
 [profile.release]
-rustflags = [ "-C", "no-vectorize-loops", "-C", "no-vectorize-slp" ]
+# rustflags = [ "-C", "no-vectorize-loops", "-C", "no-vectorize-slp" ]
 
 [profile.dev]

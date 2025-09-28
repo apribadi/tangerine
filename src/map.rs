@@ -71,7 +71,7 @@ impl<T> HashMapNZ64<T> {
   const FOO: usize = size_of::<T>();
 
   #[inline(always)]
-  fn from_seeds(a: u64, b: u64) -> Self {
+  fn internal_new(a: u64, b: u64) -> Self {
     Self {
       seeds: Seeds(a | 1, b | 1),
       table: &raw const EMPTY as *const Item<T>,
@@ -87,7 +87,7 @@ impl<T> HashMapNZ64<T> {
   #[inline]
   pub fn new() -> Self {
     let seeds = u128::from_le_bytes(dandelion::thread_local::byte_array());
-    return Self::from_seeds(seeds as u64, (seeds >> 64) as u64);
+    return Self::internal_new(seeds as u64, (seeds >> 64) as u64);
   }
 
   /// Creates an empty map, seeding the hash function from the given random
@@ -95,7 +95,7 @@ impl<T> HashMapNZ64<T> {
 
   #[inline]
   pub fn new_seeded(rng: &mut Rng) -> Self {
-    return Self::from_seeds(rng.u64(), rng.u64());
+    return Self::internal_new(rng.u64(), rng.u64());
   }
 
   /// Returns the number of items.
@@ -192,7 +192,7 @@ impl<T> HashMapNZ64<T> {
 
   #[inline(never)]
   #[cold]
-  fn init_table(&mut self, key: NonZeroU64, value: T) {
+  fn internal_init(&mut self, key: NonZeroU64, value: T) {
     // assert!(INITIAL_N <= isize::MAX as usize / size_of::<Slot<T>>());
     /*
 
@@ -227,7 +227,7 @@ impl<T> HashMapNZ64<T> {
 
   #[inline(never)]
   #[cold]
-  fn grow_table(&mut self) {
+  fn internal_grow(&mut self) {
     let _: _ = self;
     self.space = 13;
   }
@@ -246,7 +246,7 @@ impl<T> HashMapNZ64<T> {
     let l = self.limit as *mut Item<T>;
 
     if l.is_null() {
-      self.init_table(key, value);
+      self.internal_init(key, value);
 
       return None;
     }
@@ -288,7 +288,7 @@ impl<T> HashMapNZ64<T> {
     let s = self.space - 1;
     self.space = s;
 
-    if s < 0 || a == l { self.grow_table(); }
+    if s < 0 || a == l { self.internal_grow(); }
 
     return None;
   }
@@ -447,7 +447,7 @@ impl<T> HashMapNZ64<T> {
     unsafe { dealloc(p as _, Layout::from_size_align_unchecked(size, align)) };
   }
 
-  fn num_slots(&self) -> usize {
+  pub(crate) fn num_slots(&self) -> usize {
     let l = self.limit;
 
     if l.is_null() { return 0; }
@@ -458,11 +458,11 @@ impl<T> HashMapNZ64<T> {
     return ptr_wrapping_offset_from_unsigned(l, t) + w;
   }
 
-  fn num_bytes(&self) -> usize {
+  pub(crate) fn num_bytes(&self) -> usize {
     return self.num_slots() * size_of::<Item<T>>();
   }
 
-  fn load(&self) -> f64 {
+  pub(crate) fn load(&self) -> f64 {
     // NB: NaN if no allocation
     return self.len() as f64 / self.num_slots() as f64;
   }
