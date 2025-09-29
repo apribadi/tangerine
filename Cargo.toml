@@ -10,6 +10,7 @@ version = "0.1.0"
 [lints.rust]
 elided_lifetimes_in_paths = "warn"
 non_ascii_idents = "warn"
+private_bounds = "allow"
 trivial_numeric_casts = "warn"
 unreachable_pub = "warn"
 unsafe_op_in_unsafe_fn = "deny"
@@ -18,7 +19,8 @@ unused_qualifications = "warn"
 unused_results = "warn"
 
 [dependencies]
-dandelion-random = { version = "0.2.0", features = ["thread_local"] }
+dandelion-random = { version = "0.2.0", features = ["rand_core", "thread_local"] }
+rand_core = { version = "0.9.3" }
 
 [dev-dependencies]
 

@@ -1,111 +1,112 @@
 pub mod map;
 
 use dandelion::Rng;
-use map::HashMapNZ64;
+use map::HashMap;
 use core::num::NonZeroU64;
 
 #[inline(never)]
-pub fn u32_new() -> HashMapNZ64<u32> {
-  HashMapNZ64::new()
+pub fn new() -> HashMap<NonZeroU64, u32> {
+  HashMap::new()
 }
 
 #[inline(never)]
-pub fn u32_new_seeded(rng: &mut Rng) -> HashMapNZ64<u32> {
-  HashMapNZ64::new_seeded(rng)
+pub fn new_seeded(rng: &mut Rng) -> HashMap<NonZeroU64, u32> {
+  HashMap::new_seeded(rng)
 }
 
 #[inline(never)]
-pub fn u32_len(t: &HashMapNZ64<u32>) -> usize {
+pub fn len(t: &HashMap<NonZeroU64, u32>) -> usize {
   t.len()
 }
 
 #[inline(never)]
-pub fn u32_is_empty(t: &HashMapNZ64<u32>) -> bool {
+pub fn is_empty(t: &HashMap<NonZeroU64, u32>) -> bool {
   t.is_empty()
 }
 
 #[inline(never)]
-pub fn u32_contains_key(t: &HashMapNZ64<u32>, k: NonZeroU64) -> bool {
+pub fn contains_key(t: &HashMap<NonZeroU64, u32>, k: NonZeroU64) -> bool {
   t.contains_key(k)
 }
 
 #[inline(never)]
-pub fn u32_get(t: &HashMapNZ64<u32>, k: NonZeroU64) -> Option<&u32> {
+pub fn get(t: &HashMap<NonZeroU64, u32>, k: NonZeroU64) -> Option<&u32> {
   t.get(k)
 }
 
 #[inline(never)]
-pub fn u32_get_value(t: &HashMapNZ64<u32>, k: NonZeroU64) -> u32 {
+pub fn get_value(t: &HashMap<NonZeroU64, u32>, k: NonZeroU64) -> u32 {
   match t.get(k) { None => 0, Some(v) => *v, }
 }
 
 #[inline(never)]
-pub fn u32_get_mut(t: &mut HashMapNZ64<u32>, k: NonZeroU64) -> Option<&mut u32> {
+pub fn get_mut(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64) -> Option<&mut u32> {
   t.get_mut(k)
 }
 
 #[inline(never)]
-pub fn u32_insert(t: &mut HashMapNZ64<u32>, k: NonZeroU64, v: u32) -> Option<u32> {
+pub fn insert(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64, v: u32) -> Option<u32> {
   t.insert(k, v)
 }
 
 #[inline(never)]
-pub fn u32_insert_drop(t: &mut HashMapNZ64<u32>, k: NonZeroU64, v: u32) {
+pub fn insert_drop(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64, v: u32) {
   let _: _ = t.insert(k, v);
 }
 
 #[inline(never)]
-pub fn u32_remove(t: &mut HashMapNZ64<u32>, k: NonZeroU64) -> Option<u32> {
+pub fn remove(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64) -> Option<u32> {
   t.remove(k)
 }
 
 #[inline(never)]
-pub fn u32_remove_drop(t: &mut HashMapNZ64<u32>, k: NonZeroU64) {
+pub fn remove_drop(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64) {
   let _: _ = t.remove(k);
 }
 
 #[inline(never)]
-pub fn u32_remove_hash(t: &mut HashMapNZ64<u32>, k: NonZeroU64) -> u32 {
-  let m = k.get() as u32;
-  let v =
-    match t.remove(k) {
-      None => 0,
-      Some(v) => v,
-    };
-  let v = v.wrapping_mul(m).swap_bytes();
-  let v = v.wrapping_mul(m).swap_bytes();
-  let v = v.wrapping_mul(m).swap_bytes();
-  let v = v.wrapping_mul(m).swap_bytes();
-  let v = v.wrapping_mul(m).swap_bytes();
-  let v = v.wrapping_mul(m).swap_bytes();
-  let v = v.wrapping_mul(m).swap_bytes();
-  let v = v.wrapping_mul(m).swap_bytes();
-  let v = v.wrapping_mul(m).swap_bytes();
-  let v = v.wrapping_mul(m).swap_bytes();
-  v
-}
-
-#[inline(never)]
-pub fn u32_clear(t: &mut HashMapNZ64<u32>) {
+pub fn clear(t: &mut HashMap<NonZeroU64, u32>) {
   t.clear();
 }
 
 #[inline(never)]
-pub fn u32_reset(t: &mut HashMapNZ64<u32>) {
+pub fn reset(t: &mut HashMap<NonZeroU64, u32>) {
   t.reset();
 }
 
 #[inline(never)]
-pub fn u32_internal_num_slots(t: &HashMapNZ64<u32>) -> usize {
+pub fn index(t: &HashMap<NonZeroU64, u32>, k: NonZeroU64) -> &u32 {
+  &t[k]
+}
+
+#[inline(never)]
+pub fn index_mut(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64) -> &mut u32 {
+  &mut t[k]
+}
+
+#[inline(never)]
+pub fn internal_num_slots(t: &HashMap<NonZeroU64, u32>) -> usize {
   map::internal::num_slots(t)
 }
 
 #[inline(never)]
-pub fn u32_internal_num_bytes(t: &HashMapNZ64<u32>) -> usize {
+pub fn internal_num_bytes(t: &HashMap<NonZeroU64, u32>) -> usize {
   map::internal::num_bytes(t)
 }
 
 #[inline(never)]
-pub fn u32_internal_load(t: &HashMapNZ64<u32>) -> f64 {
-  map::internal::load(t)
+pub fn internal_load_factor(t: &HashMap<NonZeroU64, u32>) -> f64 {
+  map::internal::load_factor(t)
 }
+
+/*
+#[inline(never)]
+pub fn foo(h: u64, w: usize) -> usize {
+  <NonZeroU64 as map::Key>::slot(h, w)
+}
+
+#[inline(never)]
+pub fn bar(t: &HashMap<NonZeroU64, u32>) -> usize {
+  t.num_slots()
+}
+*/
