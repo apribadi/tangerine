@@ -85,17 +85,17 @@ pub fn index_mut(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64) -> &mut u32 {
 }
 
 #[inline(never)]
-pub fn internal_num_slots(t: &HashMap<NonZeroU64, u32>) -> usize {
+pub fn num_slots(t: &HashMap<NonZeroU64, u32>) -> usize {
   map::internal::num_slots(t)
 }
 
 #[inline(never)]
-pub fn internal_num_bytes(t: &HashMap<NonZeroU64, u32>) -> usize {
+pub fn num_bytes(t: &HashMap<NonZeroU64, u32>) -> usize {
   map::internal::num_bytes(t)
 }
 
 #[inline(never)]
-pub fn internal_load_factor(t: &HashMap<NonZeroU64, u32>) -> f64 {
+pub fn load_factor(t: &HashMap<NonZeroU64, u32>) -> f64 {
   map::internal::load_factor(t)
 }
 

@@ -17,7 +17,7 @@ use rand_core::RngCore;
 /// A sealed trait for hash map keys, implemented only by `NonZeroU32` and
 /// `NonZeroU64`.
 
-pub trait Key: internal::Key {
+pub trait Key: private::Key {
 }
 
 impl Key for NonZeroU64 {
@@ -71,7 +71,7 @@ fn umulh(x: u64, y: u64) -> u64 {
 
 static EMPTY64: u64 = 0;
 
-unsafe impl internal::Key for NonZeroU64 {
+unsafe impl private::Key for NonZeroU64 {
   type Seed = (u64, u64);
 
   type Hash = u64;
@@ -529,24 +529,8 @@ impl<K: Key, V> IndexMut<K> for HashMap<K, V> {
   }
 }
 
-pub mod internal {
-  //! Unstable API.
-
+mod private {
   use super::*;
-
-  pub fn num_slots<K: super::Key, V>(t: &HashMap<K, V>) -> usize {
-    return t.num_slots();
-  }
-
-  pub fn num_bytes<K: super::Key, V>(t: &HashMap<K, V>) -> usize {
-    return t.num_bytes();
-  }
-
-  pub fn load_factor<K: super::Key, V>(t: &HashMap<K, V>) -> f64 {
-    return t.load_factor();
-  }
-
-  // NB: The following trait is not exposed publicly at all.
 
   pub(super) unsafe trait Key {
     type Seed: Copy;
@@ -564,5 +548,23 @@ pub mod internal {
     fn hash(k: Self, m: Self::Seed) -> Self::Hash;
 
     fn slot(h: Self::Hash, w: usize) -> usize;
+  }
+}
+
+pub mod internal {
+  //! Unstable API exposing implementation details for benchmarks and tests.
+
+  use super::*;
+
+  pub fn num_slots<K: Key, V>(t: &HashMap<K, V>) -> usize {
+    return t.num_slots();
+  }
+
+  pub fn num_bytes<K: Key, V>(t: &HashMap<K, V>) -> usize {
+    return t.num_bytes();
+  }
+
+  pub fn load_factor<K: Key, V>(t: &HashMap<K, V>) -> f64 {
+    return t.load_factor();
   }
 }
