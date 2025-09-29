@@ -6,6 +6,7 @@ use alloc::alloc::dealloc;
 use core::alloc::Layout;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
+use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 use core::ops::Index;
 use core::ops::IndexMut;
@@ -18,6 +19,9 @@ use rand_core::RngCore;
 /// `NonZeroU64`.
 
 pub trait Key: private::Key {
+}
+
+impl Key for NonZeroU32 {
 }
 
 impl Key for NonZeroU64 {
@@ -69,6 +73,48 @@ fn umulh(x: u64, y: u64) -> u64 {
   return ((x as u128 * y as u128) >> 64) as u64;
 }
 
+static EMPTY32: u32 = 0;
+
+unsafe impl private::Key for NonZeroU32 {
+  type Seed = (u32, u32);
+
+  type Hash = u32;
+
+  const ZERO: Self::Hash = 0;
+
+  const EMPTY_TABLE: *const Self::Hash = &raw const EMPTY32;
+
+  #[inline(always)]
+  fn seed_nondet() -> Self::Seed {
+    let n = dandelion::thread_local::u64();
+    let a = n as u32;
+    let b = (n >> 32) as u32;
+    return (a | 1, b | 1);
+  }
+
+  #[inline(always)]
+  fn seed(g: &mut impl RngCore) -> Self::Seed {
+    let n = g.next_u64();
+    let a = n as u32;
+    let b = (n >> 32) as u32;
+    return (a | 1, b | 1);
+  }
+
+  #[inline(always)]
+  fn hash(k: Self, (a, b): Self::Seed) -> Self::Hash {
+    let h = k.get();
+    let h = h.wrapping_mul(a);
+    let h = h.swap_bytes();
+    let h = h.wrapping_mul(b);
+    return h;
+  }
+
+  #[inline(always)]
+  fn slot(h: Self::Hash, w: usize) -> usize {
+    return umulh((h as u64) << 32, w as u64) as usize;
+  }
+}
+
 static EMPTY64: u64 = 0;
 
 unsafe impl private::Key for NonZeroU64 {
@@ -89,9 +135,9 @@ unsafe impl private::Key for NonZeroU64 {
   }
 
   #[inline(always)]
-  fn seed(rng: &mut impl RngCore) -> Self::Seed {
-    let a = rng.next_u64();
-    let b = rng.next_u64();
+  fn seed(g: &mut impl RngCore) -> Self::Seed {
+    let a = g.next_u64();
+    let b = g.next_u64();
     return (a | 1, b | 1);
   }
 
@@ -134,8 +180,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// number generator.
 
   #[inline]
-  pub fn new_seeded(rng: &mut impl RngCore) -> Self {
-    return Self::internal_new(K::seed(rng));
+  pub fn new_seeded(g: &mut impl RngCore) -> Self {
+    return Self::internal_new(K::seed(g));
   }
 
   /// Returns the number of items.
@@ -543,7 +589,7 @@ mod private {
 
     fn seed_nondet() -> Self::Seed;
 
-    fn seed(rng: &mut impl RngCore) -> Self::Seed;
+    fn seed(g: &mut impl RngCore) -> Self::Seed;
 
     fn hash(k: Self, m: Self::Seed) -> Self::Hash;
 

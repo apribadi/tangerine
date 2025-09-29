@@ -2,11 +2,17 @@ pub mod map;
 
 use dandelion::Rng;
 use map::HashMap;
+use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 
 #[inline(never)]
 pub fn new() -> HashMap<NonZeroU64, u32> {
   HashMap::new()
+}
+
+#[inline(never)]
+pub fn new_seeded32(rng: &mut Rng) -> HashMap<NonZeroU32, u32> {
+  HashMap::new_seeded(rng)
 }
 
 #[inline(never)]
@@ -27,6 +33,11 @@ pub fn is_empty(t: &HashMap<NonZeroU64, u32>) -> bool {
 #[inline(never)]
 pub fn contains_key(t: &HashMap<NonZeroU64, u32>, k: NonZeroU64) -> bool {
   t.contains_key(k)
+}
+
+#[inline(never)]
+pub fn get32(t: &HashMap<NonZeroU32, u32>, k: NonZeroU32) -> Option<&u32> {
+  t.get(k)
 }
 
 #[inline(never)]
