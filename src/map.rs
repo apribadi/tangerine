@@ -52,11 +52,15 @@ impl<K: Key, V: Unpin> Unpin for HashMap<K, V> {
 impl<K: Key, V: UnwindSafe> UnwindSafe for HashMap<K, V> {
 }
 
+// NB: We use `repr(C)` because the `hash` field MUST be at offset zero.
+
 #[repr(C)]
 struct Slot<K: Key, V> {
   hash: K::Hash,
   data: MaybeUninit<V>,
 }
+
+static EMPTY_TABLE: [u8; 8] = [0; 8];
 
 #[inline(always)]
 fn ptr_wrapping_offset_from_unsigned<T>(x: *const T, y: *const T) -> usize {
@@ -73,16 +77,12 @@ fn umulh(x: u64, y: u64) -> u64 {
   return ((x as u128 * y as u128) >> 64) as u64;
 }
 
-static EMPTY32: u32 = 0;
-
 unsafe impl private::Key for NonZeroU32 {
   type Seed = (u32, u32);
 
   type Hash = u32;
 
   const ZERO: Self::Hash = 0;
-
-  const EMPTY_TABLE: *const Self::Hash = &raw const EMPTY32;
 
   #[inline(always)]
   fn seed_nondet() -> Self::Seed {
@@ -115,16 +115,12 @@ unsafe impl private::Key for NonZeroU32 {
   }
 }
 
-static EMPTY64: u64 = 0;
-
 unsafe impl private::Key for NonZeroU64 {
   type Seed = (u64, u64);
 
   type Hash = u64;
 
   const ZERO: Self::Hash = 0;
-
-  const EMPTY_TABLE: *const Self::Hash = &raw const EMPTY64;
 
   #[inline(always)]
   fn seed_nondet() -> Self::Seed {
@@ -161,7 +157,7 @@ impl<K: Key, V> HashMap<K, V> {
   fn internal_new(m: K::Seed) -> Self {
     Self {
       seed: m,
-      table: K::EMPTY_TABLE as *const Slot<K, V>,
+      table: &raw const EMPTY_TABLE as *const Slot<K, V>,
       width: 1,
       slack: 0,
       last: ptr::null(),
@@ -323,7 +319,7 @@ impl<K: Key, V> HashMap<K, V> {
   ///
   /// # Panics
   ///
-  /// Panics when allocation fails. If that happens, it is possible for the map
+  /// Panics if allocation fails. If that happens, it is possible for the map
   /// to leak an arbitrary set of items, but the map will remain in a valid
   /// state.
 
@@ -425,6 +421,11 @@ impl<K: Key, V> HashMap<K, V> {
   }
 
   /// Removes every item from the map. Retains heap-allocated memory.
+  ///
+  /// # Panics
+  ///
+  /// Panics if `drop`ping a value panics. If that happens, the map will be in
+  /// a valid but otherwise unspecified state.
 
   pub fn clear(&mut self) {
     let l = self.last as *mut Slot<K, V>;
@@ -483,6 +484,11 @@ impl<K: Key, V> HashMap<K, V> {
   }
 
   /// Removes every item from the map. Releases heap-allocated memory.
+  ///
+  /// # Panics
+  ///
+  /// Panics if `drop`ping a value or deallocating memory panics. If that
+  /// happens, the map will be in a valid but otherwise unspecified state.
 
   pub fn reset(&mut self) {
     let l = self.last as *mut Slot<K, V>;
@@ -495,7 +501,7 @@ impl<K: Key, V> HashMap<K, V> {
     let c = capacity(w);
     let n = (c as isize - s) as usize;
 
-    self.table = K::EMPTY_TABLE as *const Slot<K, V>;
+    self.table = &raw const EMPTY_TABLE as *const Slot<K, V>;
     self.width = 1;
     self.slack = 0;
     self.last = ptr::null();
@@ -532,7 +538,7 @@ impl<K: Key, V> HashMap<K, V> {
     unsafe { dealloc(base, Layout::from_size_align_unchecked(size, align)) };
   }
 
-  pub(self) fn num_slots(&self) -> usize {
+  fn internal_num_slots(&self) -> usize {
     let l = self.last;
 
     if l.is_null() { return 0; }
@@ -543,13 +549,13 @@ impl<K: Key, V> HashMap<K, V> {
     return ptr_wrapping_offset_from_unsigned(l, t) + w;
   }
 
-  pub(self) fn num_bytes(&self) -> usize {
-    return self.num_slots() * size_of::<Slot<K, V>>();
+  fn internal_allocation_size(&self) -> usize {
+    return self.internal_num_slots() * size_of::<Slot<K, V>>();
   }
 
-  pub(self) fn load_factor(&self) -> f64 {
+  fn internal_load_factor(&self) -> f64 {
     // NB: NaN if no allocation
-    return self.len() as f64 / self.num_slots() as f64;
+    return self.len() as f64 / self.internal_num_slots() as f64;
   }
 }
 
@@ -585,8 +591,6 @@ mod private {
 
     const ZERO: Self::Hash;
 
-    const EMPTY_TABLE: *const Self::Hash;
-
     fn seed_nondet() -> Self::Seed;
 
     fn seed(g: &mut impl RngCore) -> Self::Seed;
@@ -603,14 +607,14 @@ pub mod internal {
   use super::*;
 
   pub fn num_slots<K: Key, V>(t: &HashMap<K, V>) -> usize {
-    return t.num_slots();
+    return t.internal_num_slots();
   }
 
-  pub fn num_bytes<K: Key, V>(t: &HashMap<K, V>) -> usize {
-    return t.num_bytes();
+  pub fn allocation_size<K: Key, V>(t: &HashMap<K, V>) -> usize {
+    return t.internal_allocation_size();
   }
 
   pub fn load_factor<K: Key, V>(t: &HashMap<K, V>) -> f64 {
-    return t.load_factor();
+    return t.internal_load_factor();
   }
 }
