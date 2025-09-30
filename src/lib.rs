@@ -101,8 +101,8 @@ pub fn num_slots(t: &HashMap<NonZeroU64, u32>) -> usize {
 }
 
 #[inline(never)]
-pub fn num_bytes(t: &HashMap<NonZeroU64, u32>) -> usize {
-  map::internal::num_bytes(t)
+pub fn allocation_size(t: &HashMap<NonZeroU64, u32>) -> usize {
+  map::internal::allocation_size(t)
 }
 
 #[inline(never)]

@@ -23,6 +23,7 @@ dandelion-random = { version = "0.2.0", features = ["rand_core", "thread_local"]
 rand_core = { version = "0.9.3" }
 
 [dev-dependencies]
+expect-test = { version = "1.5.1" }
 
 [profile.release]
 # rustflags = [ "-C", "no-vectorize-loops", "-C", "no-vectorize-slp" ]

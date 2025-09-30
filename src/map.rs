@@ -2,8 +2,11 @@
 
 extern crate alloc;
 
+use alloc::alloc::alloc_zeroed;
 use alloc::alloc::dealloc;
+use alloc::alloc::handle_alloc_error;
 use core::alloc::Layout;
+use core::cmp::max;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
 use core::num::NonZeroU32;
@@ -34,7 +37,7 @@ pub struct HashMap<K: Key, V> {
   table: *const Slot<K, V>, // covariant
   width: usize,
   slack: isize,
-  last: *const Slot<K, V>,
+  limit: *const Slot<K, V>,
 }
 
 impl<K: Key, V: RefUnwindSafe> RefUnwindSafe for HashMap<K, V> {
@@ -60,7 +63,7 @@ struct Slot<K: Key, V> {
   data: MaybeUninit<V>,
 }
 
-static EMPTY_TABLE: [u8; 8] = [0; 8];
+static EMPTY_TABLE: u64 = 0;
 
 #[inline(always)]
 fn ptr_wrapping_offset_from_unsigned<T>(x: *const T, y: *const T) -> usize {
@@ -68,13 +71,18 @@ fn ptr_wrapping_offset_from_unsigned<T>(x: *const T, y: *const T) -> usize {
 }
 
 #[inline(always)]
-fn capacity(w: usize) -> usize {
-  return (w >> 1) - (w >> 3) // ~ 0.375
+fn capacity(w: usize) -> isize {
+  return ((w >> 1) - (w >> 3)) as isize // ~ 0.375
 }
 
 #[inline(always)]
 fn umulh(x: u64, y: u64) -> u64 {
   return ((x as u128 * y as u128) >> 64) as u64;
+}
+
+#[inline(always)]
+fn log2(x: usize) -> usize {
+  return (usize::BITS - 1 - (x | 1).leading_zeros()) as usize;
 }
 
 unsafe impl private::Key for NonZeroU32 {
@@ -160,7 +168,7 @@ impl<K: Key, V> HashMap<K, V> {
       table: &raw const EMPTY_TABLE as *const Slot<K, V>,
       width: 1,
       slack: 0,
-      last: ptr::null(),
+      limit: ptr::null(),
     }
   }
 
@@ -187,7 +195,7 @@ impl<K: Key, V> HashMap<K, V> {
     let w = self.width;
     let s = self.slack;
 
-    return (capacity(w) as isize - s) as usize;
+    return (capacity(w) - s) as usize;
   }
 
   /// Returns whether the map contains zero items.
@@ -272,46 +280,139 @@ impl<K: Key, V> HashMap<K, V> {
     return Some(unsafe { (&mut *&raw mut (*a).data).assume_init_mut() });
   }
 
+  // NB: The fact that `align_of::<T>` divides `size_of::<T>()` helps imply
+  // that the layout of an array of `MAX_NUM_SLOTS` slots is valid, because
+  // rounding up to the alignment won't increase the size.
+
+  const MAX_NUM_SLOTS: usize = isize::MAX as usize / size_of::<Slot<K, V>>();
+
   #[inline(never)]
   #[cold]
   fn internal_init(&mut self, key: K, value: V) {
-    // assert!(INITIAL_N <= isize::MAX as usize / size_of::<Slot<T>>());
-    /*
+    let m = self.seed;
+    let w = 12;
+    let e = 4;
 
-    const INITIAL_E: usize = 4;
-    const INITIAL_W: usize = 20;
+    // TODO: round size up
+
+    assert!(w + e <= Self::MAX_NUM_SLOTS);
 
     let align = align_of::<Slot<K, V>>();
-    let size = INITIAL_N * size_of::<Slot<K, V>>();
+    let size = (w + e) * size_of::<Slot<K, V>>();
     let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
 
-    let a = unsafe { alloc::alloc::alloc_zeroed(layout) } as *mut Slot<T>;
-    if a.is_null() { match alloc::alloc::handle_alloc_error(layout) {} }
+    let p = unsafe { alloc_zeroed(layout) } as *mut Slot<K, V>;
 
-    let t = unsafe { a.add(INITIAL_D - 1) };
-    let b = unsafe { a.add(INITIAL_N - 1) };
+    if p.is_null() {
+      match handle_alloc_error(layout) { /* ! */ }
+    }
 
-    let m = self.seed;
-    let h = hash(m, key).get();
-    let p = unsafe { t.offset(- spot(INITIAL_S, h)) };
+    let t = p.wrapping_add(w - 1);
+    let l = p.wrapping_add(w + e - 1);
+    let h = K::hash(key, m);
+    let a = t.wrapping_sub(K::slot(h, w));
 
-    unsafe { &mut *p }.hash = h;
-    unsafe { &mut *p }.data = MaybeUninit::new(value);
+    unsafe { ptr::write(&raw mut (*a).hash, h) };
+    unsafe { ptr::write(&raw mut (*a).data, MaybeUninit::new(value)) };
 
-    // We only modify `self` after we know that allocation has succeeded.
+    // We only modify `self` after we know that allocation has succeeded so
+    // that the hash map will still be valid after a panic.
 
     self.table = t;
-    self.shift = INITIAL_S;
-    self.slack = INITIAL_R - 1;
-    self.check = b;
-    */
+    self.width = w;
+    self.slack = capacity(w) - 1;
+    self.limit = l;
   }
 
   #[inline(never)]
   #[cold]
   fn internal_grow(&mut self) {
-    let _: _ = self;
-    self.slack = 13;
+    let old_t = self.table as *mut Slot<K, V>;
+    let old_w = self.width;
+    let old_s = self.slack;
+    let old_l = self.limit as *mut Slot<K, V>;
+    let old_e = ptr_wrapping_offset_from_unsigned(old_l, old_t);
+    let old_p = old_t.wrapping_sub(old_w - 1);
+
+    let old_l_hash = unsafe { ptr::read(&raw const (*old_l).hash) };
+    let is_overflow = old_l_hash != K::ZERO;
+
+    // WARNING!
+    //
+    // We must be careful to leave the map in a valid state even if attempting
+    // to allocate a new table results in a panic.
+    //
+    // It turns out that the `self.slack < 0` state actually *is* valid, but
+    // the `is_overflow` state *is not* valid.
+    //
+    // In the latter case, we temporarily remove the item in the final slot and
+    // restore it after we have succeeded at allocating a new table.
+    //
+    // This is an instance of the infamous PPYP design pattern.
+
+    if is_overflow {
+      unsafe { ptr::write(&raw mut (*old_l).hash, K::ZERO) };
+      self.slack = old_s + 1;
+    }
+
+    let new_w = old_w + old_w / 4;
+    let new_e = old_e + (log2(new_w) - log2(old_w)) + (is_overflow as usize);
+    let new_s = old_s + (capacity(new_w) - capacity(old_w));
+
+    // TODO: round up
+
+    // Panic if we would overflow the layout.
+
+    assert!(new_w + new_e <= Self::MAX_NUM_SLOTS);
+
+    let align = align_of::<Slot<K, V>>();
+    let old_size = (old_w + old_e) * size_of::<Slot<K, V>>();
+    let new_size = (new_w + new_e) * size_of::<Slot<K, V>>();
+    let old_layout = unsafe { Layout::from_size_align_unchecked(old_size, align) };
+    let new_layout = unsafe { Layout::from_size_align_unchecked(new_size, align) };
+
+    let new_p = unsafe { alloc_zeroed(new_layout) } as *mut Slot<K, V>;
+
+    if new_p.is_null() {
+      match handle_alloc_error(new_layout) { /* ! */ }
+    }
+
+    // At this point, we know that allocating a new table has succeeded, so we
+    // make sure to restore the last slot in case he had removed it earlier.
+
+    unsafe { ptr::write(&raw mut (*old_l).hash, old_l_hash) };
+
+    let new_t = new_p.wrapping_add(new_w - 1);
+    let new_l = new_p.wrapping_add(new_w + new_e - 1);
+
+    let mut a = old_p;
+    let mut b = new_p;
+
+    loop {
+      let x = unsafe { ptr::read(&raw const (*a).hash) };
+
+      if x != K::ZERO {
+        b = max(b, new_t.wrapping_sub(K::slot(x, new_w)));
+
+        unsafe { ptr::write(&raw mut (*b).hash, x) }
+        unsafe { ptr::write(&raw mut (*b).data, ptr::read(&raw const (*a).data)) };
+
+        b = b.wrapping_add(1);
+      }
+
+      if a == old_l { break; }
+
+      a = a.wrapping_add(1);
+    }
+
+    self.table = new_t;
+    self.width = new_w;
+    self.slack = new_s;
+    self.limit = new_l;
+
+    // The map is now in a valid state, even if `dealloc` panics.
+
+    unsafe { dealloc(old_p as *mut u8, old_layout) };
   }
 
   /// Inserts the given key and value into the map. Returns the previous value
@@ -325,7 +426,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline]
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-    let l = self.last as *mut Slot<K, V>;
+    let l = self.limit as *mut Slot<K, V>;
 
     if l.is_null() {
       self.internal_init(key, value);
@@ -400,7 +501,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     self.slack += 1;
 
-    let value = unsafe { ptr::read(&raw mut (*a).data).assume_init() };
+    let value = unsafe { ptr::read(&raw const (*a).data).assume_init() };
 
     let mut b = a.wrapping_add(1);
 
@@ -428,7 +529,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// a valid but otherwise unspecified state.
 
   pub fn clear(&mut self) {
-    let l = self.last as *mut Slot<K, V>;
+    let l = self.limit as *mut Slot<K, V>;
 
     if l.is_null() { return; }
 
@@ -436,7 +537,7 @@ impl<K: Key, V> HashMap<K, V> {
     let w = self.width;
     let s = self.slack;
     let c = capacity(w);
-    let n = (c as isize - s) as usize;
+    let n = (c - s) as usize;
 
     if n == 0 { return; }
 
@@ -479,7 +580,7 @@ impl<K: Key, V> HashMap<K, V> {
         a = a.wrapping_add(1);
       }
 
-      self.slack = c as isize;
+      self.slack = c;
     }
   }
 
@@ -491,20 +592,21 @@ impl<K: Key, V> HashMap<K, V> {
   /// happens, the map will be in a valid but otherwise unspecified state.
 
   pub fn reset(&mut self) {
-    let l = self.last as *mut Slot<K, V>;
+    let l = self.limit as *mut Slot<K, V>;
 
     if l.is_null() { return; }
 
     let t = self.table as *mut Slot<K, V>;
     let w = self.width;
     let s = self.slack;
+    let e = ptr_wrapping_offset_from_unsigned(l, t);
     let c = capacity(w);
-    let n = (c as isize - s) as usize;
+    let n = (c - s) as usize;
 
     self.table = &raw const EMPTY_TABLE as *const Slot<K, V>;
     self.width = 1;
     self.slack = 0;
-    self.last = ptr::null();
+    self.limit = ptr::null();
 
     if needs_drop::<V>() && n != 0 {
       // WARNING!
@@ -531,15 +633,15 @@ impl<K: Key, V> HashMap<K, V> {
     }
 
     let align = align_of::<Slot<K, V>>();
-    let num_slots = ptr_wrapping_offset_from_unsigned(l, t) + w;
-    let size = num_slots * size_of::<Slot<K, V>>();
-    let base = t.wrapping_sub(w - 1) as *mut u8;
+    let size = (w + e) * size_of::<Slot<K, V>>();
+    let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
+    let p = t.wrapping_sub(w - 1);
 
-    unsafe { dealloc(base, Layout::from_size_align_unchecked(size, align)) };
+    unsafe { dealloc(p as *mut u8, layout) };
   }
 
   fn internal_num_slots(&self) -> usize {
-    let l = self.last;
+    let l = self.limit;
 
     if l.is_null() { return 0; }
 
