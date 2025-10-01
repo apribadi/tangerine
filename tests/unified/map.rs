@@ -110,6 +110,7 @@ fn test_entry() -> Result<(), std::fmt::Error> {
   Ok(())
 }
 */
+*/
 
 #[test]
 fn foo() -> Result<(), std::fmt::Error> {
@@ -121,10 +122,13 @@ fn foo() -> Result<(), std::fmt::Error> {
     let _ = t.insert(k, 10 * i);
   }
 
+  writeln!(s, "len = {}", t.len())?;
+  writeln!(s, "num_slots = {:#?}", tangerine::map::internal::num_slots(&t))?;
   writeln!(s, "load = {:#?}", tangerine::map::internal::load_factor(&t))?;
 
-  for key in t.keys() {
-    assert!(t.contains_key(key));
+  for i in 1 ..= 100 {
+    let k = NonZeroU64::new(i).unwrap();
+    assert!(t.contains_key(k));
   }
 
   for i in 1 ..= 100 {
@@ -134,71 +138,75 @@ fn foo() -> Result<(), std::fmt::Error> {
     }
   }
 
+  writeln!(s, "len = {}", t.len())?;
+  writeln!(s, "num_slots = {:#?}", tangerine::map::internal::num_slots(&t))?;
   writeln!(s, "load = {:#?}", tangerine::map::internal::load_factor(&t))?;
 
-  for key in t.keys() {
-    assert!(t.contains_key(key));
+  for i in 1 ..= 100 {
+    let k = NonZeroU64::new(i).unwrap();
+    if let Some(v) = t.get(k) {
+      writeln!(s, "{}: {}", k, v)?;
+    }
   }
 
-  writeln!(s, "{:#?}", t)?;
-
   expect![[r#"
-      load = 0.3787878787878788
-      load = 0.1893939393939394
-      {
-          1: 10,
-          3: 30,
-          5: 50,
-          7: 70,
-          9: 90,
-          11: 110,
-          13: 130,
-          15: 150,
-          17: 170,
-          19: 190,
-          21: 210,
-          23: 230,
-          25: 250,
-          27: 270,
-          29: 290,
-          31: 310,
-          33: 330,
-          35: 350,
-          37: 370,
-          39: 390,
-          41: 410,
-          43: 430,
-          45: 450,
-          47: 470,
-          49: 490,
-          51: 510,
-          53: 530,
-          55: 550,
-          57: 570,
-          59: 590,
-          61: 610,
-          63: 630,
-          65: 650,
-          67: 670,
-          69: 690,
-          71: 710,
-          73: 730,
-          75: 750,
-          77: 770,
-          79: 790,
-          81: 810,
-          83: 830,
-          85: 850,
-          87: 870,
-          89: 890,
-          91: 910,
-          93: 930,
-          95: 950,
-          97: 970,
-          99: 990,
-      }
+      len = 100
+      num_slots = 302
+      load = 0.33112582781456956
+      len = 50
+      num_slots = 302
+      load = 0.16556291390728478
+      1: 10
+      3: 30
+      5: 50
+      7: 70
+      9: 90
+      11: 110
+      13: 130
+      15: 150
+      17: 170
+      19: 190
+      21: 210
+      23: 230
+      25: 250
+      27: 270
+      29: 290
+      31: 310
+      33: 330
+      35: 350
+      37: 370
+      39: 390
+      41: 410
+      43: 430
+      45: 450
+      47: 470
+      49: 490
+      51: 510
+      53: 530
+      55: 550
+      57: 570
+      59: 590
+      61: 610
+      63: 630
+      65: 650
+      67: 670
+      69: 690
+      71: 710
+      73: 730
+      75: 750
+      77: 770
+      79: 790
+      81: 810
+      83: 830
+      85: 850
+      87: 870
+      89: 890
+      91: 910
+      93: 930
+      95: 950
+      97: 970
+      99: 990
   "#]].assert_eq(&s);
 
   Ok(())
 }
-*/
