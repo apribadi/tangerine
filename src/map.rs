@@ -176,7 +176,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
 
-  #[inline]
   pub fn new() -> Self {
     return Self::internal_new(K::seed_nondet());
   }
@@ -184,14 +183,13 @@ impl<K: Key, V> HashMap<K, V> {
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
 
-  #[inline]
   pub fn new_seeded(g: &mut impl RngCore) -> Self {
     return Self::internal_new(K::seed(g));
   }
 
   /// Returns the number of items.
 
-  #[inline]
+  #[inline(always)]
   pub fn len(&self) -> usize {
     let w = self.width;
     let s = self.slack;
@@ -201,14 +199,14 @@ impl<K: Key, V> HashMap<K, V> {
 
   /// Returns whether the map contains zero items.
 
-  #[inline]
+  #[inline(always)]
   pub fn is_empty(&self) -> bool {
     return self.len() == 0;
   }
 
   /// Returns whether the map contains the given key.
 
-  #[inline]
+  #[inline(always)]
   pub fn contains_key(&self, key: K) -> bool {
     let m = self.seed0;
     let t = self.table;
@@ -232,7 +230,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns a reference to the value associated with the given key, if
   /// present.
 
-  #[inline]
+  #[inline(always)]
   pub fn get(&self, key: K) -> Option<&V> {
     let m = self.seed0;
     let t = self.table;
@@ -258,7 +256,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns a mutable mut to the value associated with the given key, if
   /// present.
 
-  #[inline]
+  #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let m = self.seed0;
     let t = self.table as *mut Slot<K, V>;
@@ -429,7 +427,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// to leak an arbitrary set of items, but the map will remain in a valid
   /// state.
 
-  #[inline]
+  #[inline(always)]
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let l = self.limit as *mut Slot<K, V>;
 
@@ -484,7 +482,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// Removes the given key from the map. Returns the previous value associated
   /// with the given key, if one was present.
 
-  #[inline]
+  #[inline(always)]
   pub fn remove(&mut self, key: K) -> Option<V> {
     let m = self.seed0;
     let t = self.table as *mut Slot<K, V>;
@@ -695,14 +693,14 @@ impl<K: Key, V> Drop for HashMap<K, V> {
 impl<K: Key, V> Index<K> for HashMap<K, V> {
   type Output = V;
 
-  #[inline]
+  #[inline(always)]
   fn index(&self, key: K) -> &V {
     return self.get(key).unwrap();
   }
 }
 
 impl<K: Key, V> IndexMut<K> for HashMap<K, V> {
-  #[inline]
+  #[inline(always)]
   fn index_mut(&mut self, key: K) -> &mut V {
     return self.get_mut(key).unwrap();
   }
