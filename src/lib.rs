@@ -1,82 +1,73 @@
-//! TODO: crate docs
+#![doc = include_str!("../README.md")]
 
 pub mod key;
 pub mod map;
 
+// TODO: set
+
 /*
+use core::num::NonZeroU64;
 use dandelion::Rng;
 use map::HashMap;
-use core::num::NonZeroU32;
-use core::num::NonZeroU64;
 
 #[inline(never)]
 pub fn new() -> HashMap<NonZeroU64, u32> {
-  HashMap::new()
-}
-
-#[inline(never)]
-pub fn new_seeded32(rng: &mut Rng) -> HashMap<NonZeroU32, u32> {
-  HashMap::new_seeded(rng)
+  return HashMap::new();
 }
 
 #[inline(never)]
 pub fn new_seeded(rng: &mut Rng) -> HashMap<NonZeroU64, u32> {
-  HashMap::new_seeded(rng)
+  return HashMap::new_seeded(rng);
 }
 
 #[inline(never)]
 pub fn len(t: &HashMap<NonZeroU64, u32>) -> usize {
-  t.len()
+  return t.len();
 }
 
 #[inline(never)]
 pub fn is_empty(t: &HashMap<NonZeroU64, u32>) -> bool {
-  t.is_empty()
+  return t.is_empty();
 }
 
 #[inline(never)]
 pub fn contains_key(t: &HashMap<NonZeroU64, u32>, k: NonZeroU64) -> bool {
-  t.contains_key(k)
-}
-
-#[inline(never)]
-pub fn get32(t: &HashMap<NonZeroU32, u32>, k: NonZeroU32) -> Option<&u32> {
-  t.get(k)
+  return t.contains_key(k);
 }
 
 #[inline(never)]
 pub fn get(t: &HashMap<NonZeroU64, u32>, k: NonZeroU64) -> Option<&u32> {
-  t.get(k)
+  return t.get(k);
 }
 
 #[inline(never)]
 pub fn get_value(t: &HashMap<NonZeroU64, u32>, k: NonZeroU64) -> u32 {
-  match t.get(k) { None => 0, Some(v) => *v, }
+  return match t.get(k) { None => 0, Some(v) => *v, };
 }
 
 #[inline(never)]
 pub fn get_mut(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64) -> Option<&mut u32> {
-  t.get_mut(k)
+  return t.get_mut(k);
 }
 
 #[inline(never)]
 pub fn insert(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64, v: u32) -> Option<u32> {
-  t.insert(k, v)
+  return t.insert(k, v);
 }
 
 #[inline(never)]
 pub fn insert_drop(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64, v: u32) {
-  let _: _ = t.insert(k, v);
+  let _ = t.insert(k, v);
 }
 
 #[inline(never)]
 pub fn remove(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64) -> Option<u32> {
-  t.remove(k)
+  return t.remove(k);
 }
 
 #[inline(never)]
 pub fn remove_drop(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64) {
-  let _: _ = t.remove(k);
+  let _ = t.remove(k);
 }
 
 #[inline(never)]
@@ -91,26 +82,26 @@ pub fn reset(t: &mut HashMap<NonZeroU64, u32>) {
 
 #[inline(never)]
 pub fn index(t: &HashMap<NonZeroU64, u32>, k: NonZeroU64) -> &u32 {
-  &t[k]
+  return &t[k];
 }
 
 #[inline(never)]
 pub fn index_mut(t: &mut HashMap<NonZeroU64, u32>, k: NonZeroU64) -> &mut u32 {
-  &mut t[k]
+  return &mut t[k];
 }
 
 #[inline(never)]
 pub fn num_slots(t: &HashMap<NonZeroU64, u32>) -> usize {
-  map::internal::num_slots(t)
+  return map::internal::num_slots(t);
 }
 
 #[inline(never)]
 pub fn allocation_size(t: &HashMap<NonZeroU64, u32>) -> usize {
-  map::internal::allocation_size(t)
+  return map::internal::allocation_size(t);
 }
 
 #[inline(never)]
 pub fn load_factor(t: &HashMap<NonZeroU64, u32>) -> f64 {
-  map::internal::load_factor(t)
+  return map::internal::load_factor(t);
 }
 */
