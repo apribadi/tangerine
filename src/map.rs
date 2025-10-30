@@ -1,5 +1,5 @@
 //! This module provides a fast hash map keyed by types representable as
-//! `NonZeroU32` or `NonZeroU64`s.
+//! `NonZeroU32` or `NonZeroU64`.
 
 // TODO: IntoIterator
 // TODO: drain
