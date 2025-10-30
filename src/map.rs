@@ -1,6 +1,11 @@
 //! This module implements a fast hash map keyed by `NonZeroU32`s or
 //! `NonZeroU64`s.
 
+// TODO: IntoIterator
+// TODO: drain
+// TODO: shrink_to_fit
+// TODO: try_insert
+
 extern crate alloc;
 
 use alloc::alloc::alloc_zeroed;
@@ -555,7 +560,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    Iter { size: n, slot: a, seed: m, marker: PhantomData }
+    return Iter { size: n, slot: a, seed: m, marker: PhantomData };
   }
 
   /// Returns an iterator yielding each key and a mutable reference to its
@@ -570,7 +575,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    IterMut { size: n, slot: a, seed: m, marker: PhantomData }
+    return IterMut { size: n, slot: a, seed: m, marker: PhantomData };
   }
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
@@ -584,7 +589,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    Keys { size: n, slot: a, seed: m, marker: PhantomData }
+    return Keys { size: n, slot: a, seed: m, marker: PhantomData };
   }
 
   /// Returns an iterator yielding a reference to each value. The iterator item
@@ -598,7 +603,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    Values { size: n, slot: a, marker: PhantomData }
+    return Values { size: n, slot: a, marker: PhantomData };
   }
 
   /// Returns an iterator yielding a mutable reference to each value. The
@@ -612,7 +617,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    ValuesMut { size: n, slot: a, marker: PhantomData }
+    return ValuesMut { size: n, slot: a, marker: PhantomData };
   }
 
   fn internal_num_slots(&self) -> usize {
@@ -722,35 +727,35 @@ impl<'a, K: Key, V> FusedIterator for ValuesMut<'a, K, V> {
 impl<'a, K: Key, V> ExactSizeIterator for Iter<'a, K, V> {
   #[inline(always)]
   fn len(&self) -> usize {
-    self.size
+    return self.size;
   }
 }
 
 impl<'a, K: Key, V> ExactSizeIterator for IterMut<'a, K, V> {
   #[inline(always)]
   fn len(&self) -> usize {
-    self.size
+    return self.size;
   }
 }
 
 impl<'a, K: Key, V> ExactSizeIterator for Keys<'a, K, V> {
   #[inline(always)]
   fn len(&self) -> usize {
-    self.size
+    return self.size;
   }
 }
 
 impl<'a, K: Key, V> ExactSizeIterator for Values<'a, K, V> {
   #[inline(always)]
   fn len(&self) -> usize {
-    self.size
+    return self.size;
   }
 }
 
 impl<'a, K: Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {
   #[inline(always)]
   fn len(&self) -> usize {
-    self.size
+    return self.size;
   }
 }
 
@@ -778,12 +783,12 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
     self.size = n - 1;
     self.slot = a.wrapping_add(1);
 
-    Some((x, y))
+    return Some((x, y));
   }
 
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
-    (self.size, Some(self.size))
+    return (self.size, Some(self.size));
   }
 }
 
@@ -811,12 +816,12 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
     self.size = n - 1;
     self.slot = a.wrapping_add(1);
 
-    Some((x, y))
+    return Some((x, y));
   }
 
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
-    (self.size, Some(self.size))
+    return (self.size, Some(self.size));
   }
 }
 
@@ -843,12 +848,12 @@ impl<'a, K: Key, V> Iterator for Keys<'a, K, V> {
     self.size = n - 1;
     self.slot = a.wrapping_add(1);
 
-    Some(x)
+    return Some(x);
   }
 
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
-    (self.size, Some(self.size))
+    return (self.size, Some(self.size));
   }
 }
 
@@ -875,12 +880,12 @@ impl<'a, K: Key, V> Iterator for Values<'a, K, V> {
     self.size = n - 1;
     self.slot = a.wrapping_add(1);
 
-    Some(y)
+    return Some(y);
   }
 
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
-    (self.size, Some(self.size))
+    return (self.size, Some(self.size));
   }
 }
 
@@ -907,12 +912,12 @@ impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
     self.size = n - 1;
     self.slot = a.wrapping_add(1);
 
-    Some(y)
+    return Some(y);
   }
 
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
-    (self.size, Some(self.size))
+    return (self.size, Some(self.size));
   }
 }
 
