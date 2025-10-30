@@ -7,7 +7,6 @@ use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use core::alloc::Layout;
 use core::cmp::max;
-use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
 use core::num::NonZeroU32;
