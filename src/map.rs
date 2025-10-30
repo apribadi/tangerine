@@ -30,6 +30,35 @@ impl Key for NonZeroU32 {
 impl Key for NonZeroU64 {
 }
 
+impl<T: IntoKey> Key for T {
+}
+
+pub unsafe trait IntoKey {
+  //! TODO:
+  //!
+  //! SAFETY: It must be safe to do
+  //!
+  //! ```
+  //! let y = inject(x);
+  //! ...
+  //! let z = project(y);
+  //! ```
+  //!
+  //! For logical correctness, `x` and `z` ought to be "the same" in some
+  //! sense, but that is not required for safety.
+
+  /// TODO:
+
+  type Key: Key;
+
+  /// TODO:
+  fn inject(_: Self) -> Self::Key;
+
+  /// TODO:
+
+  unsafe fn project(_: Self::Key) -> Self;
+}
+
 /// A fast hash map keyed by `NonZeroU32`s or `NonZeroU64`s.
 
 pub struct HashMap<K: Key, V> {
@@ -157,6 +186,34 @@ unsafe impl private::Key for NonZeroU64 {
   #[inline(always)]
   fn slot(h: Self::Hash, w: usize) -> usize {
     return umulh(h, w as u64) as usize;
+  }
+}
+
+unsafe impl<T: IntoKey> private::Key for T {
+  type Seed = <T::Key as private::Key>::Seed;
+
+  type Hash = <T::Key as private::Key>::Hash;
+
+  const ZERO: Self::Hash = <T::Key as private::Key>::ZERO;
+
+  #[inline(always)]
+  fn seed_nondet() -> Self::Seed {
+    <T::Key as private::Key>::seed_nondet()
+  }
+
+  #[inline(always)]
+  fn seed(g: &mut impl RngCore) -> Self::Seed {
+    <T::Key as private::Key>::seed(g)
+  }
+
+  #[inline(always)]
+  fn hash(k: Self, m: Self::Seed) -> Self::Hash {
+    <T::Key as private::Key>::hash(T::inject(k), m)
+  }
+
+  #[inline(always)]
+  fn slot(h: Self::Hash, w: usize) -> usize {
+    <T::Key as private::Key>::slot(h, w)
   }
 }
 
