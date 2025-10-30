@@ -3,11 +3,13 @@ use std::fmt::Write;
 use std::num::NonZeroU64;
 use std::writeln;
 use tangerine::map::HashMap;
+use dandelion::Rng;
 
 #[test]
 fn test_basic() -> Result<(), std::fmt::Error> {
+  let mut g = Rng::from_u64(0);
+  let mut t = HashMap::new_seeded(&mut g);
   let mut s = String::new();
-  let mut t = HashMap::<NonZeroU64, u64>::new();
 
   let key = NonZeroU64::new(13).unwrap();
 
@@ -52,70 +54,11 @@ fn test_basic() -> Result<(), std::fmt::Error> {
   Ok(())
 }
 
-/*
-
-#[test]
-fn test_iter() -> Result<(), std::fmt::Error> {
-  let mut s = String::new();
-  let mut t = HashMapNZ64::<u64>::new();
-  let key = NonZeroU64::new(1).unwrap();
-
-  for i in 1 ..= 10 {
-    let k = NonZeroU64::new(i).unwrap();
-    let _ = t.insert(k, 10 * i);
-  }
-
-  let it = t.values();
-  let _ = t.get(key);
-  let mut a = it.collect::<Vec<_>>();
-  a.sort();
-
-  writeln!(s, "{:?}", a)?;
-
-  // t.reset();
-
-  let _ = t.into_iter().collect::<Vec<_>>();
-
-  expect![[r#"
-      [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-  "#]].assert_eq(&s);
-
-  Ok(())
-}
-
-/*
-#[test]
-fn test_entry() -> Result<(), std::fmt::Error> {
-  let mut s = String::new();
-  let mut t = HashMapNZ64::<u64>::new();
-  let key = NonZeroU64::new(1).unwrap();
-
-  t.insert(key, 13);
-
-  match t.entry(key) {
-    map::Entry::Vacant(_) => {}
-    map::Entry::Occupied(mut o) => {
-      let old = o.replace(100);
-      writeln!(s, "old = {:?}", old)?;
-    }
-  }
-
-  writeln!(s, "{:?}", t)?;
-
-  expect![[r#"
-      old = 13
-      {1: 100}
-  "#]].assert_eq(&s);
-
-  Ok(())
-}
-*/
-*/
-
 #[test]
 fn foo() -> Result<(), std::fmt::Error> {
+  let mut g = Rng::from_u64(0);
   let mut s = String::new();
-  let mut t = HashMap::<NonZeroU64, u64>::new();
+  let mut t = HashMap::<NonZeroU64, u64>::new_seeded(&mut g);
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
@@ -208,5 +151,127 @@ fn foo() -> Result<(), std::fmt::Error> {
       99: 990
   "#]].assert_eq(&s);
 
+  s.clear();
+
+  let mut items = t.iter().collect::<Vec<_>>();
+  items.sort();
+  for (k, &v) in items {
+    writeln!(s, "{}: {}", k, v)?;
+  }
+
+  expect![[r#"
+      1: 10
+      3: 30
+      5: 50
+      7: 70
+      9: 90
+      11: 110
+      13: 130
+      15: 150
+      17: 170
+      19: 190
+      21: 210
+      23: 230
+      25: 250
+      27: 270
+      29: 290
+      31: 310
+      33: 330
+      35: 350
+      37: 370
+      39: 390
+      41: 410
+      43: 430
+      45: 450
+      47: 470
+      49: 490
+      51: 510
+      53: 530
+      55: 550
+      57: 570
+      59: 590
+      61: 610
+      63: 630
+      65: 650
+      67: 670
+      69: 690
+      71: 710
+      73: 730
+      75: 750
+      77: 770
+      79: 790
+      81: 810
+      83: 830
+      85: 850
+      87: 870
+      89: 890
+      91: 910
+      93: 930
+      95: 950
+      97: 970
+      99: 990
+  "#]].assert_eq(&s);
+
   Ok(())
 }
+
+/*
+
+#[test]
+fn test_iter() -> Result<(), std::fmt::Error> {
+  let mut s = String::new();
+  let mut t = HashMapNZ64::<u64>::new();
+  let key = NonZeroU64::new(1).unwrap();
+
+  for i in 1 ..= 10 {
+    let k = NonZeroU64::new(i).unwrap();
+    let _ = t.insert(k, 10 * i);
+  }
+
+  let it = t.values();
+  let _ = t.get(key);
+  let mut a = it.collect::<Vec<_>>();
+  a.sort();
+
+  writeln!(s, "{:?}", a)?;
+
+  // t.reset();
+
+  let _ = t.into_iter().collect::<Vec<_>>();
+
+  expect![[r#"
+      [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+  "#]].assert_eq(&s);
+
+  Ok(())
+}
+
+/*
+#[test]
+fn test_entry() -> Result<(), std::fmt::Error> {
+  let mut s = String::new();
+  let mut t = HashMapNZ64::<u64>::new();
+  let key = NonZeroU64::new(1).unwrap();
+
+  t.insert(key, 13);
+
+  match t.entry(key) {
+    map::Entry::Vacant(_) => {}
+    map::Entry::Occupied(mut o) => {
+      let old = o.replace(100);
+      writeln!(s, "old = {:?}", old)?;
+    }
+  }
+
+  writeln!(s, "{:?}", t)?;
+
+  expect![[r#"
+      old = 13
+      {1: 100}
+  "#]].assert_eq(&s);
+
+  Ok(())
+}
+*/
+*/
+

@@ -37,6 +37,22 @@ fn umulh(x: u64, y: u64) -> u64 {
   return ((x as u128 * y as u128) >> 64) as u64;
 }
 
+#[inline(always)]
+fn invert64(a: u64) -> u64 {
+  // https://arxiv.org/abs/2204.04342
+
+  let x = a.wrapping_mul(3) ^ 2;
+  let y = 1u64.wrapping_sub(a.wrapping_mul(x));
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  let y = y.wrapping_mul(y);
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  let y = y.wrapping_mul(y);
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  let y = y.wrapping_mul(y);
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  return x;
+}
+
 unsafe impl private::Key for NonZeroU32 {
   type Seed = (u32, u32);
 
@@ -61,12 +77,22 @@ unsafe impl private::Key for NonZeroU32 {
   }
 
   #[inline(always)]
+  fn invert_seed(_: Self::Seed) -> Self::Seed {
+    unimplemented!()
+  }
+
+  #[inline(always)]
   fn hash(k: Self, (a, b): Self::Seed) -> Self::Hash {
     let h = k.get();
     let h = h.wrapping_mul(a);
     let h = h.swap_bytes();
     let h = h.wrapping_mul(b);
     return h;
+  }
+
+  #[inline(always)]
+  unsafe fn invert_hash(_: Self::Hash, _: Self::Seed) -> Self {
+    unimplemented!()
   }
 
   #[inline(always)]
@@ -98,12 +124,28 @@ unsafe impl private::Key for NonZeroU64 {
   }
 
   #[inline(always)]
+  fn invert_seed(m: Self::Seed) -> Self::Seed {
+    let a = m.0;
+    let b = m.1;
+    let c = invert64(a.wrapping_mul(b));
+    return (c.wrapping_mul(a), c.wrapping_mul(b));
+  }
+
+  #[inline(always)]
   fn hash(k: Self, (a, b): Self::Seed) -> Self::Hash {
     let h = k.get();
     let h = h.wrapping_mul(a);
     let h = h.swap_bytes();
     let h = h.wrapping_mul(b);
     return h;
+  }
+
+  #[inline(always)]
+  unsafe fn invert_hash(h: Self::Hash, (a, b): Self::Seed) -> Self {
+    let h = h.wrapping_mul(a);
+    let h = h.swap_bytes();
+    let h = h.wrapping_mul(b);
+    return unsafe { NonZeroU64::new_unchecked(h) };
   }
 
   #[inline(always)]
@@ -121,22 +163,32 @@ unsafe impl<T: IntoKey> private::Key for T {
 
   #[inline(always)]
   fn seed_nondet() -> Self::Seed {
-    <T::Key as private::Key>::seed_nondet()
+    return <T::Key as private::Key>::seed_nondet();
   }
 
   #[inline(always)]
   fn seed(g: &mut impl RngCore) -> Self::Seed {
-    <T::Key as private::Key>::seed(g)
+    return <T::Key as private::Key>::seed(g);
+  }
+
+  #[inline(always)]
+  fn invert_seed(m: Self::Seed) -> Self::Seed {
+    return <T::Key as private::Key>::invert_seed(m);
   }
 
   #[inline(always)]
   fn hash(k: Self, m: Self::Seed) -> Self::Hash {
-    <T::Key as private::Key>::hash(T::inject(k), m)
+    return <T::Key as private::Key>::hash(T::inject(k), m);
+  }
+
+  #[inline(always)]
+  unsafe fn invert_hash(h: Self::Hash, m: Self::Seed) -> T {
+    return unsafe { T::project(<T::Key as private::Key>::invert_hash(h, m)) };
   }
 
   #[inline(always)]
   fn slot(h: Self::Hash, w: usize) -> usize {
-    <T::Key as private::Key>::slot(h, w)
+    return <T::Key as private::Key>::slot(h, w);
   }
 }
 
@@ -154,7 +206,11 @@ pub(crate) mod private {
 
     fn seed(g: &mut impl RngCore) -> Self::Seed;
 
+    fn invert_seed(m: Self::Seed) -> Self::Seed;
+
     fn hash(k: Self, m: Self::Seed) -> Self::Hash;
+
+    unsafe fn invert_hash(k: Self::Hash, m: Self::Seed) -> Self;
 
     fn slot(h: Self::Hash, w: usize) -> usize;
   }

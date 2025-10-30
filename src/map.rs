@@ -1,4 +1,5 @@
-//! This module implements a fast hash map keyed by `NonZeroU64`s.
+//! This module implements a fast hash map keyed by `NonZeroU32`s or
+//! `NonZeroU64`s.
 
 extern crate alloc;
 
@@ -7,6 +8,9 @@ use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use core::alloc::Layout;
 use core::cmp::max;
+use core::iter::ExactSizeIterator;
+use core::iter::FusedIterator;
+use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
 use core::ops::Index;
@@ -22,6 +26,7 @@ use crate::key::Key;
 
 pub struct HashMap<K: Key, V> {
   seed0: K::Seed,
+  seed1: K::Seed,
   table: *const Slot<K, V>, // covariant
   width: usize,
   slack: isize,
@@ -73,6 +78,7 @@ impl<K: Key, V> HashMap<K, V> {
   fn internal_new(m: K::Seed) -> Self {
     Self {
       seed0: m,
+      seed1: K::invert_seed(m),
       table: &raw const EMPTY_TABLE as *const Slot<K, V>,
       width: 1,
       slack: 0,
@@ -266,7 +272,7 @@ impl<K: Key, V> HashMap<K, V> {
     let new_e = old_e + (log2(new_w) - log2(old_w)) + (is_overflow as usize);
     let new_s = old_s + (capacity(new_w) - capacity(old_w));
 
-    // TODO: round up
+    // TODO: round size up
 
     // Panic if we would overflow the layout.
 
@@ -435,7 +441,7 @@ impl<K: Key, V> HashMap<K, V> {
   ///
   /// # Panics
   ///
-  /// Panics if `drop`ping a value panics. If that happens, the map will be in
+  /// Panics if [`drop`]ping a value panics. If that happens, the map will be in
   /// a valid but otherwise unspecified state.
 
   pub fn clear(&mut self) {
@@ -500,7 +506,7 @@ impl<K: Key, V> HashMap<K, V> {
   ///
   /// # Panics
   ///
-  /// Panics if `drop`ping a value or deallocating memory panics. If that
+  /// Panics if [`drop`]ping a value or deallocating memory panics. If that
   /// happens, the map will be in a valid but otherwise unspecified state.
 
   pub fn reset(&mut self) {
@@ -553,23 +559,20 @@ impl<K: Key, V> HashMap<K, V> {
     unsafe { dealloc(p as *mut u8, layout) };
   }
 
-  // TODO: iter
-  /*
   /// Returns an iterator yielding each key and a reference to its associated
   /// value. The iterator item type is `(K, &'_ V)`.
 
-  pub fn iter(&self) -> Iter<'_, V> {
-    let m = self.seed;
+  pub fn iter(&self) -> Iter<'_, K, V> {
+    let m = self.seed1;
     let t = self.table;
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
-    let p = t.wrapping_sub(w - 1);
+    let a = t.wrapping_sub(w - 1);
 
-    Iter { len: n, ptr: p, marker: PhantomData }
+    Iter { size: n, slot: a, seed: m, marker: PhantomData }
   }
-  */
 
   fn internal_num_slots(&self) -> usize {
     let l = self.limit;
@@ -614,60 +617,56 @@ impl<K: Key, V> IndexMut<K> for HashMap<K, V> {
   }
 }
 
-/*
-
 /// Iterator returned by [`HashMap::iter`].
 
 #[derive(Clone)]
-pub struct Iter<'a, K, V: 'a> {
-  len: usize,
-  ptr: *const Slot<T>,
+pub struct Iter<'a, K: Key, V> {
+  size: usize,
+  slot: *const Slot<K, V>,
+  seed: K::Seed,
   marker: PhantomData<&'a V>,
 }
 
-impl<'a, T> FusedIterator for Iter<'a, T> {
+impl<'a, K: Key, V> FusedIterator for Iter<'a, K, V> {
 }
 
-impl<'a, T> ExactSizeIterator for Iter<'a, T> {
+impl<'a, K: Key, V> ExactSizeIterator for Iter<'a, K, V> {
 }
 
-impl<'a, K, V> Iterator for Iter<'a, K, V> {
+impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
   type Item = (K, &'a V);
 
   #[inline(always)]
   fn next(&mut self) -> Option<Self::Item> {
-    panic!()
-      /*
-    let n = self.len;
+    let n = self.size;
 
     if n == 0 { return None; }
 
-    let mut a = self.ptr;
+    let mut a = self.slot;
     let mut x;
 
     loop {
       x = unsafe { ptr::read(&raw const (*a).hash) };
+
       if x != K::ZERO { break; }
+
       a = a.wrapping_add(1);
     }
 
-    // let x = hash(self.rev, unsafe { NonZeroU64::new_unchecked(x) });
-    let x = x;
-    let y = unsafe { ptr::read(&raw const (*a).data) };
+    let x = unsafe { K::invert_hash(x, self.seed) };
+    let y = unsafe { (&*&raw const (*a).data).assume_init_ref() };
 
-    self.len = n - 1;
-    self.ptr = a.wrapping_add(1);
+    self.size = n - 1;
+    self.slot = a.wrapping_add(1);
 
     Some((x, y))
-      */
   }
 
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
-    (self.len, Some(self.len))
+    (self.size, Some(self.size))
   }
 }
-*/
 
 pub mod internal {
   //! Unstable API exposing implementation details for benchmarks and tests.
