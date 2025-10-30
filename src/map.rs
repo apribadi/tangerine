@@ -35,7 +35,7 @@ impl<T: IntoKey> Key for T {
 pub unsafe trait IntoKey {
   //! SAFETY: It must be safe to do
   //!
-  //! ```
+  //! ```ignore
   //! let y = inject(x);
   //! // ...
   //! let z = project(y);
