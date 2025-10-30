@@ -39,19 +39,16 @@ pub struct HashMap<K: Key, V> {
   limit: *const Slot<K, V>,
 }
 
-impl<K: Key, V: RefUnwindSafe> RefUnwindSafe for HashMap<K, V> {
-}
-
 unsafe impl<K: Key, V: Send> Send for HashMap<K, V> {
 }
 
 unsafe impl<K: Key, V: Sync> Sync for HashMap<K, V> {
 }
 
-impl<K: Key, V: Unpin> Unpin for HashMap<K, V> {
+impl<K: Key, V: UnwindSafe> UnwindSafe for HashMap<K, V> {
 }
 
-impl<K: Key, V: UnwindSafe> UnwindSafe for HashMap<K, V> {
+impl<K: Key, V: RefUnwindSafe> RefUnwindSafe for HashMap<K, V> {
 }
 
 // NB: We use `repr(C)` because the `hash` field MUST be at offset zero.
@@ -561,7 +558,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return Iter { size: n, slot: a, seed: m, marker: PhantomData };
+    return Iter { size: n, slot: a, seed: m, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding each key and a mutable reference to its
@@ -576,7 +573,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return IterMut { size: n, slot: a, seed: m, marker: PhantomData };
+    return IterMut { size: n, slot: a, seed: m, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
@@ -590,7 +587,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return Keys { size: n, slot: a, seed: m, marker: PhantomData };
+    return Keys { size: n, slot: a, seed: m, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding a reference to each value. The iterator item
@@ -604,7 +601,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return Values { size: n, slot: a, marker: PhantomData };
+    return Values { size: n, slot: a, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding a mutable reference to each value. The
@@ -618,7 +615,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return ValuesMut { size: n, slot: a, marker: PhantomData };
+    return ValuesMut { size: n, slot: a, _phantom_data: PhantomData };
   }
 
   fn internal_num_slots(&self) -> usize {
@@ -671,7 +668,7 @@ pub struct Iter<'a, K: Key, V> {
   size: usize,
   slot: *const Slot<K, V>,
   seed: K::Seed,
-  marker: PhantomData<&'a V>,
+  _phantom_data: PhantomData<&'a V>,
 }
 
 /// Iterator returned by [`HashMap::iter_mut`].
@@ -680,7 +677,7 @@ pub struct IterMut<'a, K: Key, V> {
   size: usize,
   slot: *mut Slot<K, V>,
   seed: K::Seed,
-  marker: PhantomData<&'a mut V>,
+  _phantom_data: PhantomData<&'a mut V>,
 }
 
 /// Iterator returned by [`HashMap::keys`].
@@ -690,7 +687,7 @@ pub struct Keys<'a, K: Key, V> {
   size: usize,
   slot: *const Slot<K, V>,
   seed: K::Seed,
-  marker: PhantomData<&'a V>,
+  _phantom_data: PhantomData<&'a V>,
 }
 
 /// Iterator returned by [`HashMap::values`].
@@ -699,7 +696,7 @@ pub struct Keys<'a, K: Key, V> {
 pub struct Values<'a, K: Key, V> {
   size: usize,
   slot: *const Slot<K, V>,
-  marker: PhantomData<&'a V>,
+  _phantom_data: PhantomData<&'a V>,
 }
 
 /// Iterator returned by [`HashMap::values_mut`].
@@ -707,7 +704,7 @@ pub struct Values<'a, K: Key, V> {
 pub struct ValuesMut<'a, K: Key, V> {
   size: usize,
   slot: *mut Slot<K, V>,
-  marker: PhantomData<&'a mut V>,
+  _phantom_data: PhantomData<&'a mut V>,
 }
 
 impl<'a, K: Key, V> FusedIterator for Iter<'a, K, V> {
