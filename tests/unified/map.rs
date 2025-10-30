@@ -153,9 +153,9 @@ fn foo() -> Result<(), std::fmt::Error> {
 
   s.clear();
 
-  let mut items = t.iter().collect::<Vec<_>>();
-  items.sort();
-  for (k, &v) in items {
+  let mut xs = t.iter().collect::<Vec<_>>();
+  xs.sort();
+  for (k, &v) in xs {
     writeln!(s, "{}: {}", k, v)?;
   }
 
@@ -210,6 +210,67 @@ fn foo() -> Result<(), std::fmt::Error> {
       95: 950
       97: 970
       99: 990
+  "#]].assert_eq(&s);
+
+  s.clear();
+
+  let mut xs = t.keys().collect::<Vec<_>>();
+  xs.sort();
+  for k in xs {
+    writeln!(s, "{}", k)?;
+  }
+
+  expect![[r#"
+      1
+      3
+      5
+      7
+      9
+      11
+      13
+      15
+      17
+      19
+      21
+      23
+      25
+      27
+      29
+      31
+      33
+      35
+      37
+      39
+      41
+      43
+      45
+      47
+      49
+      51
+      53
+      55
+      57
+      59
+      61
+      63
+      65
+      67
+      69
+      71
+      73
+      75
+      77
+      79
+      81
+      83
+      85
+      87
+      89
+      91
+      93
+      95
+      97
+      99
   "#]].assert_eq(&s);
 
   Ok(())

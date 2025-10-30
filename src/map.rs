@@ -131,9 +131,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     loop {
       x = unsafe { ptr::read(&raw const (*a).hash) };
-
       if x <= h { break; }
-
       a = a.wrapping_add(1);
     }
 
@@ -155,9 +153,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     loop {
       x = unsafe { ptr::read(&raw const (*a).hash) };
-
       if x <= h { break; }
-
       a = a.wrapping_add(1);
     }
 
@@ -181,9 +177,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     loop {
       x = unsafe { ptr::read(&raw const (*a).hash) };
-
       if x <= h { break; }
-
       a = a.wrapping_add(1);
     }
 
@@ -307,12 +301,10 @@ impl<K: Key, V> HashMap<K, V> {
 
       if x != K::ZERO {
         b = max(b, new_t.wrapping_sub(K::slot(x, new_w)));
-
         unsafe { ptr::write(&raw mut (*b).hash, x) }
         unsafe { ptr::write(&raw mut (*b).data, ptr::read(&raw const (*a).data)) };
 
         n -= 1;
-
         if n == 0 { break; }
 
         b = b.wrapping_add(1);
@@ -360,9 +352,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     loop {
       x = unsafe { ptr::read(&raw const (*a).hash) };
-
       if x <= h { break; }
-
       a = a.wrapping_add(1);
     }
 
@@ -407,9 +397,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     loop {
       x = unsafe { ptr::read(&raw const (*a).hash) };
-
       if x <= h { break; }
-
       a = a.wrapping_add(1);
     }
 
@@ -481,7 +469,6 @@ impl<K: Key, V> HashMap<K, V> {
           unsafe { ptr::drop_in_place(&raw mut (*a).data) };
 
           n -= 1;
-
           if n == 0 { break; }
         }
 
@@ -492,9 +479,7 @@ impl<K: Key, V> HashMap<K, V> {
 
       loop {
         unsafe { ptr::write(&raw mut (*a).hash, K::ZERO) };
-
         if a == l { break; }
-
         a = a.wrapping_add(1);
       }
 
@@ -543,7 +528,6 @@ impl<K: Key, V> HashMap<K, V> {
           unsafe { ptr::drop_in_place(&raw mut (*a).data) };
 
           n -= 1;
-
           if n == 0 { break; }
         }
 
@@ -572,6 +556,63 @@ impl<K: Key, V> HashMap<K, V> {
     let a = t.wrapping_sub(w - 1);
 
     Iter { size: n, slot: a, seed: m, marker: PhantomData }
+  }
+
+  /// Returns an iterator yielding each key and a mutable reference to its
+  /// associated value. The iterator item type is `(K, &'_ mut V)`.
+
+  pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+    let m = self.seed1;
+    let t = self.table as *mut Slot<K, V>;
+    let w = self.width;
+    let s = self.slack;
+
+    let n = (capacity(w) - s) as usize;
+    let a = t.wrapping_sub(w - 1);
+
+    IterMut { size: n, slot: a, seed: m, marker: PhantomData }
+  }
+
+  /// Returns an iterator yielding each key. The iterator item type is `K`.
+
+  pub fn keys(&self) -> Keys<'_, K, V> {
+    let m = self.seed1;
+    let t = self.table;
+    let w = self.width;
+    let s = self.slack;
+
+    let n = (capacity(w) - s) as usize;
+    let a = t.wrapping_sub(w - 1);
+
+    Keys { size: n, slot: a, seed: m, marker: PhantomData }
+  }
+
+  /// Returns an iterator yielding a reference to each value. The iterator item
+  /// type is `&'_ V`.
+
+  pub fn values(&self) -> Values<'_, K, V> {
+    let t = self.table;
+    let w = self.width;
+    let s = self.slack;
+
+    let n = (capacity(w) - s) as usize;
+    let a = t.wrapping_sub(w - 1);
+
+    Values { size: n, slot: a, marker: PhantomData }
+  }
+
+  /// Returns an iterator yielding a mutable reference to each value. The
+  /// iterator item type is `&'_ mut V`.
+
+  pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
+    let t = self.table as *mut Slot<K, V>;
+    let w = self.width;
+    let s = self.slack;
+
+    let n = (capacity(w) - s) as usize;
+    let a = t.wrapping_sub(w - 1);
+
+    ValuesMut { size: n, slot: a, marker: PhantomData }
   }
 
   fn internal_num_slots(&self) -> usize {
@@ -627,10 +668,90 @@ pub struct Iter<'a, K: Key, V> {
   marker: PhantomData<&'a V>,
 }
 
+/// Iterator returned by [`HashMap::iter_mut`].
+
+pub struct IterMut<'a, K: Key, V> {
+  size: usize,
+  slot: *mut Slot<K, V>,
+  seed: K::Seed,
+  marker: PhantomData<&'a mut V>,
+}
+
+/// Iterator returned by [`HashMap::keys`].
+
+#[derive(Clone)]
+pub struct Keys<'a, K: Key, V> {
+  size: usize,
+  slot: *const Slot<K, V>,
+  seed: K::Seed,
+  marker: PhantomData<&'a V>,
+}
+
+/// Iterator returned by [`HashMap::values`].
+
+#[derive(Clone)]
+pub struct Values<'a, K: Key, V> {
+  size: usize,
+  slot: *const Slot<K, V>,
+  marker: PhantomData<&'a V>,
+}
+
+/// Iterator returned by [`HashMap::values_mut`].
+
+pub struct ValuesMut<'a, K: Key, V> {
+  size: usize,
+  slot: *mut Slot<K, V>,
+  marker: PhantomData<&'a mut V>,
+}
+
 impl<'a, K: Key, V> FusedIterator for Iter<'a, K, V> {
 }
 
+impl<'a, K: Key, V> FusedIterator for IterMut<'a, K, V> {
+}
+
+impl<'a, K: Key, V> FusedIterator for Keys<'a, K, V> {
+}
+
+impl<'a, K: Key, V> FusedIterator for Values<'a, K, V> {
+}
+
+impl<'a, K: Key, V> FusedIterator for ValuesMut<'a, K, V> {
+}
+
 impl<'a, K: Key, V> ExactSizeIterator for Iter<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    self.size
+  }
+}
+
+impl<'a, K: Key, V> ExactSizeIterator for IterMut<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    self.size
+  }
+}
+
+impl<'a, K: Key, V> ExactSizeIterator for Keys<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    self.size
+  }
+}
+
+impl<'a, K: Key, V> ExactSizeIterator for Values<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    self.size
+  }
+}
+
+impl<'a, K: Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    self.size
+  }
 }
 
 impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
@@ -647,9 +768,7 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
 
     loop {
       x = unsafe { ptr::read(&raw const (*a).hash) };
-
       if x != K::ZERO { break; }
-
       a = a.wrapping_add(1);
     }
 
@@ -660,6 +779,135 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
     self.slot = a.wrapping_add(1);
 
     Some((x, y))
+  }
+
+  #[inline(always)]
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    (self.size, Some(self.size))
+  }
+}
+
+impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
+  type Item = (K, &'a mut V);
+
+  #[inline(always)]
+  fn next(&mut self) -> Option<Self::Item> {
+    let n = self.size;
+
+    if n == 0 { return None; }
+
+    let mut a = self.slot;
+    let mut x;
+
+    loop {
+      x = unsafe { ptr::read(&raw const (*a).hash) };
+      if x != K::ZERO { break; }
+      a = a.wrapping_add(1);
+    }
+
+    let x = unsafe { K::invert_hash(x, self.seed) };
+    let y = unsafe { (&mut *&raw mut (*a).data).assume_init_mut() };
+
+    self.size = n - 1;
+    self.slot = a.wrapping_add(1);
+
+    Some((x, y))
+  }
+
+  #[inline(always)]
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    (self.size, Some(self.size))
+  }
+}
+
+impl<'a, K: Key, V> Iterator for Keys<'a, K, V> {
+  type Item = K;
+
+  #[inline(always)]
+  fn next(&mut self) -> Option<Self::Item> {
+    let n = self.size;
+
+    if n == 0 { return None; }
+
+    let mut a = self.slot;
+    let mut x;
+
+    loop {
+      x = unsafe { ptr::read(&raw const (*a).hash) };
+      if x != K::ZERO { break; }
+      a = a.wrapping_add(1);
+    }
+
+    let x = unsafe { K::invert_hash(x, self.seed) };
+
+    self.size = n - 1;
+    self.slot = a.wrapping_add(1);
+
+    Some(x)
+  }
+
+  #[inline(always)]
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    (self.size, Some(self.size))
+  }
+}
+
+impl<'a, K: Key, V> Iterator for Values<'a, K, V> {
+  type Item = &'a V;
+
+  #[inline(always)]
+  fn next(&mut self) -> Option<Self::Item> {
+    let n = self.size;
+
+    if n == 0 { return None; }
+
+    let mut a = self.slot;
+    let mut x;
+
+    loop {
+      x = unsafe { ptr::read(&raw const (*a).hash) };
+      if x != K::ZERO { break; }
+      a = a.wrapping_add(1);
+    }
+
+    let y = unsafe { (&*&raw const (*a).data).assume_init_ref() };
+
+    self.size = n - 1;
+    self.slot = a.wrapping_add(1);
+
+    Some(y)
+  }
+
+  #[inline(always)]
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    (self.size, Some(self.size))
+  }
+}
+
+impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
+  type Item = &'a mut V;
+
+  #[inline(always)]
+  fn next(&mut self) -> Option<Self::Item> {
+    let n = self.size;
+
+    if n == 0 { return None; }
+
+    let mut a = self.slot;
+    let mut x;
+
+    loop {
+      x = unsafe { ptr::read(&raw const (*a).hash) };
+      if x != K::ZERO { break; }
+      a = a.wrapping_add(1);
+    }
+
+    let y = unsafe { (&mut *&raw mut (*a).data).assume_init_mut() };
+
+    self.size = n - 1;
+    self.slot = a.wrapping_add(1);
+
+    Some(y)
   }
 
   #[inline(always)]
