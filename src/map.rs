@@ -428,7 +428,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     unsafe { ptr::write(&raw mut (*a).hash, K::ZERO) };
 
-    return Some(value)
+    return Some(value);
   }
 
   /// Removes every item from the map. Retains heap-allocated memory.
