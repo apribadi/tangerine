@@ -2,8 +2,7 @@
 
 pub mod key;
 pub mod map;
-
-// TODO: set
+pub mod set;
 
 /*
 use core::num::NonZeroU64;
