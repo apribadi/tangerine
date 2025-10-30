@@ -135,7 +135,7 @@ unsafe impl private::Key for NonZeroU64 {
 
   #[inline(always)]
   fn seed_nondet() -> Self::Seed {
-    let n = u128::from_le_bytes(dandelion::thread_local::byte_array());
+    let n = dandelion::thread_local::u128();
     let a = n as u64;
     let b = (n >> 64) as u64;
     return (a | 1, b | 1);

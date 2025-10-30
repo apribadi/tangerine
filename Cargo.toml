@@ -1,5 +1,3 @@
-# cargo-features = [ "profile-rustflags" ]
-
 [package]
 authors = ["Aaron Pribadi <aaron.pribadi@gmail.com>"]
 edition = "2024"
@@ -20,17 +18,12 @@ unused_qualifications = "warn"
 unused_results = "warn"
 
 [dependencies]
-dandelion-random = { version = "0.2.0", features = ["rand_core", "thread_local"] }
+dandelion-random = { git = "https://github.com/apribadi/dandelion.git", branch = "devel", features = ["rand_core", "thread_local"] }
 rand_core = { version = "0.9.3" }
 
 [dev-dependencies]
 expect-test = { version = "1.5.1" }
-ahash = { version = "0.8.2", features = [ "std" ] }
-fxhash = "0.2.1"
-hashbrown = { version = "0.13.2", features = [ "ahash", "raw" ] }
-intmap = "2.0.0"
 
 [profile.release]
-# rustflags = [ "-C", "no-vectorize-loops", "-C", "no-vectorize-slp" ]
 
 [profile.dev]

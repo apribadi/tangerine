@@ -133,12 +133,11 @@ impl<K: Key, V> HashMap<K, V> {
     let h = K::hash(key, m);
 
     let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x <= h { break; }
+    while x > h {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     return x == h;
@@ -155,12 +154,11 @@ impl<K: Key, V> HashMap<K, V> {
     let h = K::hash(key, m);
 
     let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x <= h { break; }
+    while x > h {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     if x != h { return None; }
@@ -179,12 +177,11 @@ impl<K: Key, V> HashMap<K, V> {
     let h = K::hash(key, m);
 
     let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x <= h { break; }
+    while x > h {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     if x != h { return None; }
@@ -302,11 +299,14 @@ impl<K: Key, V> HashMap<K, V> {
     let mut b = new_p;
     let mut n = old_n;
 
+    // NB: n > 0
+
     loop {
       let x = unsafe { ptr::read(&raw const (*a).hash) };
 
       if x != K::ZERO {
         b = max(b, new_t.wrapping_sub(K::slot(x, new_w)));
+
         unsafe { ptr::write(&raw mut (*b).hash, x) }
         unsafe { ptr::write(&raw mut (*b).data, ptr::read(&raw const (*a).data)) };
 
@@ -354,12 +354,11 @@ impl<K: Key, V> HashMap<K, V> {
     let h = K::hash(key, m);
 
     let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x <= h { break; }
+    while x > h {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     let value = MaybeUninit::new(value);
@@ -399,12 +398,11 @@ impl<K: Key, V> HashMap<K, V> {
     let h = K::hash(key, m);
 
     let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x <= h { break; }
+    while x > h {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     if x != h { return None; }
@@ -412,18 +410,16 @@ impl<K: Key, V> HashMap<K, V> {
     self.slack += 1;
 
     let value = unsafe { ptr::read(&raw const (*a).data).assume_init() };
-
+    let mut a = a;
     let mut b = a.wrapping_add(1);
+    let mut x = unsafe { ptr::read(&raw const (*b).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*b).hash) };
-
-      if a < t.wrapping_sub(K::slot(x, w)) || /* unlikely */ x == K::ZERO { break; }
-
+    while t.wrapping_sub(K::slot(x, w)) <= a && /* likely */ x != K::ZERO {
       unsafe { ptr::write(&raw mut (*a).hash, x) };
       unsafe { ptr::write(&raw mut (*a).data, ptr::read(&raw const (*b).data)) };
       a = b;
       b = b.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*b).hash) };
     }
 
     unsafe { ptr::write(&raw mut (*a).hash, K::ZERO) };
@@ -466,9 +462,12 @@ impl<K: Key, V> HashMap<K, V> {
       let mut n = n;
       let mut s = s;
 
+      // NB: n > 0
+
       loop {
         if unsafe { ptr::read(&raw const (*a).hash) } != K::ZERO {
           unsafe { ptr::write(&raw mut (*a).hash, K::ZERO) };
+
           s += 1;
           self.slack = s;
 
@@ -483,9 +482,8 @@ impl<K: Key, V> HashMap<K, V> {
     } else {
       let mut a = t.wrapping_sub(w - 1);
 
-      loop {
+      while a <= l {
         unsafe { ptr::write(&raw mut (*a).hash, K::ZERO) };
-        if a == l { break; }
         a = a.wrapping_add(1);
       }
 
@@ -528,6 +526,8 @@ impl<K: Key, V> HashMap<K, V> {
 
       let mut n = n;
       let mut a = t.wrapping_sub(w - 1);
+
+      // NB: n > 0
 
       loop {
         if unsafe { ptr::read(&raw const (*a).hash) } != K::ZERO {
@@ -770,12 +770,11 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
     if n == 0 { return None; }
 
     let mut a = self.slot;
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x != K::ZERO { break; }
+    while x == K::ZERO {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     let x = unsafe { K::invert_hash(x, self.seed) };
@@ -803,12 +802,11 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
     if n == 0 { return None; }
 
     let mut a = self.slot;
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x != K::ZERO { break; }
+    while x == K::ZERO {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     let x = unsafe { K::invert_hash(x, self.seed) };
@@ -836,12 +834,11 @@ impl<'a, K: Key, V> Iterator for Keys<'a, K, V> {
     if n == 0 { return None; }
 
     let mut a = self.slot;
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x != K::ZERO { break; }
+    while x == K::ZERO {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     let x = unsafe { K::invert_hash(x, self.seed) };
@@ -868,12 +865,11 @@ impl<'a, K: Key, V> Iterator for Values<'a, K, V> {
     if n == 0 { return None; }
 
     let mut a = self.slot;
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x != K::ZERO { break; }
+    while x == K::ZERO {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     let y = unsafe { (&*&raw const (*a).data).assume_init_ref() };
@@ -900,12 +896,11 @@ impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
     if n == 0 { return None; }
 
     let mut a = self.slot;
-    let mut x;
+    let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
-    loop {
-      x = unsafe { ptr::read(&raw const (*a).hash) };
-      if x != K::ZERO { break; }
+    while x == K::ZERO {
       a = a.wrapping_add(1);
+      x = unsafe { ptr::read(&raw const (*a).hash) };
     }
 
     let y = unsafe { (&mut *&raw mut (*a).data).assume_init_mut() };
