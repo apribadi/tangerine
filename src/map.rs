@@ -309,8 +309,8 @@ impl<K: Key, V> HashMap<K, V> {
     return Some(unsafe { (&*&raw const (*a).data).assume_init_ref() });
   }
 
-  /// Returns a mutable mut to the value associated with the given key, if
-  /// present.
+  /// Returns a mutable reference to the value associated with the given key,
+  /// if present.
 
   #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
