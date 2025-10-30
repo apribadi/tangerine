@@ -45,6 +45,9 @@ unsafe impl<K: Key, V: Send> Send for HashMap<K, V> {
 unsafe impl<K: Key, V: Sync> Sync for HashMap<K, V> {
 }
 
+impl<K: Key, V: Unpin> Unpin for HashMap<K, V> {
+}
+
 impl<K: Key, V: UnwindSafe> UnwindSafe for HashMap<K, V> {
 }
 
