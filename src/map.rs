@@ -101,8 +101,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
 
-  pub fn new_seeded(g: &mut impl RngCore) -> Self {
-    return Self::internal_new(K::seed(g));
+  pub fn new_seeded(rng: &mut impl RngCore) -> Self {
+    return Self::internal_new(K::seed(rng));
   }
 
   /// Returns the number of items.

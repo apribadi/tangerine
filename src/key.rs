@@ -4,7 +4,7 @@ use rand_core::RngCore;
 
 /// A sealed trait for hash map keys.
 ///
-/// It is implemented by `NonZeroU32` and `NonZeroU64`, and by a type that can
+/// It is implemented by `NonZeroU32` and `NonZeroU64`, and by types that can
 /// be represented by one of those.
 
 pub trait Key: private::Key {
@@ -35,6 +35,20 @@ pub unsafe trait IntoKey {
 #[inline(always)]
 fn umulh(x: u64, y: u64) -> u64 {
   return ((x as u128 * y as u128) >> 64) as u64;
+}
+
+#[inline(always)]
+fn invert32(a: u32) -> u32 {
+  // https://jeffhurchalla.com/2022/04/25/a-faster-multiplicative-inverse-mod-a-power-of-2/
+
+  let x = a.wrapping_mul(3) ^ 2;
+  let y = 1u32.wrapping_sub(a.wrapping_mul(x));
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  let y = y.wrapping_mul(y);
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  let y = y.wrapping_mul(y);
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  return x;
 }
 
 #[inline(always)]
@@ -77,8 +91,11 @@ unsafe impl private::Key for NonZeroU32 {
   }
 
   #[inline(always)]
-  fn invert_seed(_: Self::Seed) -> Self::Seed {
-    unimplemented!()
+  fn invert_seed(m: Self::Seed) -> Self::Seed {
+    let a = m.0;
+    let b = m.1;
+    let c = invert32(a.wrapping_mul(b));
+    return (c.wrapping_mul(a), c.wrapping_mul(b));
   }
 
   #[inline(always)]
@@ -91,8 +108,11 @@ unsafe impl private::Key for NonZeroU32 {
   }
 
   #[inline(always)]
-  unsafe fn invert_hash(_: Self::Hash, _: Self::Seed) -> Self {
-    unimplemented!()
+  unsafe fn invert_hash(h: Self::Hash, (a, b): Self::Seed) -> Self {
+    let h = h.wrapping_mul(a);
+    let h = h.swap_bytes();
+    let h = h.wrapping_mul(b);
+    return unsafe { NonZeroU32::new_unchecked(h) };
   }
 
   #[inline(always)]
@@ -204,14 +224,14 @@ pub(crate) mod private {
 
     fn seed_nondet() -> Self::Seed;
 
-    fn seed(g: &mut impl RngCore) -> Self::Seed;
+    fn seed(_: &mut impl RngCore) -> Self::Seed;
 
-    fn invert_seed(m: Self::Seed) -> Self::Seed;
+    fn invert_seed(_: Self::Seed) -> Self::Seed;
 
-    fn hash(k: Self, m: Self::Seed) -> Self::Hash;
+    fn hash(_: Self, _: Self::Seed) -> Self::Hash;
 
-    unsafe fn invert_hash(k: Self::Hash, m: Self::Seed) -> Self;
+    unsafe fn invert_hash(_: Self::Hash, _: Self::Seed) -> Self;
 
-    fn slot(h: Self::Hash, w: usize) -> usize;
+    fn slot(_: Self::Hash, _: usize) -> usize;
   }
 }
