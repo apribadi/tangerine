@@ -18,8 +18,7 @@ use core::panic::UnwindSafe;
 use core::ptr;
 use rand_core::RngCore;
 
-/// A sealed trait for hash map keys, implemented only by `NonZeroU32` and
-/// `NonZeroU64`.
+/// A sealed trait for hash map keys.
 
 pub trait Key: private::Key {
 }
