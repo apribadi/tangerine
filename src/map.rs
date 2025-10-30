@@ -9,8 +9,6 @@ use core::alloc::Layout;
 use core::cmp::max;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
-use core::num::NonZeroU32;
-use core::num::NonZeroU64;
 use core::ops::Index;
 use core::ops::IndexMut;
 use core::panic::RefUnwindSafe;
@@ -18,38 +16,7 @@ use core::panic::UnwindSafe;
 use core::ptr;
 use rand_core::RngCore;
 
-/// A sealed trait for hash map keys.
-
-pub trait Key: private::Key {
-}
-
-impl Key for NonZeroU32 {
-}
-
-impl Key for NonZeroU64 {
-}
-
-impl<T: IntoKey> Key for T {
-}
-
-pub unsafe trait IntoKey {
-  //! SAFETY: It must be safe to do
-  //!
-  //! ```ignore
-  //! let y = inject(x);
-  //! // ...
-  //! let z = project(y);
-  //! ```
-  //!
-  //! For logical correctness, `x` and `z` ought to be "the same" in some
-  //! sense, but that is not required for safety.
-
-  type Key: Key;
-
-  fn inject(_: Self) -> Self::Key;
-
-  unsafe fn project(_: Self::Key) -> Self;
-}
+use crate::key::Key;
 
 /// A fast hash map keyed by `NonZeroU32`s or `NonZeroU64`s.
 
@@ -97,116 +64,8 @@ fn capacity(w: usize) -> isize {
 }
 
 #[inline(always)]
-fn umulh(x: u64, y: u64) -> u64 {
-  return ((x as u128 * y as u128) >> 64) as u64;
-}
-
-#[inline(always)]
 fn log2(x: usize) -> usize {
   return (usize::BITS - 1 - (x | 1).leading_zeros()) as usize;
-}
-
-unsafe impl private::Key for NonZeroU32 {
-  type Seed = (u32, u32);
-
-  type Hash = u32;
-
-  const ZERO: Self::Hash = 0;
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    let n = dandelion::thread_local::u64();
-    let a = n as u32;
-    let b = (n >> 32) as u32;
-    return (a | 1, b | 1);
-  }
-
-  #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> Self::Seed {
-    let n = g.next_u64();
-    let a = n as u32;
-    let b = (n >> 32) as u32;
-    return (a | 1, b | 1);
-  }
-
-  #[inline(always)]
-  fn hash(k: Self, (a, b): Self::Seed) -> Self::Hash {
-    let h = k.get();
-    let h = h.wrapping_mul(a);
-    let h = h.swap_bytes();
-    let h = h.wrapping_mul(b);
-    return h;
-  }
-
-  #[inline(always)]
-  fn slot(h: Self::Hash, w: usize) -> usize {
-    return umulh((h as u64) << 32, w as u64) as usize;
-  }
-}
-
-unsafe impl private::Key for NonZeroU64 {
-  type Seed = (u64, u64);
-
-  type Hash = u64;
-
-  const ZERO: Self::Hash = 0;
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    let n = u128::from_le_bytes(dandelion::thread_local::byte_array());
-    let a = n as u64;
-    let b = (n >> 64) as u64;
-    return (a | 1, b | 1);
-  }
-
-  #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> Self::Seed {
-    let a = g.next_u64();
-    let b = g.next_u64();
-    return (a | 1, b | 1);
-  }
-
-  #[inline(always)]
-  fn hash(k: Self, (a, b): Self::Seed) -> Self::Hash {
-    let h = k.get();
-    let h = h.wrapping_mul(a);
-    let h = h.swap_bytes();
-    let h = h.wrapping_mul(b);
-    return h;
-  }
-
-  #[inline(always)]
-  fn slot(h: Self::Hash, w: usize) -> usize {
-    return umulh(h, w as u64) as usize;
-  }
-}
-
-unsafe impl<T: IntoKey> private::Key for T {
-  type Seed = <T::Key as private::Key>::Seed;
-
-  type Hash = <T::Key as private::Key>::Hash;
-
-  const ZERO: Self::Hash = <T::Key as private::Key>::ZERO;
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    <T::Key as private::Key>::seed_nondet()
-  }
-
-  #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> Self::Seed {
-    <T::Key as private::Key>::seed(g)
-  }
-
-  #[inline(always)]
-  fn hash(k: Self, m: Self::Seed) -> Self::Hash {
-    <T::Key as private::Key>::hash(T::inject(k), m)
-  }
-
-  #[inline(always)]
-  fn slot(h: Self::Hash, w: usize) -> usize {
-    <T::Key as private::Key>::slot(h, w)
-  }
 }
 
 impl<K: Key, V> HashMap<K, V> {
@@ -809,26 +668,6 @@ impl<'a, K, V> Iterator for Iter<'a, K, V> {
   }
 }
 */
-
-mod private {
-  use super::*;
-
-  pub(super) unsafe trait Key {
-    type Seed: Copy;
-
-    type Hash: Copy + Ord;
-
-    const ZERO: Self::Hash;
-
-    fn seed_nondet() -> Self::Seed;
-
-    fn seed(g: &mut impl RngCore) -> Self::Seed;
-
-    fn hash(k: Self, m: Self::Seed) -> Self::Hash;
-
-    fn slot(h: Self::Hash, w: usize) -> usize;
-  }
-}
 
 pub mod internal {
   //! Unstable API exposing implementation details for benchmarks and tests.

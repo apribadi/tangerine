@@ -1,3 +1,4 @@
+pub mod key;
 pub mod map;
 
 use dandelion::Rng;
