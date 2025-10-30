@@ -1,6 +1,9 @@
+//! TODO: crate docs
+
 pub mod key;
 pub mod map;
 
+/*
 use dandelion::Rng;
 use map::HashMap;
 use core::num::NonZeroU32;
@@ -109,16 +112,5 @@ pub fn allocation_size(t: &HashMap<NonZeroU64, u32>) -> usize {
 #[inline(never)]
 pub fn load_factor(t: &HashMap<NonZeroU64, u32>) -> f64 {
   map::internal::load_factor(t)
-}
-
-/*
-#[inline(never)]
-pub fn foo(h: u64, w: usize) -> usize {
-  <NonZeroU64 as map::Key>::slot(h, w)
-}
-
-#[inline(never)]
-pub fn bar(t: &HashMap<NonZeroU64, u32>) -> usize {
-  t.num_slots()
 }
 */

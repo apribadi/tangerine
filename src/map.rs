@@ -1,5 +1,5 @@
-//! This module implements a fast hash map keyed by `NonZeroU32`s or
-//! `NonZeroU64`s.
+//! This module provides a fast hash map keyed by types representable as
+//! `NonZeroU32` or `NonZeroU64`s.
 
 // TODO: IntoIterator
 // TODO: drain
@@ -27,7 +27,8 @@ use rand_core::RngCore;
 
 use crate::key::Key;
 
-/// A fast hash map keyed by `NonZeroU32`s or `NonZeroU64`s.
+/// A fast hash map keyed by types representable as `NonZeroU32` or
+/// `NonZeroU64`.
 
 pub struct HashMap<K: Key, V> {
   seed0: K::Seed,
@@ -923,6 +924,8 @@ impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
 
 pub mod internal {
   //! Unstable API exposing implementation details for benchmarks and tests.
+
+  #![allow(missing_docs)]
 
   use super::*;
 

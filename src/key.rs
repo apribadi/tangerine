@@ -1,11 +1,12 @@
+//! This module provides traits for word-sized hashable keys representable as
+//! `NonZeroU32` or `NonZeroU64`.
+
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 use rand_core::RngCore;
 
-/// A sealed trait for hash map keys.
-///
-/// It is implemented by `NonZeroU32` and `NonZeroU64`, and by types that can
-/// be represented by one of those.
+/// A sealed trait for word-sized hashable keys representable as `NonZeroU32`
+/// or `NonZeroU64`.
 
 pub trait Key: private::Key {
 }
@@ -19,11 +20,15 @@ impl Key for NonZeroU64 {
 impl<T: IntoKey> Key for T {
 }
 
+/// A trait for representing keys as `NonZeroU32` or `NonZeroU64`.
+///
+/// SAFETY: It must be safe to do `project(inject(_))`.
+///
+/// For logical correctness, the key ought to be in some sense "the same"
+/// after a round trip, but that is not required for safety.
+
 pub unsafe trait IntoKey {
-  //! SAFETY: It must be safe to do `project(inject(_))`.
-  //!
-  //! For logical correctness, the key ought to be in some sense "the same"
-  //! after a round trip, but that is not required for safety.
+  #![allow(missing_docs)]
 
   type Key: Key;
 
