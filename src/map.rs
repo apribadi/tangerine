@@ -33,27 +33,20 @@ impl<T: IntoKey> Key for T {
 }
 
 pub unsafe trait IntoKey {
-  //! TODO:
-  //!
   //! SAFETY: It must be safe to do
   //!
   //! ```
   //! let y = inject(x);
-  //! ...
+  //! // ...
   //! let z = project(y);
   //! ```
   //!
   //! For logical correctness, `x` and `z` ought to be "the same" in some
   //! sense, but that is not required for safety.
 
-  /// TODO:
-
   type Key: Key;
 
-  /// TODO:
   fn inject(_: Self) -> Self::Key;
-
-  /// TODO:
 
   unsafe fn project(_: Self::Key) -> Self;
 }
@@ -701,6 +694,7 @@ impl<K: Key, V> HashMap<K, V> {
     unsafe { dealloc(p as *mut u8, layout) };
   }
 
+  // TODO: iter
   /*
   /// Returns an iterator yielding each key and a reference to its associated
   /// value. The iterator item type is `(K, &'_ V)`.
