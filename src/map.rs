@@ -1,6 +1,8 @@
 //! This module provides a fast hash map keyed by types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
+// TODO: Clone
+// TODO: Debug
 // TODO: IntoIterator
 // TODO: drain
 // TODO: shrink_to_fit
@@ -914,6 +916,12 @@ impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
     return (self.size, Some(self.size));
+  }
+}
+
+impl<K: Key, V> Default for HashMap<K, V> {
+  fn default() -> Self {
+    return Self::new();
   }
 }
 

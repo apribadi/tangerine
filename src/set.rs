@@ -7,7 +7,7 @@ use rand_core::RngCore;
 
 use crate::key::Key;
 use crate::map::HashMap;
-use crate::map::Keys;
+use crate::map;
 
 /// A fast hash set containing types representable as `NonZeroU32` or
 /// `NonZeroU64`.
@@ -92,7 +92,7 @@ impl<T: Key> HashSet<T> {
 
 #[derive(Clone)]
 pub struct Iter<'a, T: Key> {
-  keys: Keys<'a, T, ()>,
+  keys: map::Keys<'a, T, ()>,
 }
 
 impl<'a, T: Key> FusedIterator for Iter<'a, T> {
@@ -116,5 +116,31 @@ impl<'a, T: Key> Iterator for Iter<'a, T> {
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
     return self.keys.size_hint();
+  }
+}
+
+impl<T: Key> Default for HashSet<T> {
+  fn default() -> Self {
+    return Self { map: HashMap::default() };
+  }
+}
+
+pub mod internal {
+  //! Unstable API exposing implementation details for benchmarks and tests.
+
+  #![allow(missing_docs)]
+
+  use super::*;
+
+  pub fn num_slots<T: Key>(t: &HashSet<T>) -> usize {
+    return map::internal::num_slots(&t.map);
+  }
+
+  pub fn allocation_size<T: Key>(t: &HashSet<T>) -> usize {
+    return map::internal::allocation_size(&t.map);
+  }
+
+  pub fn load_factor<T: Key>(t: &HashSet<T>) -> f64 {
+    return map::internal::load_factor(&t.map);
   }
 }
