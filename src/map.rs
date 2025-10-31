@@ -204,8 +204,6 @@ impl<K: Key, V> HashMap<K, V> {
     let w = 12;
     let e = 4;
 
-    // TODO: round size up
-
     assert!(w + e <= Self::MAX_NUM_SLOTS);
 
     let align = align_of::<Slot<K, V>>();
@@ -291,8 +289,10 @@ impl<K: Key, V> HashMap<K, V> {
       match handle_alloc_error(new_layout) { /* ! */ }
     }
 
-    // At this point, we know that allocating a new table has succeeded, so we
-    // make sure to restore the last slot in case he had removed it earlier.
+    // At this point we know that allocating a new table has succeeded.
+    //
+    // We make sure to restore the last slot in case we had removed it earlier,
+    // before copying from the old table to the new table.
 
     unsafe { ptr::write(&raw mut (*old_l).hash, old_l_hash) };
 
@@ -302,8 +302,6 @@ impl<K: Key, V> HashMap<K, V> {
     let mut a = old_p;
     let mut b = new_p;
     let mut n = old_n;
-
-    // NB: n > 0
 
     loop {
       let x = unsafe { ptr::read(&raw const (*a).hash) };
@@ -449,49 +447,49 @@ impl<K: Key, V> HashMap<K, V> {
     let c = capacity(w);
     let n = (c - s) as usize;
 
-    if n == 0 { return; }
-
     if needs_drop::<V>() {
-      // WARNING!
-      //
-      // We must be careful to leave the map in a valid state even if a call to
-      // `drop` panics.
-      //
-      // Here, we traverse the table in reverse order to ensure that we don't
-      // remove an item that is currently displacing another item.
-      //
-      // Also, we update `self.slack` as we go instead of once at the end.
+      if n != 0 {
+        // WARNING!
+        //
+        // We must be careful to leave the map in a valid state even if a call to
+        // `drop` panics.
+        //
+        // Here, we traverse the table in reverse order to ensure that we don't
+        // remove an item that is currently displacing another item.
+        //
+        // Also, we update `self.slack` as we go instead of once at the end.
 
-      let mut a = l;
-      let mut n = n;
-      let mut s = s;
+        let mut n = n;
+        let mut s = s;
+        let mut a = l;
 
-      // NB: n > 0
+        loop {
+          if unsafe { ptr::read(&raw const (*a).hash) } != K::ZERO {
+            unsafe { ptr::write(&raw mut (*a).hash, K::ZERO) };
 
-      loop {
-        if unsafe { ptr::read(&raw const (*a).hash) } != K::ZERO {
-          unsafe { ptr::write(&raw mut (*a).hash, K::ZERO) };
+            s += 1;
+            self.slack = s;
 
-          s += 1;
-          self.slack = s;
+            unsafe { ptr::drop_in_place(&raw mut (*a).data) };
 
-          unsafe { ptr::drop_in_place(&raw mut (*a).data) };
+            n -= 1;
+            if n == 0 { break; }
+          }
 
-          n -= 1;
-          if n == 0 { break; }
+          a = a.wrapping_sub(1);
         }
-
-        a = a.wrapping_sub(1);
       }
     } else {
-      let mut a = t.wrapping_sub(w - 1);
+      if n != 0 {
+        let mut a = t.wrapping_sub(w - 1);
 
-      while a <= l {
-        unsafe { ptr::write(&raw mut (*a).hash, K::ZERO) };
-        a = a.wrapping_add(1);
+        while a <= l {
+          unsafe { ptr::write(&raw mut (*a).hash, K::ZERO) };
+          a = a.wrapping_add(1);
+        }
+
+        self.slack = c;
       }
-
-      self.slack = c;
     }
   }
 
@@ -519,29 +517,29 @@ impl<K: Key, V> HashMap<K, V> {
     self.slack = 0;
     self.limit = ptr::null();
 
-    if needs_drop::<V>() && n != 0 {
-      // WARNING!
-      //
-      // We must be careful to leave the map in a valid state even if a call to
-      // `drop` panics.
-      //
-      // Here, we have already put `self` into the valid initial state, so if a
-      // call to `drop` panics then we can just safely leak the table.
+    if needs_drop::<V>() {
+      if n != 0 {
+        // WARNING!
+        //
+        // We must be careful to leave the map in a valid state even if a call to
+        // `drop` panics.
+        //
+        // Here, we have already put `self` into the valid initial state, so if a
+        // call to `drop` panics then we can just safely leak the table.
 
-      let mut n = n;
-      let mut a = t.wrapping_sub(w - 1);
+        let mut n = n;
+        let mut a = t.wrapping_sub(w - 1);
 
-      // NB: n > 0
+        loop {
+          if unsafe { ptr::read(&raw const (*a).hash) } != K::ZERO {
+            unsafe { ptr::drop_in_place(&raw mut (*a).data) };
 
-      loop {
-        if unsafe { ptr::read(&raw const (*a).hash) } != K::ZERO {
-          unsafe { ptr::drop_in_place(&raw mut (*a).data) };
+            n -= 1;
+            if n == 0 { break; }
+          }
 
-          n -= 1;
-          if n == 0 { break; }
+          a = a.wrapping_add(1);
         }
-
-        a = a.wrapping_add(1);
       }
     }
 
