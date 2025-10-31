@@ -1,11 +1,11 @@
 use std::num::NonZeroU64;
 use std::array;
 
-const N: usize = 20;
+const N: usize = 10;
 const C: usize = 500;
-const K: usize = 50;
+const K: usize = 100;
 
-const _: () = assert!(N * C == 10_000); // total working set
+const _: () = assert!(N * C == 5_000); // total working set
 const _: () = assert!(K * N * C * 2 == 1_000_000); // number of operations
 
 fn make_key(x: usize) -> NonZeroU64 {
