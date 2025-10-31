@@ -19,11 +19,13 @@ unused_results = "warn"
 
 [dependencies]
 dandelion-random = { git = "https://github.com/apribadi/dandelion.git", branch = "devel", features = ["rand_core", "thread_local"] }
-rand_core = { version = "0.9.3" }
+rand_core = "0.9.3"
 
 [dev-dependencies]
+ahash = "0.8.12"
 divan = "0.1.21"
-expect-test = { version = "1.5.1" }
+expect-test = "1.5.1"
+foldhash = "0.2.0"
 
 [profile.release]
 

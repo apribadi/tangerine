@@ -267,7 +267,9 @@ impl<K: Key, V> HashMap<K, V> {
       self.slack = old_s + 1;
     }
 
-    let new_w = old_w + old_w / 4;
+    // let new_w = old_w + old_w / 4;
+    let new_w = old_w + old_w / 2;
+    // let new_w = old_w + old_w;
     let new_e = old_e + (log2(new_w) - log2(old_w)) + (is_overflow as usize);
     let new_s = old_s + (capacity(new_w) - capacity(old_w));
 
