@@ -1,3 +1,3 @@
 //! unified tests
 
-mod map;
+mod test_map;

@@ -22,8 +22,13 @@ dandelion-random = { git = "https://github.com/apribadi/dandelion.git", branch =
 rand_core = { version = "0.9.3" }
 
 [dev-dependencies]
+divan = "0.1.21"
 expect-test = { version = "1.5.1" }
 
 [profile.release]
 
 [profile.dev]
+
+[[bench]]
+name = "unified"
+harness = false
