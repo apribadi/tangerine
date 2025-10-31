@@ -89,9 +89,7 @@ fn foo() -> Result<(), std::fmt::Error> {
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
-    if let Some(v) = t.get(k) {
-      write!(s, "{}: {}\n", k, v)?;
-    }
+    write!(s, "{}: {:?}\n", k, t.get(k))?;
   }
 
   expect![[r#"
@@ -103,56 +101,106 @@ fn foo() -> Result<(), std::fmt::Error> {
       num_slots = 384
       load = 0.13020833333333334
       allocation_size = 6144
-      1: 10
-      3: 30
-      5: 50
-      7: 70
-      9: 90
-      11: 110
-      13: 130
-      15: 150
-      17: 170
-      19: 190
-      21: 210
-      23: 230
-      25: 250
-      27: 270
-      29: 290
-      31: 310
-      33: 330
-      35: 350
-      37: 370
-      39: 390
-      41: 410
-      43: 430
-      45: 450
-      47: 470
-      49: 490
-      51: 510
-      53: 530
-      55: 550
-      57: 570
-      59: 590
-      61: 610
-      63: 630
-      65: 650
-      67: 670
-      69: 690
-      71: 710
-      73: 730
-      75: 750
-      77: 770
-      79: 790
-      81: 810
-      83: 830
-      85: 850
-      87: 870
-      89: 890
-      91: 910
-      93: 930
-      95: 950
-      97: 970
-      99: 990
+      1: Some(10)
+      2: None
+      3: Some(30)
+      4: None
+      5: Some(50)
+      6: None
+      7: Some(70)
+      8: None
+      9: Some(90)
+      10: None
+      11: Some(110)
+      12: None
+      13: Some(130)
+      14: None
+      15: Some(150)
+      16: None
+      17: Some(170)
+      18: None
+      19: Some(190)
+      20: None
+      21: Some(210)
+      22: None
+      23: Some(230)
+      24: None
+      25: Some(250)
+      26: None
+      27: Some(270)
+      28: None
+      29: Some(290)
+      30: None
+      31: Some(310)
+      32: None
+      33: Some(330)
+      34: None
+      35: Some(350)
+      36: None
+      37: Some(370)
+      38: None
+      39: Some(390)
+      40: None
+      41: Some(410)
+      42: None
+      43: Some(430)
+      44: None
+      45: Some(450)
+      46: None
+      47: Some(470)
+      48: None
+      49: Some(490)
+      50: None
+      51: Some(510)
+      52: None
+      53: Some(530)
+      54: None
+      55: Some(550)
+      56: None
+      57: Some(570)
+      58: None
+      59: Some(590)
+      60: None
+      61: Some(610)
+      62: None
+      63: Some(630)
+      64: None
+      65: Some(650)
+      66: None
+      67: Some(670)
+      68: None
+      69: Some(690)
+      70: None
+      71: Some(710)
+      72: None
+      73: Some(730)
+      74: None
+      75: Some(750)
+      76: None
+      77: Some(770)
+      78: None
+      79: Some(790)
+      80: None
+      81: Some(810)
+      82: None
+      83: Some(830)
+      84: None
+      85: Some(850)
+      86: None
+      87: Some(870)
+      88: None
+      89: Some(890)
+      90: None
+      91: Some(910)
+      92: None
+      93: Some(930)
+      94: None
+      95: Some(950)
+      96: None
+      97: Some(970)
+      98: None
+      99: Some(990)
+      100: None
   "#]].assert_eq(&s);
 
   Ok(())
@@ -168,6 +216,10 @@ fn test_iter() -> Result<(), std::fmt::Error> {
     let _ = t.insert(k, 10 * i);
   }
 
+  write!(s, "num_slots = {}\n", tangerine::map::internal::num_slots(&t))?;
+  write!(s, "load = {}\n", tangerine::map::internal::load_factor(&t))?;
+  write!(s, "allocation_size = {}\n", tangerine::map::internal::allocation_size(&t))?;
+
   let values = t.values();
   let _ = t.get(NonZeroU64::new(1).unwrap());
   let mut values = values.collect::<Vec<_>>();
@@ -176,6 +228,9 @@ fn test_iter() -> Result<(), std::fmt::Error> {
   write!(s, "{:?}\n", values)?;
 
   expect![[r#"
+      num_slots = 32
+      load = 0.3125
+      allocation_size = 512
       [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
   "#]].assert_eq(&s);
 
