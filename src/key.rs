@@ -27,7 +27,7 @@ impl<T: IntoKey> Key for T {
 /// For logical correctness, the key ought to be in some sense "the same"
 /// after a round trip, but that is not required for safety.
 
-pub unsafe trait IntoKey {
+pub unsafe trait IntoKey: Copy {
   #![allow(missing_docs)]
 
   type Key: Key;
