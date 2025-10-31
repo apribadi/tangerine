@@ -1,35 +1,35 @@
 use expect_test::expect;
 use std::fmt::Write;
 use std::num::NonZeroU64;
-use std::writeln;
+use std::write;
 use tangerine::map::HashMap;
 use dandelion::Rng;
 
 #[test]
 fn test_basic() -> Result<(), std::fmt::Error> {
+  let mut s = String::new();
   let mut g = Rng::from_u64(0);
   let mut t = HashMap::new_seeded(&mut g);
-  let mut s = String::new();
 
   let key = NonZeroU64::new(13).unwrap();
 
-  writeln!(s, "{:?} <- t.len()", t.len())?;
-  writeln!(s, "{:?} <- t.is_empty()", t.is_empty())?;
-  writeln!(s, "{:?} <- t.contains_key({:?})", t.contains_key(key), key)?;
-  writeln!(s, "{:?} <- t.get({:?})", t.get(key), key)?;
-  writeln!(s, "{:?} <- t.get_mut({:?})", t.get_mut(key), key)?;
-  writeln!(s, "{:?} <- t.insert({:?}, {:?})", t.insert(key, 42), key, 42)?;
-  writeln!(s, "{:?} <- t.len()", t.len())?;
-  writeln!(s, "{:?} <- t.is_empty()", t.is_empty())?;
-  writeln!(s, "{:?} <- t.contains_key({:?})", t.contains_key(key), key)?;
-  writeln!(s, "{:?} <- t.get({:?})", t.get(key), key)?;
-  writeln!(s, "{:?} <- t.get_mut({:?})", t.get_mut(key), key)?;
-  writeln!(s, "{:?} <- t.remove({:?})", t.remove(key), key)?;
-  writeln!(s, "{:?} <- t.len()", t.len())?;
-  writeln!(s, "{:?} <- t.is_empty()", t.is_empty())?;
-  writeln!(s, "{:?} <- t.contains_key({:?})", t.contains_key(key), key)?;
-  writeln!(s, "{:?} <- t.get({:?})", t.get(key), key)?;
-  writeln!(s, "{:?} <- t.get_mut({:?})", t.get_mut(key), key)?;
+  write!(s, "{:?} <- t.len()\n", t.len())?;
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty())?;
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key)?;
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key)?;
+  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key)?;
+  write!(s, "{:?} <- t.insert({:?}, {:?})\n", t.insert(key, 42), key, 42)?;
+  write!(s, "{:?} <- t.len()\n", t.len())?;
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty())?;
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key)?;
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key)?;
+  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key)?;
+  write!(s, "{:?} <- t.remove({:?})\n", t.remove(key), key)?;
+  write!(s, "{:?} <- t.len()\n", t.len())?;
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty())?;
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key)?;
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key)?;
+  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key)?;
 
   expect![[r#"
       0 <- t.len()
@@ -65,9 +65,10 @@ fn foo() -> Result<(), std::fmt::Error> {
     let _ = t.insert(k, 10 * i);
   }
 
-  writeln!(s, "len = {}", t.len())?;
-  writeln!(s, "num_slots = {:#?}", tangerine::map::internal::num_slots(&t))?;
-  writeln!(s, "load = {:#?}", tangerine::map::internal::load_factor(&t))?;
+  write!(s, "len = {}\n", t.len())?;
+  write!(s, "num_slots = {}\n", tangerine::map::internal::num_slots(&t))?;
+  write!(s, "load = {}\n", tangerine::map::internal::load_factor(&t))?;
+  write!(s, "allocation_size = {}\n", tangerine::map::internal::allocation_size(&t))?;
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
@@ -81,24 +82,27 @@ fn foo() -> Result<(), std::fmt::Error> {
     }
   }
 
-  writeln!(s, "len = {}", t.len())?;
-  writeln!(s, "num_slots = {:#?}", tangerine::map::internal::num_slots(&t))?;
-  writeln!(s, "load = {:#?}", tangerine::map::internal::load_factor(&t))?;
+  write!(s, "len = {}\n", t.len())?;
+  write!(s, "num_slots = {}\n", tangerine::map::internal::num_slots(&t))?;
+  write!(s, "load = {}\n", tangerine::map::internal::load_factor(&t))?;
+  write!(s, "allocation_size = {}\n", tangerine::map::internal::allocation_size(&t))?;
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
     if let Some(v) = t.get(k) {
-      writeln!(s, "{}: {}", k, v)?;
+      write!(s, "{}: {}\n", k, v)?;
     }
   }
 
   expect![[r#"
       len = 100
-      num_slots = 302
-      load = 0.33112582781456956
+      num_slots = 384
+      load = 0.2604166666666667
+      allocation_size = 6144
       len = 50
-      num_slots = 302
-      load = 0.16556291390728478
+      num_slots = 384
+      load = 0.13020833333333334
+      allocation_size = 6144
       1: 10
       3: 30
       5: 50
@@ -149,156 +153,27 @@ fn foo() -> Result<(), std::fmt::Error> {
       95: 950
       97: 970
       99: 990
-  "#]].assert_eq(&s);
-
-  s.clear();
-
-  let mut xs = t.iter().collect::<Vec<_>>();
-  xs.sort();
-  for (k, &v) in xs {
-    writeln!(s, "{}: {}", k, v)?;
-  }
-
-  expect![[r#"
-      1: 10
-      3: 30
-      5: 50
-      7: 70
-      9: 90
-      11: 110
-      13: 130
-      15: 150
-      17: 170
-      19: 190
-      21: 210
-      23: 230
-      25: 250
-      27: 270
-      29: 290
-      31: 310
-      33: 330
-      35: 350
-      37: 370
-      39: 390
-      41: 410
-      43: 430
-      45: 450
-      47: 470
-      49: 490
-      51: 510
-      53: 530
-      55: 550
-      57: 570
-      59: 590
-      61: 610
-      63: 630
-      65: 650
-      67: 670
-      69: 690
-      71: 710
-      73: 730
-      75: 750
-      77: 770
-      79: 790
-      81: 810
-      83: 830
-      85: 850
-      87: 870
-      89: 890
-      91: 910
-      93: 930
-      95: 950
-      97: 970
-      99: 990
-  "#]].assert_eq(&s);
-
-  s.clear();
-
-  let mut xs = t.keys().collect::<Vec<_>>();
-  xs.sort();
-  for k in xs {
-    writeln!(s, "{}", k)?;
-  }
-
-  expect![[r#"
-      1
-      3
-      5
-      7
-      9
-      11
-      13
-      15
-      17
-      19
-      21
-      23
-      25
-      27
-      29
-      31
-      33
-      35
-      37
-      39
-      41
-      43
-      45
-      47
-      49
-      51
-      53
-      55
-      57
-      59
-      61
-      63
-      65
-      67
-      69
-      71
-      73
-      75
-      77
-      79
-      81
-      83
-      85
-      87
-      89
-      91
-      93
-      95
-      97
-      99
   "#]].assert_eq(&s);
 
   Ok(())
 }
 
-/*
-
 #[test]
 fn test_iter() -> Result<(), std::fmt::Error> {
   let mut s = String::new();
-  let mut t = HashMapNZ64::<u64>::new();
-  let key = NonZeroU64::new(1).unwrap();
+  let mut t = HashMap::new();
 
   for i in 1 ..= 10 {
     let k = NonZeroU64::new(i).unwrap();
     let _ = t.insert(k, 10 * i);
   }
 
-  let it = t.values();
-  let _ = t.get(key);
-  let mut a = it.collect::<Vec<_>>();
-  a.sort();
+  let values = t.values();
+  let _ = t.get(NonZeroU64::new(1).unwrap());
+  let mut values = values.collect::<Vec<_>>();
+  values.sort();
 
-  writeln!(s, "{:?}", a)?;
-
-  // t.reset();
-
-  let _ = t.into_iter().collect::<Vec<_>>();
+  write!(s, "{:?}\n", values)?;
 
   expect![[r#"
       [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
@@ -306,33 +181,3 @@ fn test_iter() -> Result<(), std::fmt::Error> {
 
   Ok(())
 }
-
-/*
-#[test]
-fn test_entry() -> Result<(), std::fmt::Error> {
-  let mut s = String::new();
-  let mut t = HashMapNZ64::<u64>::new();
-  let key = NonZeroU64::new(1).unwrap();
-
-  t.insert(key, 13);
-
-  match t.entry(key) {
-    map::Entry::Vacant(_) => {}
-    map::Entry::Occupied(mut o) => {
-      let old = o.replace(100);
-      writeln!(s, "old = {:?}", old)?;
-    }
-  }
-
-  writeln!(s, "{:?}", t)?;
-
-  expect![[r#"
-      old = 13
-      {1: 100}
-  "#]].assert_eq(&s);
-
-  Ok(())
-}
-*/
-*/
-

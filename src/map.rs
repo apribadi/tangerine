@@ -76,9 +76,35 @@ fn capacity(w: usize) -> isize {
   return ((w >> 1) - (w >> 3)) as isize // ~ 0.375
 }
 
+// SIZE CLASS MATH
+//
+// 0           A     B     C           D           E
+// |           |     |     |           |           |
+//                X              Y
+//
+// Note that (3 / 2) * (4 / 3) == 2, so increasing a size class by two steps is
+// always exactly a factor of two.
+//
+// We increase our size by just less than a factor of two, and then round down
+// to the nearest size class.
+//
+// This ensures that we increase our size to the smallest size class such that
+// we're increasing by at least one size class.
+
 #[inline(always)]
-fn log2(x: usize) -> usize {
-  return (usize::BITS - 1 - (x | 1).leading_zeros()) as usize;
+fn increment_size_class(n: usize) -> usize {
+  debug_assert!(2 <= n && n <= isize::MAX as usize);
+  let m = 2 * n - 1;
+  let k = usize::BITS - 1 - m.leading_zeros();
+  let a = 1 << k;
+  let b = a >> 1;
+  return a | b & m;
+}
+
+#[inline(always)]
+fn log2(n: usize) -> usize {
+  debug_assert!(n >= 1);
+  return (usize::BITS - 1 - n.leading_zeros()) as usize;
 }
 
 impl<K: Key, V> HashMap<K, V> {
@@ -203,11 +229,12 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed0;
     let w = 12;
     let e = 4;
+    let d = w + e;
 
-    assert!(w + e <= Self::MAX_NUM_SLOTS);
+    assert!(d <= Self::MAX_NUM_SLOTS);
 
     let align = align_of::<Slot<K, V>>();
-    let size = (w + e) * size_of::<Slot<K, V>>();
+    let size = d * size_of::<Slot<K, V>>();
     let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
 
     let p = unsafe { alloc_zeroed(layout) } as *mut Slot<K, V>;
@@ -217,7 +244,7 @@ impl<K: Key, V> HashMap<K, V> {
     }
 
     let t = p.wrapping_add(w - 1);
-    let l = p.wrapping_add(w + e - 1);
+    let l = p.wrapping_add(d - 1);
     let h = K::hash(key, m);
     let a = t.wrapping_sub(K::slot(h, w));
 
@@ -241,6 +268,7 @@ impl<K: Key, V> HashMap<K, V> {
     let old_s = self.slack;
     let old_l = self.limit as *mut Slot<K, V>;
     let old_e = ptr_wrapping_offset_from_unsigned(old_l, old_t);
+    let old_d = old_w + old_e;
     let old_p = old_t.wrapping_sub(old_w - 1);
     let old_n = (capacity(old_w) - old_s) as usize;
 
@@ -265,21 +293,18 @@ impl<K: Key, V> HashMap<K, V> {
       self.slack = old_s + 1;
     }
 
-    // let new_w = old_w + old_w / 4;
-    let new_w = old_w + old_w / 2;
-    // let new_w = old_w + old_w;
-    let new_e = old_e + (log2(new_w) - log2(old_w)) + (is_overflow as usize);
+    let new_d = increment_size_class(old_d * size_of::<Slot<K, V>>()) / size_of::<Slot<K, V>>();
+    let new_e = old_e + (log2(new_d) - log2(old_d)) + (is_overflow as usize);
+    let new_w = new_d - new_e;
     let new_s = old_s + (capacity(new_w) - capacity(old_w));
-
-    // TODO: round size up
 
     // Panic if we would overflow the layout.
 
-    assert!(new_w + new_e <= Self::MAX_NUM_SLOTS);
+    assert!(new_d <= Self::MAX_NUM_SLOTS);
 
     let align = align_of::<Slot<K, V>>();
-    let old_size = (old_w + old_e) * size_of::<Slot<K, V>>();
-    let new_size = (new_w + new_e) * size_of::<Slot<K, V>>();
+    let old_size = old_d * size_of::<Slot<K, V>>();
+    let new_size = new_d * size_of::<Slot<K, V>>();
     let old_layout = unsafe { Layout::from_size_align_unchecked(old_size, align) };
     let new_layout = unsafe { Layout::from_size_align_unchecked(new_size, align) };
 
@@ -289,10 +314,9 @@ impl<K: Key, V> HashMap<K, V> {
       match handle_alloc_error(new_layout) { /* ! */ }
     }
 
-    // At this point we know that allocating a new table has succeeded.
-    //
-    // We make sure to restore the last slot in case we had removed it earlier,
-    // before copying from the old table to the new table.
+    // At this point we know that allocating a new table has succeeded. We
+    // make sure to re-write the last slot before copying from the old table to
+    // the new table.
 
     unsafe { ptr::write(&raw mut (*old_l).hash, old_l_hash) };
 
@@ -509,6 +533,7 @@ impl<K: Key, V> HashMap<K, V> {
     let w = self.width;
     let s = self.slack;
     let e = ptr_wrapping_offset_from_unsigned(l, t);
+    let d = w + e;
     let c = capacity(w);
     let n = (c - s) as usize;
 
@@ -544,7 +569,7 @@ impl<K: Key, V> HashMap<K, V> {
     }
 
     let align = align_of::<Slot<K, V>>();
-    let size = (w + e) * size_of::<Slot<K, V>>();
+    let size = d * size_of::<Slot<K, V>>();
     let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
     let p = t.wrapping_sub(w - 1);
 
