@@ -55,7 +55,38 @@ fn test_basic() -> Result<(), std::fmt::Error> {
 }
 
 #[test]
-fn foo() -> Result<(), std::fmt::Error> {
+fn test_iter() -> Result<(), std::fmt::Error> {
+  let mut s = String::new();
+  let mut t = HashMap::new();
+
+  for i in 1 ..= 10 {
+    let k = NonZeroU64::new(i).unwrap();
+    let _ = t.insert(k, 10 * i);
+  }
+
+  write!(s, "num_slots = {}\n", tangerine::map::internal::num_slots(&t))?;
+  write!(s, "load = {}\n", tangerine::map::internal::load_factor(&t))?;
+  write!(s, "allocation_size = {}\n", tangerine::map::internal::allocation_size(&t))?;
+
+  let values = t.values();
+  let _ = t.get(NonZeroU64::new(1).unwrap());
+  let mut values = values.collect::<Vec<_>>();
+  values.sort();
+
+  write!(s, "{:?}\n", values)?;
+
+  expect![[r#"
+      num_slots = 32
+      load = 0.3125
+      allocation_size = 512
+      [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+  "#]].assert_eq(&s);
+
+  Ok(())
+}
+
+#[test]
+fn test_1() -> Result<(), std::fmt::Error> {
   let mut g = Rng::from_u64(0);
   let mut s = String::new();
   let mut t = HashMap::<NonZeroU64, u64>::new_seeded(&mut g);
@@ -201,37 +232,6 @@ fn foo() -> Result<(), std::fmt::Error> {
       98: None
       99: Some(990)
       100: None
-  "#]].assert_eq(&s);
-
-  Ok(())
-}
-
-#[test]
-fn test_iter() -> Result<(), std::fmt::Error> {
-  let mut s = String::new();
-  let mut t = HashMap::new();
-
-  for i in 1 ..= 10 {
-    let k = NonZeroU64::new(i).unwrap();
-    let _ = t.insert(k, 10 * i);
-  }
-
-  write!(s, "num_slots = {}\n", tangerine::map::internal::num_slots(&t))?;
-  write!(s, "load = {}\n", tangerine::map::internal::load_factor(&t))?;
-  write!(s, "allocation_size = {}\n", tangerine::map::internal::allocation_size(&t))?;
-
-  let values = t.values();
-  let _ = t.get(NonZeroU64::new(1).unwrap());
-  let mut values = values.collect::<Vec<_>>();
-  values.sort();
-
-  write!(s, "{:?}\n", values)?;
-
-  expect![[r#"
-      num_slots = 32
-      load = 0.3125
-      allocation_size = 512
-      [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
   "#]].assert_eq(&s);
 
   Ok(())
