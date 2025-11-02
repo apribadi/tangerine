@@ -19,6 +19,7 @@ unused_results = "warn"
 
 [dependencies]
 dandelion-random = { git = "https://github.com/apribadi/dandelion.git", branch = "devel", features = ["rand_core", "thread_local"] }
+plain-old-pointer = { git = "https://github.com/apribadi/pop.git" }
 rand_core = "0.9.3"
 
 [dev-dependencies]

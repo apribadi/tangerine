@@ -22,8 +22,6 @@ use core::mem::MaybeUninit;
 use core::mem::needs_drop;
 use core::ops::Index;
 use core::ops::IndexMut;
-use core::panic::RefUnwindSafe;
-use core::panic::UnwindSafe;
 use core::ptr;
 use rand_core::RngCore;
 
@@ -35,25 +33,11 @@ use crate::key::Key;
 pub struct HashMap<K: Key, V> {
   seed0: K::Seed,
   seed1: K::Seed,
-  table: *const Slot<K, V>, // covariant
+  table: pop::ptr,
   width: usize,
   slack: isize,
-  limit: *const Slot<K, V>,
-}
-
-unsafe impl<K: Key, V: Send> Send for HashMap<K, V> {
-}
-
-unsafe impl<K: Key, V: Sync> Sync for HashMap<K, V> {
-}
-
-impl<K: Key, V: UnwindSafe> UnwindSafe for HashMap<K, V> {
-}
-
-impl<K: Key, V: RefUnwindSafe> RefUnwindSafe for HashMap<K, V> {
-}
-
-impl<K: Key, V: Unpin> Unpin for HashMap<K, V> {
+  limit: pop::ptr,
+  _phantom_data: PhantomData<(K, V)>,
 }
 
 // NB: We use `repr(C)` because the `hash` field MUST be at offset zero.
@@ -113,10 +97,11 @@ impl<K: Key, V> HashMap<K, V> {
     Self {
       seed0: m,
       seed1: K::invert_seed(m),
-      table: &raw const EMPTY_TABLE as *const Slot<K, V>,
+      table: pop::ptr::from(&EMPTY_TABLE),
       width: 1,
       slack: 0,
-      limit: ptr::null(),
+      limit: pop::ptr::NULL,
+      _phantom_data: PhantomData,
     }
   }
 
@@ -156,7 +141,7 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn contains_key(&self, key: K) -> bool {
     let m = self.seed0;
-    let t = self.table;
+    let t = self.table.as_const_ptr::<Slot<K, V>>();
     let w = self.width;
     let h = K::hash(key, m);
 
@@ -177,7 +162,7 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn get(&self, key: K) -> Option<&V> {
     let m = self.seed0;
-    let t = self.table;
+    let t = self.table.as_const_ptr::<Slot<K, V>>();
     let w = self.width;
     let h = K::hash(key, m);
 
@@ -200,7 +185,7 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let m = self.seed0;
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.as_mut_ptr::<Slot<K, V>>();
     let w = self.width;
     let h = K::hash(key, m);
 
@@ -254,19 +239,19 @@ impl<K: Key, V> HashMap<K, V> {
     // We only modify `self` after we know that allocation has succeeded so
     // that the hash map will still be valid after a panic.
 
-    self.table = t;
+    self.table = pop::ptr::from(t);
     self.width = w;
     self.slack = capacity(w) - 1;
-    self.limit = l;
+    self.limit = pop::ptr::from(l);
   }
 
   #[inline(never)]
   #[cold]
   fn internal_grow(&mut self) {
-    let old_t = self.table as *mut Slot<K, V>;
+    let old_t = self.table.as_mut_ptr::<Slot<K, V>>();
     let old_w = self.width;
     let old_s = self.slack;
-    let old_l = self.limit as *mut Slot<K, V>;
+    let old_l = self.limit.as_mut_ptr::<Slot<K, V>>();
     let old_e = ptr_wrapping_offset_from_unsigned(old_l, old_t);
     let old_d = old_w + old_e;
     let old_p = old_t.wrapping_sub(old_w - 1);
@@ -345,10 +330,10 @@ impl<K: Key, V> HashMap<K, V> {
       a = a.wrapping_add(1);
     }
 
-    self.table = new_t;
+    self.table = pop::ptr::from(new_t);
     self.width = new_w;
     self.slack = new_s;
-    self.limit = new_l;
+    self.limit = pop::ptr::from(new_l);
 
     // The map is now in a valid state, even if `dealloc` panics.
 
@@ -366,7 +351,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-    let l = self.limit as *mut Slot<K, V>;
+    let l = self.limit.as_mut_ptr::<Slot<K, V>>();
 
     if l.is_null() {
       self.internal_init(key, value);
@@ -375,7 +360,7 @@ impl<K: Key, V> HashMap<K, V> {
     }
 
     let m = self.seed0;
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.as_mut_ptr::<Slot<K, V>>();
     let w = self.width;
     let h = K::hash(key, m);
 
@@ -419,7 +404,7 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn remove(&mut self, key: K) -> Option<V> {
     let m = self.seed0;
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.as_mut_ptr::<Slot<K, V>>();
     let w = self.width;
     let h = K::hash(key, m);
 
@@ -461,11 +446,11 @@ impl<K: Key, V> HashMap<K, V> {
   /// a valid but otherwise unspecified state.
 
   pub fn clear(&mut self) {
-    let l = self.limit as *mut Slot<K, V>;
+    let l = self.limit.as_mut_ptr::<Slot<K, V>>();
 
     if l.is_null() { return; }
 
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.as_mut_ptr::<Slot<K, V>>();
     let w = self.width;
     let s = self.slack;
     let c = capacity(w);
@@ -525,11 +510,11 @@ impl<K: Key, V> HashMap<K, V> {
   /// happens, the map will be in a valid but otherwise unspecified state.
 
   pub fn reset(&mut self) {
-    let l = self.limit as *mut Slot<K, V>;
+    let l = self.limit.as_mut_ptr::<Slot<K, V>>();
 
     if l.is_null() { return; }
 
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.as_mut_ptr::<Slot<K, V>>();
     let w = self.width;
     let s = self.slack;
     let e = ptr_wrapping_offset_from_unsigned(l, t);
@@ -537,10 +522,10 @@ impl<K: Key, V> HashMap<K, V> {
     let c = capacity(w);
     let n = (c - s) as usize;
 
-    self.table = &raw const EMPTY_TABLE as *const Slot<K, V>;
+    self.table = pop::ptr::from(&EMPTY_TABLE);
     self.width = 1;
     self.slack = 0;
-    self.limit = ptr::null();
+    self.limit = pop::ptr::NULL;
 
     if needs_drop::<V>() {
       if n != 0 {
@@ -581,14 +566,14 @@ impl<K: Key, V> HashMap<K, V> {
 
   pub fn iter(&self) -> Iter<'_, K, V> {
     let m = self.seed1;
-    let t = self.table;
+    let t = self.table.as_const_ptr::<Slot<K, V>>();
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return Iter { size: n, slot: a, seed: m, _phantom_data: PhantomData };
+    return Iter { size: n, slot: pop::ptr::from(a), seed: m, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding each key and a mutable reference to its
@@ -596,64 +581,64 @@ impl<K: Key, V> HashMap<K, V> {
 
   pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
     let m = self.seed1;
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.as_mut_ptr::<Slot<K, V>>();
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return IterMut { size: n, slot: a, seed: m, _phantom_data: PhantomData };
+    return IterMut { size: n, slot: pop::ptr::from(a), seed: m, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
 
   pub fn keys(&self) -> Keys<'_, K, V> {
     let m = self.seed1;
-    let t = self.table;
+    let t = self.table.as_const_ptr::<Slot<K, V>>();
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return Keys { size: n, slot: a, seed: m, _phantom_data: PhantomData };
+    return Keys { size: n, slot: pop::ptr::from(a), seed: m, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding a reference to each value. The iterator item
   /// type is `&'_ V`.
 
   pub fn values(&self) -> Values<'_, K, V> {
-    let t = self.table;
+    let t = self.table.as_const_ptr::<Slot<K, V>>();
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return Values { size: n, slot: a, _phantom_data: PhantomData };
+    return Values { size: n, slot: pop::ptr::from(a), _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding a mutable reference to each value. The
   /// iterator item type is `&'_ mut V`.
 
   pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.as_mut_ptr::<Slot<K, V>>();
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
     let a = t.wrapping_sub(w - 1);
 
-    return ValuesMut { size: n, slot: a, _phantom_data: PhantomData };
+    return ValuesMut { size: n, slot: pop::ptr::from(a), _phantom_data: PhantomData };
   }
 
   fn internal_num_slots(&self) -> usize {
-    let l = self.limit;
+    let l = self.limit.as_const_ptr::<Slot<K, V>>();
 
     if l.is_null() { return 0; }
 
-    let t = self.table;
+    let t = self.table.as_const_ptr::<Slot<K, V>>();
     let w = self.width;
 
     return ptr_wrapping_offset_from_unsigned(l, t) + w;
@@ -696,18 +681,18 @@ impl<K: Key, V> IndexMut<K> for HashMap<K, V> {
 #[derive(Clone)]
 pub struct Iter<'a, K: Key, V> {
   size: usize,
-  slot: *const Slot<K, V>,
+  slot: pop::ptr,
   seed: K::Seed,
-  _phantom_data: PhantomData<&'a V>,
+  _phantom_data: PhantomData<(&'a K, &'a V)>,
 }
 
 /// Iterator returned by [`HashMap::iter_mut`].
 
 pub struct IterMut<'a, K: Key, V> {
   size: usize,
-  slot: *mut Slot<K, V>,
+  slot: pop::ptr,
   seed: K::Seed,
-  _phantom_data: PhantomData<&'a mut V>,
+  _phantom_data: PhantomData<(&'a K, &'a mut V)>,
 }
 
 /// Iterator returned by [`HashMap::keys`].
@@ -715,9 +700,9 @@ pub struct IterMut<'a, K: Key, V> {
 #[derive(Clone)]
 pub struct Keys<'a, K: Key, V> {
   size: usize,
-  slot: *const Slot<K, V>,
+  slot: pop::ptr,
   seed: K::Seed,
-  _phantom_data: PhantomData<&'a V>,
+  _phantom_data: PhantomData<(&'a K, &'a V)>,
 }
 
 /// Iterator returned by [`HashMap::values`].
@@ -725,16 +710,16 @@ pub struct Keys<'a, K: Key, V> {
 #[derive(Clone)]
 pub struct Values<'a, K: Key, V> {
   size: usize,
-  slot: *const Slot<K, V>,
-  _phantom_data: PhantomData<&'a V>,
+  slot: pop::ptr,
+  _phantom_data: PhantomData<(&'a K, &'a V)>,
 }
 
 /// Iterator returned by [`HashMap::values_mut`].
 
 pub struct ValuesMut<'a, K: Key, V> {
   size: usize,
-  slot: *mut Slot<K, V>,
-  _phantom_data: PhantomData<&'a mut V>,
+  slot: pop::ptr,
+  _phantom_data: PhantomData<(&'a K, &'a mut V)>,
 }
 
 impl<'a, K: Key, V> FusedIterator for Iter<'a, K, V> {
@@ -796,7 +781,7 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
 
     if n == 0 { return None; }
 
-    let mut a = self.slot;
+    let mut a = self.slot.as_const_ptr::<Slot<K, V>>();
     let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
     while x == K::ZERO {
@@ -808,7 +793,7 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
     let y = unsafe { (&*&raw const (*a).data).assume_init_ref() };
 
     self.size = n - 1;
-    self.slot = a.wrapping_add(1);
+    self.slot = pop::ptr::from(a.wrapping_add(1));
 
     return Some((x, y));
   }
@@ -828,7 +813,7 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
 
     if n == 0 { return None; }
 
-    let mut a = self.slot;
+    let mut a = self.slot.as_mut_ptr::<Slot<K, V>>();
     let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
     while x == K::ZERO {
@@ -840,7 +825,7 @@ impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
     let y = unsafe { (&mut *&raw mut (*a).data).assume_init_mut() };
 
     self.size = n - 1;
-    self.slot = a.wrapping_add(1);
+    self.slot = pop::ptr::from(a.wrapping_add(1));
 
     return Some((x, y));
   }
@@ -860,7 +845,7 @@ impl<'a, K: Key, V> Iterator for Keys<'a, K, V> {
 
     if n == 0 { return None; }
 
-    let mut a = self.slot;
+    let mut a = self.slot.as_const_ptr::<Slot<K, V>>();
     let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
     while x == K::ZERO {
@@ -871,7 +856,7 @@ impl<'a, K: Key, V> Iterator for Keys<'a, K, V> {
     let x = unsafe { K::invert_hash(x, self.seed) };
 
     self.size = n - 1;
-    self.slot = a.wrapping_add(1);
+    self.slot = pop::ptr::from(a.wrapping_add(1));
 
     return Some(x);
   }
@@ -891,7 +876,7 @@ impl<'a, K: Key, V> Iterator for Values<'a, K, V> {
 
     if n == 0 { return None; }
 
-    let mut a = self.slot;
+    let mut a = self.slot.as_const_ptr::<Slot<K, V>>();
     let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
     while x == K::ZERO {
@@ -902,7 +887,7 @@ impl<'a, K: Key, V> Iterator for Values<'a, K, V> {
     let y = unsafe { (&*&raw const (*a).data).assume_init_ref() };
 
     self.size = n - 1;
-    self.slot = a.wrapping_add(1);
+    self.slot = pop::ptr::from(a.wrapping_add(1));
 
     return Some(y);
   }
@@ -922,7 +907,7 @@ impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
 
     if n == 0 { return None; }
 
-    let mut a = self.slot;
+    let mut a = self.slot.as_mut_ptr::<Slot<K, V>>();
     let mut x = unsafe { ptr::read(&raw const (*a).hash) };
 
     while x == K::ZERO {
@@ -933,7 +918,7 @@ impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
     let y = unsafe { (&mut *&raw mut (*a).data).assume_init_mut() };
 
     self.size = n - 1;
-    self.slot = a.wrapping_add(1);
+    self.slot = pop::ptr::from(a.wrapping_add(1));
 
     return Some(y);
   }
