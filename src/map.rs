@@ -10,8 +10,6 @@
 
 extern crate alloc;
 
-use alloc::alloc::alloc_zeroed;
-use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use core::alloc::Layout;
 use core::cmp::max;
@@ -20,6 +18,7 @@ use core::iter::FusedIterator;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
+use core::mem::offset_of;
 use core::ops::Index;
 use core::ops::IndexMut;
 use pop::ptr;
@@ -49,6 +48,22 @@ struct Slot<K: Key, V> {
 }
 
 static EMPTY_TABLE: u64 = 0;
+
+unsafe fn alloc_zeroed(size: usize, align: usize) -> ptr {
+  let l = unsafe { Layout::from_size_align_unchecked(size, align) };
+  let p = unsafe { pop::alloc_zeroed(l) };
+
+  if p.is_null() {
+    match handle_alloc_error(l) {
+    }
+  }
+
+  return p;
+}
+
+unsafe fn dealloc(ptr: ptr, size: usize, align: usize) {
+  unsafe { pop::dealloc(ptr, Layout::from_size_align_unchecked(size, align)) };
+}
 
 #[inline(always)]
 fn ptr_wrapping_offset_from_unsigned<T>(x: *const T, y: *const T) -> usize {
@@ -92,6 +107,10 @@ fn log2(n: usize) -> usize {
 }
 
 impl<K: Key, V> HashMap<K, V> {
+  const SLOT_STRIDE: usize = size_of::<Slot<K, V>>();
+
+  const DATA_OFFSET: usize = offset_of!(Slot<K, V>, data);
+
   #[inline(always)]
   fn internal_new(m: K::Seed) -> Self {
     Self {
@@ -141,16 +160,16 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn contains_key(&self, key: K) -> bool {
     let m = self.seed0;
-    let t = self.table.as_const_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let h = K::hash(key, m);
 
-    let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x = unsafe { (&raw const (*a).hash).read() };
+    let mut a = t - Self::SLOT_STRIDE * K::slot(h, w);
+    let mut x = unsafe { a.read::<K::Hash>() };
 
     while x > h {
-      a = a.wrapping_add(1);
-      x = unsafe { (&raw const (*a).hash).read() };
+      a = a + Self::SLOT_STRIDE;
+      x = unsafe { a.read::<K::Hash>() };
     }
 
     return x == h;
@@ -162,21 +181,21 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn get(&self, key: K) -> Option<&V> {
     let m = self.seed0;
-    let t = self.table.as_const_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let h = K::hash(key, m);
 
-    let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x = unsafe { (&raw const (*a).hash).read() };
+    let mut a = t - Self::SLOT_STRIDE * K::slot(h, w);
+    let mut x = unsafe { a.read::<K::Hash>() };
 
     while x > h {
-      a = a.wrapping_add(1);
-      x = unsafe { (&raw const (*a).hash).read() };
+      a = a + Self::SLOT_STRIDE;
+      x = unsafe { a.read::<K::Hash>() };
     }
 
     if x != h { return None; }
 
-    return Some(unsafe { (&*&raw const (*a).data).assume_init_ref() });
+    return Some(unsafe { (a + Self::DATA_OFFSET).as_ref::<V>() });
   }
 
   /// Returns a mutable reference to the value associated with the given key,
@@ -185,21 +204,21 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let m = self.seed0;
-    let t = self.table.as_mut_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let h = K::hash(key, m);
 
-    let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x = unsafe { (&raw const (*a).hash).read() };
+    let mut a = t - Self::SLOT_STRIDE * K::slot(h, w);
+    let mut x = unsafe { a.read::<K::Hash>() };
 
     while x > h {
-      a = a.wrapping_add(1);
-      x = unsafe { (&raw const (*a).hash).read() };
+      a = a + Self::SLOT_STRIDE;
+      x = unsafe { a.read::<K::Hash>() };
     }
 
     if x != h { return None; }
 
-    return Some(unsafe { (&mut *&raw mut (*a).data).assume_init_mut() });
+    return Some(unsafe { (a + Self::DATA_OFFSET).as_mut_ref::<V>() });
   }
 
   // NB: The fact that `align_of::<T>` divides `size_of::<T>()` helps imply
@@ -218,31 +237,25 @@ impl<K: Key, V> HashMap<K, V> {
 
     assert!(d <= Self::MAX_NUM_SLOTS);
 
-    let align = align_of::<Slot<K, V>>();
     let size = d * size_of::<Slot<K, V>>();
-    let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
+    let align = align_of::<Slot<K, V>>();
+    let p = unsafe { alloc_zeroed(size, align) };
 
-    let p = unsafe { alloc_zeroed(layout) } as *mut Slot<K, V>;
-
-    if p.is_null() {
-      match handle_alloc_error(layout) { /* ! */ }
-    }
-
-    let t = p.wrapping_add(w - 1);
-    let l = p.wrapping_add(d - 1);
+    let t = p + Self::SLOT_STRIDE * (w - 1);
+    let l = p + Self::SLOT_STRIDE * (d - 1);
     let h = K::hash(key, m);
-    let a = t.wrapping_sub(K::slot(h, w));
+    let a = t - Self::SLOT_STRIDE * K::slot(h, w);
 
-    unsafe { (&raw mut (*a).hash).write(h) };
-    unsafe { (&raw mut (*a).data).write(MaybeUninit::new(value)) };
+    unsafe { a.write(h) };
+    unsafe { (a + Self::DATA_OFFSET).write(value) };
 
     // We only modify `self` after we know that allocation has succeeded so
     // that the hash map will still be valid after a panic.
 
-    self.table = ptr::from(t);
+    self.table = t;
     self.width = w;
     self.slack = capacity(w) - 1;
-    self.limit = ptr::from(l);
+    self.limit = l;
   }
 
   #[inline(never)]
@@ -290,14 +303,8 @@ impl<K: Key, V> HashMap<K, V> {
     let align = align_of::<Slot<K, V>>();
     let old_size = old_d * size_of::<Slot<K, V>>();
     let new_size = new_d * size_of::<Slot<K, V>>();
-    let old_layout = unsafe { Layout::from_size_align_unchecked(old_size, align) };
-    let new_layout = unsafe { Layout::from_size_align_unchecked(new_size, align) };
 
-    let new_p = unsafe { alloc_zeroed(new_layout) } as *mut Slot<K, V>;
-
-    if new_p.is_null() {
-      match handle_alloc_error(new_layout) { /* ! */ }
-    }
+    let new_p = unsafe { alloc_zeroed(new_size, align) }.as_mut_ptr::<Slot<K, V>>();
 
     // At this point we know that allocating a new table has succeeded. We
     // make sure to re-write the last slot before copying from the old table to
@@ -337,7 +344,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     // The map is now in a valid state, even if `dealloc` panics.
 
-    unsafe { dealloc(old_p as *mut u8, old_layout) };
+    unsafe { dealloc(ptr::from(old_p), old_size, align) };
   }
 
   /// Inserts the given key and value into the map. Returns the previous value
@@ -555,10 +562,9 @@ impl<K: Key, V> HashMap<K, V> {
 
     let align = align_of::<Slot<K, V>>();
     let size = d * size_of::<Slot<K, V>>();
-    let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
     let p = t.wrapping_sub(w - 1);
 
-    unsafe { dealloc(p as *mut u8, layout) };
+    unsafe { dealloc(ptr::from(p), size, align) };
   }
 
   /// Returns an iterator yielding each key and a reference to its associated
