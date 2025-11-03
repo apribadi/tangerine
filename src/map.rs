@@ -66,11 +66,6 @@ unsafe fn dealloc(ptr: ptr, size: usize, align: usize) {
 }
 
 #[inline(always)]
-fn ptr_wrapping_offset_from_unsigned<T>(x: *const T, y: *const T) -> usize {
-  return x.addr().wrapping_sub(y.addr()) / size_of::<T>();
-}
-
-#[inline(always)]
 fn capacity(w: usize) -> isize {
   return ((w >> 1) - (w >> 3)) as isize // ~ 0.375
 }
@@ -106,11 +101,27 @@ fn log2(n: usize) -> usize {
   return (usize::BITS - 1 - n.leading_zeros()) as usize;
 }
 
+const fn slot_stride<K: Key, V>() -> usize {
+  return size_of::<Slot<K, V>>();
+}
+
+const fn data_offset<K: Key, V>() -> usize {
+  return offset_of!(Slot<K, V>, data);
+}
+
+const fn align<K: Key, V>() -> usize {
+  return align_of::<Slot<K, V>>();
+}
+
+const fn max_num_slots<K: Key, V>() -> usize {
+  // NB: The fact that `align_of::<T>` divides `size_of::<T>()` helps imply
+  // that the layout of an array of `MAX_NUM_SLOTS` slots is valid, because
+  // rounding up to the alignment won't increase the size.
+
+ return isize::MAX as usize / slot_stride::<K, V>();
+}
+
 impl<K: Key, V> HashMap<K, V> {
-  const SLOT_STRIDE: usize = size_of::<Slot<K, V>>();
-
-  const DATA_OFFSET: usize = offset_of!(Slot<K, V>, data);
-
   #[inline(always)]
   fn internal_new(m: K::Seed) -> Self {
     Self {
@@ -159,16 +170,18 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   pub fn contains_key(&self, key: K) -> bool {
+    let SLOT_STRIDE = slot_stride::<K, V>();
+
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
     let h = K::hash(key, m);
 
-    let mut a = t - Self::SLOT_STRIDE * K::slot(h, w);
+    let mut a = t - SLOT_STRIDE * K::slot(h, w);
     let mut x = unsafe { a.read::<K::Hash>() };
 
     while x > h {
-      a = a + Self::SLOT_STRIDE;
+      a = a + SLOT_STRIDE;
       x = unsafe { a.read::<K::Hash>() };
     }
 
@@ -180,22 +193,25 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   pub fn get(&self, key: K) -> Option<&V> {
+    let SLOT_STRIDE = slot_stride::<K, V>();
+    let DATA_OFFSET = data_offset::<K, V>();
+
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
     let h = K::hash(key, m);
 
-    let mut a = t - Self::SLOT_STRIDE * K::slot(h, w);
+    let mut a = t - SLOT_STRIDE * K::slot(h, w);
     let mut x = unsafe { a.read::<K::Hash>() };
 
     while x > h {
-      a = a + Self::SLOT_STRIDE;
+      a = a + SLOT_STRIDE;
       x = unsafe { a.read::<K::Hash>() };
     }
 
     if x != h { return None; }
 
-    return Some(unsafe { (a + Self::DATA_OFFSET).as_ref::<V>() });
+    return Some(unsafe { (a + DATA_OFFSET).as_ref::<V>() });
   }
 
   /// Returns a mutable reference to the value associated with the given key,
@@ -203,51 +219,51 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
+    let SLOT_STRIDE = slot_stride::<K, V>();
+    let DATA_OFFSET = data_offset::<K, V>();
+
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
     let h = K::hash(key, m);
 
-    let mut a = t - Self::SLOT_STRIDE * K::slot(h, w);
+    let mut a = t - SLOT_STRIDE * K::slot(h, w);
     let mut x = unsafe { a.read::<K::Hash>() };
 
     while x > h {
-      a = a + Self::SLOT_STRIDE;
+      a = a + SLOT_STRIDE;
       x = unsafe { a.read::<K::Hash>() };
     }
 
     if x != h { return None; }
 
-    return Some(unsafe { (a + Self::DATA_OFFSET).as_mut_ref::<V>() });
+    return Some(unsafe { (a + DATA_OFFSET).as_mut_ref::<V>() });
   }
-
-  // NB: The fact that `align_of::<T>` divides `size_of::<T>()` helps imply
-  // that the layout of an array of `MAX_NUM_SLOTS` slots is valid, because
-  // rounding up to the alignment won't increase the size.
-
-  const MAX_NUM_SLOTS: usize = isize::MAX as usize / size_of::<Slot<K, V>>();
 
   #[inline(never)]
   #[cold]
   fn internal_init(&mut self, key: K, value: V) {
+    let ALIGN = align::<K, V>();
+    let SLOT_STRIDE = slot_stride::<K, V>();
+    let DATA_OFFSET = data_offset::<K, V>();
+
     let m = self.seed0;
     let w = 12;
     let e = 4;
     let d = w + e;
 
-    assert!(d <= Self::MAX_NUM_SLOTS);
+    assert!(d <= max_num_slots::<K, V>());
 
-    let size = d * size_of::<Slot<K, V>>();
-    let align = align_of::<Slot<K, V>>();
-    let p = unsafe { alloc_zeroed(size, align) };
+    let size = d * SLOT_STRIDE;
+    let p = unsafe { alloc_zeroed(size, ALIGN) };
 
-    let t = p + Self::SLOT_STRIDE * (w - 1);
-    let l = p + Self::SLOT_STRIDE * (d - 1);
+    let t = p + SLOT_STRIDE * (w - 1);
+    let l = p + SLOT_STRIDE * (d - 1);
     let h = K::hash(key, m);
-    let a = t - Self::SLOT_STRIDE * K::slot(h, w);
+    let a = t - SLOT_STRIDE * K::slot(h, w);
 
     unsafe { a.write(h) };
-    unsafe { (a + Self::DATA_OFFSET).write(value) };
+    unsafe { (a + DATA_OFFSET).write(value) };
 
     // We only modify `self` after we know that allocation has succeeded so
     // that the hash map will still be valid after a panic.
@@ -261,16 +277,20 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(never)]
   #[cold]
   fn internal_grow(&mut self) {
-    let old_t = self.table.as_mut_ptr::<Slot<K, V>>();
+    let ALIGN = align::<K, V>();
+    let SLOT_STRIDE = slot_stride::<K, V>();
+    let DATA_OFFSET = data_offset::<K, V>();
+
+    let old_t = self.table;
     let old_w = self.width;
     let old_s = self.slack;
-    let old_l = self.limit.as_mut_ptr::<Slot<K, V>>();
-    let old_e = ptr_wrapping_offset_from_unsigned(old_l, old_t);
+    let old_l = self.limit;
+    let old_e = (old_l - old_t) / SLOT_STRIDE;
     let old_d = old_w + old_e;
-    let old_p = old_t.wrapping_sub(old_w - 1);
+    let old_p = old_t - SLOT_STRIDE * (old_w - 1);
     let old_n = (capacity(old_w) - old_s) as usize;
 
-    let old_l_hash = unsafe { (&raw const (*old_l).hash).read() };
+    let old_l_hash = unsafe { old_l.read::<K::Hash>() };
     let is_overflow = old_l_hash != K::ZERO;
 
     // WARNING!
@@ -287,64 +307,63 @@ impl<K: Key, V> HashMap<K, V> {
     // This is an instance of the infamous PPYP design pattern.
 
     if is_overflow {
-      unsafe { (&raw mut (*old_l).hash).write(K::ZERO) };
+      unsafe { old_l.write(K::ZERO) };
       self.slack = old_s + 1;
     }
 
-    let new_d = increment_size_class(old_d * size_of::<Slot<K, V>>()) / size_of::<Slot<K, V>>();
+    let new_d = increment_size_class(old_d * SLOT_STRIDE) / SLOT_STRIDE;
     let new_e = old_e + (log2(new_d) - log2(old_d)) + (is_overflow as usize);
     let new_w = new_d - new_e;
     let new_s = old_s + (capacity(new_w) - capacity(old_w));
 
     // Panic if we would overflow the layout.
 
-    assert!(new_d <= Self::MAX_NUM_SLOTS);
+    assert!(new_d <= max_num_slots::<K, V>());
 
-    let align = align_of::<Slot<K, V>>();
-    let old_size = old_d * size_of::<Slot<K, V>>();
-    let new_size = new_d * size_of::<Slot<K, V>>();
+    let old_size = old_d * SLOT_STRIDE;
+    let new_size = new_d * SLOT_STRIDE;
 
-    let new_p = unsafe { alloc_zeroed(new_size, align) }.as_mut_ptr::<Slot<K, V>>();
+    let new_p = unsafe { alloc_zeroed(new_size, ALIGN) };
 
     // At this point we know that allocating a new table has succeeded. We
     // make sure to re-write the last slot before copying from the old table to
     // the new table.
 
-    unsafe { (&raw mut (*old_l).hash).write(old_l_hash) };
+    unsafe { old_l.write(old_l_hash) };
 
-    let new_t = new_p.wrapping_add(new_w - 1);
-    let new_l = new_p.wrapping_add(new_w + new_e - 1);
+    let new_t = new_p + SLOT_STRIDE * (new_w - 1);
+    let new_l = new_p + SLOT_STRIDE * (new_d - 1);
 
     let mut a = old_p;
     let mut b = new_p;
     let mut n = old_n;
 
     loop {
-      let x = unsafe { (&raw const (*a).hash).read() };
+      let x = unsafe { a.read::<K::Hash>() };
 
       if x != K::ZERO {
-        b = max(b, new_t.wrapping_sub(K::slot(x, new_w)));
+        b = max(b, new_t - SLOT_STRIDE * K::slot(x, new_w));
 
-        unsafe { (&raw mut (*b).hash).write(x) }
-        unsafe { (&raw mut (*b).data).write((&raw const (*a).data).read()) };
+        unsafe { b.write(x) }
+        unsafe { (b + DATA_OFFSET).write((a + DATA_OFFSET).read::<V>()) };
 
         n -= 1;
         if n == 0 { break; }
 
-        b = b.wrapping_add(1);
+        b = b + SLOT_STRIDE;
       }
 
-      a = a.wrapping_add(1);
+      a = a + SLOT_STRIDE;
     }
 
-    self.table = ptr::from(new_t);
+    self.table = new_t;
     self.width = new_w;
     self.slack = new_s;
-    self.limit = ptr::from(new_l);
+    self.limit = new_l;
 
     // The map is now in a valid state, even if `dealloc` panics.
 
-    unsafe { dealloc(ptr::from(old_p), old_size, align) };
+    unsafe { dealloc(old_p, old_size, ALIGN) };
   }
 
   /// Inserts the given key and value into the map. Returns the previous value
@@ -358,7 +377,10 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-    let l = self.limit.as_mut_ptr::<Slot<K, V>>();
+    let SLOT_STRIDE = slot_stride::<K, V>();
+    let DATA_OFFSET = data_offset::<K, V>();
+
+    let l = self.limit;
 
     if l.is_null() {
       self.internal_init(key, value);
@@ -367,35 +389,33 @@ impl<K: Key, V> HashMap<K, V> {
     }
 
     let m = self.seed0;
-    let t = self.table.as_mut_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let h = K::hash(key, m);
 
-    let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x = unsafe { (&raw const (*a).hash).read() };
+    let mut a = t - SLOT_STRIDE * K::slot(h, w);
+    let mut x = unsafe { a.read::<K::Hash>() };
 
     while x > h {
-      a = a.wrapping_add(1);
-      x = unsafe { (&raw const (*a).hash).read() };
+      a = a + SLOT_STRIDE;
+      x = unsafe { a.read::<K::Hash>() };
     }
 
-    let value = MaybeUninit::new(value);
-
     if x == h {
-      return Some(unsafe { (&raw mut (*a).data).replace(value).assume_init() });
+      return Some(unsafe { (a + DATA_OFFSET).replace(value) });
     }
 
     let mut y = value;
 
-    unsafe { (&raw mut (*a).hash).write(h) };
+    unsafe { a.write(h) };
 
     while x != K::ZERO {
-      y = unsafe { (&raw mut (*a).data).replace(y) };
-      a = a.wrapping_add(1);
-      x = unsafe { (&raw mut (*a).hash).replace(x) };
+      y = unsafe { (a + DATA_OFFSET).replace(y) };
+      a = a + SLOT_STRIDE;
+      x = unsafe { a.replace(x) };
     }
 
-    unsafe { (&raw mut (*a).data).write(y) };
+    unsafe { (a + DATA_OFFSET).write(y) };
 
     let s = self.slack - 1;
     self.slack = s;
@@ -410,37 +430,40 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   pub fn remove(&mut self, key: K) -> Option<V> {
+    let SLOT_STRIDE = slot_stride::<K, V>();
+    let DATA_OFFSET = data_offset::<K, V>();
+
     let m = self.seed0;
-    let t = self.table.as_mut_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let h = K::hash(key, m);
 
-    let mut a = t.wrapping_sub(K::slot(h, w));
-    let mut x = unsafe { (&raw const (*a).hash).read() };
+    let mut a = t - SLOT_STRIDE * K::slot(h, w);
+    let mut x = unsafe { a.read::<K::Hash>() };
 
     while x > h {
-      a = a.wrapping_add(1);
-      x = unsafe { (&raw const (*a).hash).read() };
+      a = a + SLOT_STRIDE;
+      x = unsafe { a.read::<K::Hash>() };
     }
 
     if x != h { return None; }
 
     self.slack += 1;
 
-    let value = unsafe { (&raw const (*a).data).read().assume_init() };
+    let value = unsafe { (a + DATA_OFFSET).read::<V>() };
     let mut a = a;
-    let mut b = a.wrapping_add(1);
-    let mut x = unsafe { (&raw const (*b).hash).read() };
+    let mut b = a + SLOT_STRIDE;
+    let mut x = unsafe { b.read::<K::Hash>() };
 
-    while t.wrapping_sub(K::slot(x, w)) <= a && /* likely */ x != K::ZERO {
-      unsafe { (&raw mut (*a).hash).write(x) };
-      unsafe { (&raw mut (*a).data).write((&raw const (*b).data).read()) };
+    while t - SLOT_STRIDE * K::slot(x, w) <= a && /* likely */ x != K::ZERO {
+      unsafe { a.write(x) };
+      unsafe { (a + DATA_OFFSET).write((b + DATA_OFFSET).read::<V>()) };
       a = b;
-      b = b.wrapping_add(1);
-      x = unsafe { (&raw const (*b).hash).read() };
+      b = b + SLOT_STRIDE;
+      x = unsafe { b.read::<K::Hash>() };
     }
 
-    unsafe { (&raw mut (*a).hash).write(K::ZERO) };
+    unsafe { a.write(K::ZERO) };
 
     return Some(value);
   }
@@ -453,11 +476,14 @@ impl<K: Key, V> HashMap<K, V> {
   /// a valid but otherwise unspecified state.
 
   pub fn clear(&mut self) {
-    let l = self.limit.as_mut_ptr::<Slot<K, V>>();
+    let SLOT_STRIDE = slot_stride::<K, V>();
+    let DATA_OFFSET = data_offset::<K, V>();
+
+    let l = self.limit;
 
     if l.is_null() { return; }
 
-    let t = self.table.as_mut_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let s = self.slack;
     let c = capacity(w);
@@ -480,28 +506,28 @@ impl<K: Key, V> HashMap<K, V> {
         let mut a = l;
 
         loop {
-          if unsafe { (&raw const (*a).hash).read() } != K::ZERO {
-            unsafe { (&raw mut (*a).hash).write(K::ZERO) };
+          if unsafe { a.read::<K::Hash>() } != K::ZERO {
+            unsafe { a.write(K::ZERO) };
 
             s += 1;
             self.slack = s;
 
-            unsafe { (&raw mut (*a).data).drop_in_place() };
+            unsafe { (a + DATA_OFFSET).drop_in_place::<V>() };
 
             n -= 1;
             if n == 0 { break; }
           }
 
-          a = a.wrapping_sub(1);
+          a = a - SLOT_STRIDE;
         }
       }
     } else {
       if n != 0 {
-        let mut a = t.wrapping_sub(w - 1);
+        let mut a = t - SLOT_STRIDE * (w - 1);
 
         while a <= l {
-          unsafe { (&raw mut (*a).hash).write(K::ZERO) };
-          a = a.wrapping_add(1);
+          unsafe { a.write(K::ZERO) };
+          a = a + SLOT_STRIDE;
         }
 
         self.slack = c;
@@ -517,14 +543,18 @@ impl<K: Key, V> HashMap<K, V> {
   /// happens, the map will be in a valid but otherwise unspecified state.
 
   pub fn reset(&mut self) {
-    let l = self.limit.as_mut_ptr::<Slot<K, V>>();
+    let ALIGN = align::<K, V>();
+    let SLOT_STRIDE = slot_stride::<K, V>();
+    let DATA_OFFSET = data_offset::<K, V>();
+
+    let l = self.limit;
 
     if l.is_null() { return; }
 
-    let t = self.table.as_mut_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let s = self.slack;
-    let e = ptr_wrapping_offset_from_unsigned(l, t);
+    let e = (l - t) / SLOT_STRIDE;
     let d = w + e;
     let c = capacity(w);
     let n = (c - s) as usize;
@@ -545,113 +575,126 @@ impl<K: Key, V> HashMap<K, V> {
         // call to `drop` panics then we can just safely leak the table.
 
         let mut n = n;
-        let mut a = t.wrapping_sub(w - 1);
+        let mut a = t - SLOT_STRIDE * (w - 1);
 
         loop {
-          if unsafe { (&raw const (*a).hash).read() } != K::ZERO {
-            unsafe { (&raw mut (*a).data).drop_in_place() };
+          if unsafe { a.read::<K::Hash>() } != K::ZERO {
+            unsafe { (a + DATA_OFFSET).drop_in_place::<V>() };
 
             n -= 1;
             if n == 0 { break; }
           }
 
-          a = a.wrapping_add(1);
+          a = a + SLOT_STRIDE;
         }
       }
     }
 
-    let align = align_of::<Slot<K, V>>();
-    let size = d * size_of::<Slot<K, V>>();
-    let p = t.wrapping_sub(w - 1);
+    let size = d * SLOT_STRIDE;
+    let p = t - SLOT_STRIDE * (w - 1);
 
-    unsafe { dealloc(ptr::from(p), size, align) };
+    unsafe { dealloc(p, size, ALIGN) };
   }
 
   /// Returns an iterator yielding each key and a reference to its associated
   /// value. The iterator item type is `(K, &'_ V)`.
 
   pub fn iter(&self) -> Iter<'_, K, V> {
+    let SLOT_STRIDE = slot_stride::<K, V>();
+
     let m = self.seed1;
-    let t = self.table.as_const_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
-    let a = t.wrapping_sub(w - 1);
+    let a = t - SLOT_STRIDE * (w - 1);
 
-    return Iter { size: n, slot: ptr::from(a), seed: m, _phantom_data: PhantomData };
+    return Iter { size: n, slot: a, seed: m, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding each key and a mutable reference to its
   /// associated value. The iterator item type is `(K, &'_ mut V)`.
 
   pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+    let SLOT_STRIDE = slot_stride::<K, V>();
+
     let m = self.seed1;
-    let t = self.table.as_mut_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
-    let a = t.wrapping_sub(w - 1);
+    let a = t - SLOT_STRIDE * (w - 1);
 
-    return IterMut { size: n, slot: ptr::from(a), seed: m, _phantom_data: PhantomData };
+    return IterMut { size: n, slot: a, seed: m, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
 
   pub fn keys(&self) -> Keys<'_, K, V> {
+    let SLOT_STRIDE = slot_stride::<K, V>();
+
     let m = self.seed1;
-    let t = self.table.as_const_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
-    let a = t.wrapping_sub(w - 1);
+    let a = t - SLOT_STRIDE * (w - 1);
 
-    return Keys { size: n, slot: ptr::from(a), seed: m, _phantom_data: PhantomData };
+    return Keys { size: n, slot: a, seed: m, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding a reference to each value. The iterator item
   /// type is `&'_ V`.
 
   pub fn values(&self) -> Values<'_, K, V> {
-    let t = self.table.as_const_ptr::<Slot<K, V>>();
+    let SLOT_STRIDE = slot_stride::<K, V>();
+
+    let t = self.table;
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
-    let a = t.wrapping_sub(w - 1);
+    let a = t - SLOT_STRIDE * (w - 1);
 
-    return Values { size: n, slot: ptr::from(a), _phantom_data: PhantomData };
+    return Values { size: n, slot: a, _phantom_data: PhantomData };
   }
 
   /// Returns an iterator yielding a mutable reference to each value. The
   /// iterator item type is `&'_ mut V`.
 
   pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
-    let t = self.table.as_mut_ptr::<Slot<K, V>>();
+    let SLOT_STRIDE = slot_stride::<K, V>();
+
+    let t = self.table;
     let w = self.width;
     let s = self.slack;
 
     let n = (capacity(w) - s) as usize;
-    let a = t.wrapping_sub(w - 1);
+    let a = t - SLOT_STRIDE * (w - 1);
 
-    return ValuesMut { size: n, slot: ptr::from(a), _phantom_data: PhantomData };
+    return ValuesMut { size: n, slot: a, _phantom_data: PhantomData };
   }
 
   fn internal_num_slots(&self) -> usize {
-    let l = self.limit.as_const_ptr::<Slot<K, V>>();
+    let SLOT_STRIDE = slot_stride::<K, V>();
+
+    let l = self.limit;
 
     if l.is_null() { return 0; }
 
-    let t = self.table.as_const_ptr::<Slot<K, V>>();
+    let t = self.table;
     let w = self.width;
 
-    return ptr_wrapping_offset_from_unsigned(l, t) + w;
+    return (l - t) / SLOT_STRIDE + w;
   }
 
   fn internal_allocation_size(&self) -> usize {
-    return self.internal_num_slots() * size_of::<Slot<K, V>>();
+    let SLOT_STRIDE = slot_stride::<K, V>();
+
+    return self.internal_num_slots() * SLOT_STRIDE;
   }
 
   fn internal_load_factor(&self) -> f64 {
