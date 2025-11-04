@@ -661,6 +661,14 @@ impl<K: Key, V> Index<K> for HashMap<K, V> {
   }
 }
 
+// NB: The standard library hash map does *NOT* implement `IndexMut`, because
+// people might try to do
+//
+//   map[k] = ...;
+//
+// when `k` is not present in the map. With other programming languages'
+// standard behavior, this would insert the key.
+
 impl<K: Key, V> IndexMut<K> for HashMap<K, V> {
   #[inline(always)]
   fn index_mut(&mut self, key: K) -> &mut V {
