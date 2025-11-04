@@ -31,7 +31,7 @@ use crate::key::Key;
 pub struct HashMap<K: Key, V> {
   seed0: K::Seed,
   seed1: K::Seed,
-  table: ptr<Slot<K, V>>,
+  table: ptr<Slot<K, V>>, // NB: invariant
   width: usize,
   slack: isize,
   limit: ptr<Slot<K, V>>,
