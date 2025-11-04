@@ -101,30 +101,6 @@ fn log2(n: usize) -> usize {
   return (usize::BITS - 1 - n.leading_zeros()) as usize;
 }
 
-/*
-
-struct LayoutInfo {
-  SLOT_STRIDE: usize,
-  DATA_OFFSET: usize,
-  ALIGN: usize,
-  MAX_NUM_SLOTS: usize,
-}
-
-#[inline(always)]
-const fn layout_info<K: Key, V>() -> LayoutInfo {
-  // NB: The fact that `align_of::<T>` divides `size_of::<T>()` helps imply
-  // that the layout of an array of `MAX_NUM_SLOTS` slots is valid, because
-  // rounding up to the alignment won't increase the size.
-
-  let SLOT_STRIDE = size_of::<Slot<K, V>>();
-  let DATA_OFFSET = offset_of!(Slot<K, V>, data);
-  let ALIGN = align_of::<Slot<K, V>>();
-  let MAX_NUM_SLOTS = isize::MAX as usize / size_of::<Slot<K, V>>();
-
-  return LayoutInfo { SLOT_STRIDE, DATA_OFFSET, ALIGN, MAX_NUM_SLOTS };
-}
-*/
-
 #[inline(always)]
 fn slot_hash<K: Key, V>(a: ptr<Slot<K, V>>) -> ptr<K::Hash> {
   return a.cast();
@@ -724,7 +700,7 @@ pub struct Keys<'a, K: Key, V> {
   size: usize,
   slot: ptr<Slot<K, V>>,
   seed: K::Seed,
-  _phantom_data: PhantomData<(&'a K, &'a V)>,
+  _phantom_data: PhantomData<&'a K>,
 }
 
 /// Iterator returned by [`HashMap::values`].
@@ -733,7 +709,7 @@ pub struct Keys<'a, K: Key, V> {
 pub struct Values<'a, K: Key, V> {
   size: usize,
   slot: ptr<Slot<K, V>>,
-  _phantom_data: PhantomData<(&'a K, &'a V)>,
+  _phantom_data: PhantomData<&'a V>,
 }
 
 /// Iterator returned by [`HashMap::values_mut`].
@@ -741,7 +717,7 @@ pub struct Values<'a, K: Key, V> {
 pub struct ValuesMut<'a, K: Key, V> {
   size: usize,
   slot: ptr<Slot<K, V>>,
-  _phantom_data: PhantomData<(&'a K, &'a mut V)>,
+  _phantom_data: PhantomData<&'a mut V>,
 }
 
 impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
