@@ -95,16 +95,6 @@ pub struct Iter<'a, T: Key> {
   keys: map::Keys<'a, T, ()>,
 }
 
-impl<'a, T: Key> FusedIterator for Iter<'a, T> {
-}
-
-impl<'a, T: Key> ExactSizeIterator for Iter<'a, T> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.keys.len();
-  }
-}
-
 impl<'a, T: Key> Iterator for Iter<'a, T> {
   type Item = T;
 
@@ -117,6 +107,16 @@ impl<'a, T: Key> Iterator for Iter<'a, T> {
   fn size_hint(&self) -> (usize, Option<usize>) {
     return self.keys.size_hint();
   }
+}
+
+impl<'a, T: Key> ExactSizeIterator for Iter<'a, T> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    return self.keys.len();
+  }
+}
+
+impl<'a, T: Key> FusedIterator for Iter<'a, T> {
 }
 
 impl<T: Key> Default for HashSet<T> {
