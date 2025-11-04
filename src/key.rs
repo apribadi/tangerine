@@ -220,7 +220,7 @@ unsafe impl<T: IntoKey> private::Key for T {
 pub(crate) mod private {
   use rand_core::RngCore;
 
-  pub(crate) unsafe trait Key {
+  pub(crate) unsafe trait Key: Copy {
     type Seed: Copy;
 
     type Hash: Copy + Ord;
