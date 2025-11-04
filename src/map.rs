@@ -746,56 +746,6 @@ pub struct ValuesMut<'a, K: Key, V> {
   _phantom_data: PhantomData<(&'a K, &'a mut V)>,
 }
 
-impl<'a, K: Key, V> FusedIterator for Iter<'a, K, V> {
-}
-
-impl<'a, K: Key, V> FusedIterator for IterMut<'a, K, V> {
-}
-
-impl<'a, K: Key, V> FusedIterator for Keys<'a, K, V> {
-}
-
-impl<'a, K: Key, V> FusedIterator for Values<'a, K, V> {
-}
-
-impl<'a, K: Key, V> FusedIterator for ValuesMut<'a, K, V> {
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for Iter<'a, K, V> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.size;
-  }
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for IterMut<'a, K, V> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.size;
-  }
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for Keys<'a, K, V> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.size;
-  }
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for Values<'a, K, V> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.size;
-  }
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.size;
-  }
-}
-
 impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
   type Item = (K, &'a V);
 
@@ -956,6 +906,56 @@ impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
   fn size_hint(&self) -> (usize, Option<usize>) {
     return (self.size, Some(self.size));
   }
+}
+
+impl<'a, K: Key, V> ExactSizeIterator for Iter<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    return self.size;
+  }
+}
+
+impl<'a, K: Key, V> ExactSizeIterator for IterMut<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    return self.size;
+  }
+}
+
+impl<'a, K: Key, V> ExactSizeIterator for Keys<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    return self.size;
+  }
+}
+
+impl<'a, K: Key, V> ExactSizeIterator for Values<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    return self.size;
+  }
+}
+
+impl<'a, K: Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {
+  #[inline(always)]
+  fn len(&self) -> usize {
+    return self.size;
+  }
+}
+
+impl<'a, K: Key, V> FusedIterator for Iter<'a, K, V> {
+}
+
+impl<'a, K: Key, V> FusedIterator for IterMut<'a, K, V> {
+}
+
+impl<'a, K: Key, V> FusedIterator for Keys<'a, K, V> {
+}
+
+impl<'a, K: Key, V> FusedIterator for Values<'a, K, V> {
+}
+
+impl<'a, K: Key, V> FusedIterator for ValuesMut<'a, K, V> {
 }
 
 impl<K: Key, V> Default for HashMap<K, V> {
