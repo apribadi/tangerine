@@ -10,7 +10,6 @@
 
 extern crate alloc;
 
-use alloc::alloc::handle_alloc_error;
 use core::alloc::Layout;
 use core::cmp::max;
 use core::iter::ExactSizeIterator;
@@ -21,7 +20,7 @@ use core::mem::needs_drop;
 use core::mem::offset_of;
 use core::ops::Index;
 use core::ops::IndexMut;
-use pop::v2::ptr;
+use pop::ptr;
 use rand_core::RngCore;
 
 use crate::key::Key;
@@ -51,19 +50,13 @@ static EMPTY_TABLE: u64 = 0;
 
 unsafe fn alloc_zeroed(size: usize, align: usize) -> ptr<u8> {
   let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
-  let p = unsafe { ptr::from(alloc::alloc::alloc_zeroed(layout)) };
-
-  if p.is_null() {
-    match handle_alloc_error(layout) {
-    }
-  }
-
+  let Ok(p) = unsafe { pop::alloc_zeroed(layout) };
   return p;
 }
 
 unsafe fn dealloc(ptr: ptr<u8>, size: usize, align: usize) {
   let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
-  unsafe { alloc::alloc::dealloc(ptr.as_mut_ptr(), layout) };
+  unsafe { pop::dealloc(ptr, layout) };
 }
 
 #[inline(always)]
