@@ -50,11 +50,11 @@ struct Slot<K: Key, V> {
 static EMPTY_TABLE: u64 = 0;
 
 unsafe fn alloc_zeroed(size: usize, align: usize) -> ptr<u8> {
-  let l = unsafe { Layout::from_size_align_unchecked(size, align) };
-  let p = unsafe { ptr::from(alloc::alloc::alloc_zeroed(l)) };
+  let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
+  let p = unsafe { ptr::from(alloc::alloc::alloc_zeroed(layout)) };
 
   if p.is_null() {
-    match handle_alloc_error(l) {
+    match handle_alloc_error(layout) {
     }
   }
 
@@ -62,7 +62,8 @@ unsafe fn alloc_zeroed(size: usize, align: usize) -> ptr<u8> {
 }
 
 unsafe fn dealloc(ptr: ptr<u8>, size: usize, align: usize) {
-  unsafe { alloc::alloc::dealloc(ptr.as_mut_ptr(), Layout::from_size_align_unchecked(size, align)) };
+  let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
+  unsafe { alloc::alloc::dealloc(ptr.as_mut_ptr(), layout) };
 }
 
 #[inline(always)]
