@@ -49,13 +49,13 @@ struct Slot<K: Key, V> {
 
 static EMPTY_TABLE: u64 = 0;
 
-unsafe fn alloc_zeroed(size: usize, align: usize) -> ptr<u8> {
+unsafe fn global_alloc_zeroed<T>(size: usize, align: usize) -> ptr<T> {
   let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
   let Ok(p) = unsafe { global::alloc_zeroed(layout) };
   return p;
 }
 
-unsafe fn dealloc(ptr: ptr<u8>, size: usize, align: usize) {
+unsafe fn global_dealloc<T>(ptr: ptr<T>, size: usize, align: usize) {
   let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
   unsafe { global::dealloc(ptr, layout) };
 }
@@ -230,7 +230,7 @@ impl<K: Key, V> HashMap<K, V> {
     assert!(d <= Self::MAX_NUM_SLOTS);
 
     let size = d * size_of::<Slot<K, V>>();
-    let p = unsafe { alloc_zeroed(size, align_of::<Slot<K, V>>()) }.cast::<Slot<K, V>>();
+    let p = unsafe { global_alloc_zeroed(size, align_of::<Slot<K, V>>()) };
 
     let t = p + (w - 1);
     let l = p + (d - 1);
@@ -294,7 +294,7 @@ impl<K: Key, V> HashMap<K, V> {
     let old_size = old_d * size_of::<Slot<K, V>>();
     let new_size = new_d * size_of::<Slot<K, V>>();
 
-    let new_p = unsafe { alloc_zeroed(new_size, align_of::<Slot<K, V>>()) }.cast::<Slot<K, V>>();
+    let new_p = unsafe { global_alloc_zeroed(new_size, align_of::<Slot<K, V>>()) };
 
     // At this point we know that allocating a new table has succeeded. We
     // make sure to re-write the last slot before copying from the old table to
@@ -332,9 +332,9 @@ impl<K: Key, V> HashMap<K, V> {
     self.slack = new_s;
     self.limit = new_l;
 
-    // The map is now in a valid state, even if `dealloc` panics.
+    // The map is now in a valid state, even if `global_dealloc` panics.
 
-    unsafe { dealloc(old_p.cast(), old_size, align_of::<Slot<K, V>>()) };
+    unsafe { global_dealloc(old_p, old_size, align_of::<Slot<K, V>>()) };
   }
 
   /// Inserts the given key and value into the map. Returns the previous value
@@ -551,7 +551,7 @@ impl<K: Key, V> HashMap<K, V> {
     let size = d * size_of::<Slot<K, V>>();
     let p = t - (w - 1);
 
-    unsafe { dealloc(p.cast(), size, align_of::<Slot<K, V>>()) };
+    unsafe { global_dealloc(p, size, align_of::<Slot<K, V>>()) };
   }
 
   /// Returns an iterator yielding each key and a reference to its associated
