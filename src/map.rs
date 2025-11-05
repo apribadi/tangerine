@@ -20,6 +20,7 @@ use core::mem::needs_drop;
 use core::mem::offset_of;
 use core::ops::Index;
 use core::ops::IndexMut;
+use pop::global;
 use pop::ptr;
 use rand_core::RngCore;
 
@@ -50,13 +51,13 @@ static EMPTY_TABLE: u64 = 0;
 
 unsafe fn alloc_zeroed(size: usize, align: usize) -> ptr<u8> {
   let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
-  let Ok(p) = unsafe { pop::alloc_zeroed(layout) };
+  let Ok(p) = unsafe { global::alloc_zeroed(layout) };
   return p;
 }
 
 unsafe fn dealloc(ptr: ptr<u8>, size: usize, align: usize) {
   let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
-  unsafe { pop::dealloc(ptr, layout) };
+  unsafe { global::dealloc(ptr, layout) };
 }
 
 #[inline(always)]
