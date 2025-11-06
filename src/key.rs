@@ -8,6 +8,7 @@ use rand_core::RngCore;
 /// A sealed trait for hashable keys representable as `NonZeroU32` or
 /// `NonZeroU64`.
 
+#[allow(private_bounds)]
 pub trait Key: private::Key {
 }
 
