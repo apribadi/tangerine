@@ -103,7 +103,7 @@ fn slot_hash<K: Key, V>(a: ptr<Slot<K, V>>) -> ptr<K::Hash> {
 
 #[inline(always)]
 fn slot_data<K: Key, V>(a: ptr<Slot<K, V>>) -> ptr<V> {
-  return (a.cast::<u8>() + offset_of!(Slot<K, V>, data)).cast::<V>();
+  return a.byte_add(offset_of!(Slot<K, V>, data));
 }
 
 impl<K: Key, V> HashMap<K, V> {
