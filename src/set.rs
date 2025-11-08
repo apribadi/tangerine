@@ -130,7 +130,8 @@ pub mod internal {
 
   #![allow(missing_docs)]
 
-  use super::*;
+  use super::HashSet;
+  use super::Key;
 
   pub fn num_slots<T: Key>(t: &HashSet<T>) -> usize {
     return map::internal::num_slots(&t.map);
