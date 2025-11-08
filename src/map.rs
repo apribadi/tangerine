@@ -107,6 +107,8 @@ fn slot_data<K: Key, V>(a: ptr<Slot<K, V>>) -> ptr<V> {
 }
 
 impl<K: Key, V> HashMap<K, V> {
+  const ALIGN: usize = align_of::<Slot<K, V>>();
+
   const MAX_NUM_SLOTS: usize = isize::MAX as usize / size_of::<Slot<K, V>>();
 
   #[inline(always)]
@@ -230,7 +232,7 @@ impl<K: Key, V> HashMap<K, V> {
     assert!(d <= Self::MAX_NUM_SLOTS);
 
     let size = d * size_of::<Slot<K, V>>();
-    let p = unsafe { global_alloc_zeroed(size, align_of::<Slot<K, V>>()) };
+    let p = unsafe { global_alloc_zeroed(size, Self::ALIGN) };
 
     let t = p + (w - 1);
     let l = p + (d - 1);
@@ -294,7 +296,7 @@ impl<K: Key, V> HashMap<K, V> {
     let old_size = old_d * size_of::<Slot<K, V>>();
     let new_size = new_d * size_of::<Slot<K, V>>();
 
-    let new_p = unsafe { global_alloc_zeroed(new_size, align_of::<Slot<K, V>>()) };
+    let new_p = unsafe { global_alloc_zeroed(new_size, Self::ALIGN) };
 
     // At this point we know that allocating a new table has succeeded. We
     // make sure to re-write the last slot before copying from the old table to
@@ -334,7 +336,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     // The map is now in a valid state, even if `global_dealloc` panics.
 
-    unsafe { global_dealloc(old_p, old_size, align_of::<Slot<K, V>>()) };
+    unsafe { global_dealloc(old_p, old_size, Self::ALIGN) };
   }
 
   /// Inserts the given key and value into the map. Returns the previous value
@@ -551,7 +553,7 @@ impl<K: Key, V> HashMap<K, V> {
     let size = d * size_of::<Slot<K, V>>();
     let p = t - (w - 1);
 
-    unsafe { global_dealloc(p, size, align_of::<Slot<K, V>>()) };
+    unsafe { global_dealloc(p, size, Self::ALIGN) };
   }
 
   /// Returns an iterator yielding each key and a reference to its associated
@@ -941,7 +943,8 @@ pub mod internal {
 
   #![allow(missing_docs)]
 
-  use super::*;
+  use super::HashMap;
+  use super::Key;
 
   pub fn num_slots<K: Key, V>(t: &HashMap<K, V>) -> usize {
     return t.internal_num_slots();
