@@ -659,8 +659,8 @@ impl<K: Key, V> Index<K> for HashMap<K, V> {
   type Output = V;
 
   #[inline(always)]
-  fn index(&self, key: K) -> &V {
-    return self.get(key).unwrap();
+  fn index(&self, index: K) -> &Self::Output {
+    return self.get(index).unwrap();
   }
 }
 
@@ -674,8 +674,8 @@ impl<K: Key, V> Index<K> for HashMap<K, V> {
 
 impl<K: Key, V> IndexMut<K> for HashMap<K, V> {
   #[inline(always)]
-  fn index_mut(&mut self, key: K) -> &mut V {
-    return self.get_mut(key).unwrap();
+  fn index_mut(&mut self, index: K) -> &mut Self::Output {
+    return self.get_mut(index).unwrap();
   }
 }
 

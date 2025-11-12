@@ -132,6 +132,7 @@ pub mod internal {
 
   use super::HashSet;
   use super::Key;
+  use super::map;
 
   pub fn num_slots<T: Key>(t: &HashSet<T>) -> usize {
     return map::internal::num_slots(&t.map);
