@@ -10,7 +10,6 @@
 
 extern crate alloc;
 
-use core::alloc::Layout;
 use core::cmp::max;
 use core::iter::ExactSizeIterator;
 use core::iter::FusedIterator;
@@ -48,17 +47,6 @@ struct Slot<K: Key, V> {
 }
 
 static EMPTY_TABLE: u64 = 0;
-
-unsafe fn global_alloc_zeroed<T>(size: usize, align: usize) -> ptr<T> {
-  let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
-  let Ok(p) = unsafe { global::alloc_zeroed(layout) };
-  return p;
-}
-
-unsafe fn global_dealloc<T>(ptr: ptr<T>, size: usize, align: usize) {
-  let layout = unsafe { Layout::from_size_align_unchecked(size, align) };
-  unsafe { global::dealloc(ptr, layout) };
-}
 
 #[inline(always)]
 fn capacity(w: usize) -> isize {
@@ -107,8 +95,6 @@ fn slot_data<K: Key, V>(a: ptr<Slot<K, V>>) -> ptr<V> {
 }
 
 impl<K: Key, V> HashMap<K, V> {
-  const ALIGN: usize = align_of::<Slot<K, V>>();
-
   const MAX_NUM_SLOTS: usize = isize::MAX as usize / size_of::<Slot<K, V>>();
 
   #[inline(always)]
@@ -231,8 +217,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     assert!(d <= Self::MAX_NUM_SLOTS);
 
-    let size = d * size_of::<Slot<K, V>>();
-    let p = unsafe { global_alloc_zeroed(size, Self::ALIGN) };
+    let p = unsafe { global::alloc_slice_zeroed::<Slot<K, V>>(d) };
 
     let t = p + (w - 1);
     let l = p + (d - 1);
@@ -293,10 +278,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     assert!(new_d <= Self::MAX_NUM_SLOTS);
 
-    let old_size = old_d * size_of::<Slot<K, V>>();
-    let new_size = new_d * size_of::<Slot<K, V>>();
-
-    let new_p = unsafe { global_alloc_zeroed(new_size, Self::ALIGN) };
+    let new_p = unsafe { global::alloc_slice_zeroed::<Slot<K, V>>(new_d) };
 
     // At this point we know that allocating a new table has succeeded. We
     // make sure to re-write the last slot before copying from the old table to
@@ -336,7 +318,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     // The map is now in a valid state, even if `global_dealloc` panics.
 
-    unsafe { global_dealloc(old_p, old_size, Self::ALIGN) };
+    unsafe { global::dealloc_slice(old_p, old_d) };
   }
 
   /// Inserts the given key and value into the map. Returns the previous value
@@ -550,10 +532,9 @@ impl<K: Key, V> HashMap<K, V> {
       }
     }
 
-    let size = d * size_of::<Slot<K, V>>();
     let p = t - (w - 1);
 
-    unsafe { global_dealloc(p, size, Self::ALIGN) };
+    unsafe { global::dealloc_slice(p, d) };
   }
 
   /// Returns an iterator yielding each key and a reference to its associated
