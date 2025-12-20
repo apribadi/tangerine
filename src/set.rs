@@ -20,6 +20,7 @@ impl<T: Key> HashSet<T> {
   /// Creates an empty set, seeding the hash function from a thread-local
   /// random number generator.
 
+  #[must_use]
   pub fn new() -> Self {
     return Self { map: HashMap::new() };
   }
@@ -27,6 +28,7 @@ impl<T: Key> HashSet<T> {
   /// Creates an empty set, seeding the hash function from the given random
   /// number generator.
 
+  #[must_use]
   pub fn new_seeded(rng: &mut impl RngCore) -> Self {
     return Self { map: HashMap::new_seeded(rng) };
   }
@@ -34,6 +36,7 @@ impl<T: Key> HashSet<T> {
   /// Returns the number of values.
 
   #[inline(always)]
+  #[must_use]
   pub fn len(&self) -> usize {
     return self.map.len();
   }
@@ -41,6 +44,7 @@ impl<T: Key> HashSet<T> {
   /// Returns whether the set contains zero values.
 
   #[inline(always)]
+  #[must_use]
   pub fn is_empty(&self) -> bool {
     return self.map.is_empty();
   }
@@ -48,24 +52,23 @@ impl<T: Key> HashSet<T> {
   /// Returns whether the set contains the given value.
 
   #[inline(always)]
+  #[must_use]
   pub fn contains(&self, value: T) -> bool {
     return self.map.contains_key(value);
   }
 
-  /// Inserts the given value into the set. Returns `true` if the value was
-  /// already present, and `false` if it was not.
+  /// Inserts the given value into the set.
 
   #[inline(always)]
-  pub fn insert(&mut self, value: T) -> bool {
-    return self.map.insert(value, ()).is_some();
+  pub fn insert(&mut self, value: T) {
+    self.map.insert(value, ());
   }
 
-  /// Removes the given value from the set. Returns `true` if the value was
-  /// present, and `false` if it was not.
+  /// Removes the given value from the set.
 
   #[inline(always)]
-  pub fn remove(&mut self, value: T) -> bool {
-    return self.map.remove(value).is_some();
+  pub fn remove(&mut self, value: T) {
+    self.map.remove(value);
   }
 
   /// Removes every item from the set. Retains heap-allocated memory.
@@ -83,6 +86,8 @@ impl<T: Key> HashSet<T> {
   /// Returns an iterator yielding each value from the set. The iterator item
   /// type is `T`.
 
+  #[inline(always)]
+  #[must_use]
   pub fn iter(&self) -> Iter<'_, T> {
     return Iter { keys: self.map.keys() };
   }
@@ -134,14 +139,17 @@ pub mod internal {
   use super::Key;
   use super::map;
 
+  #[must_use]
   pub fn num_slots<T: Key>(t: &HashSet<T>) -> usize {
     return map::internal::num_slots(&t.map);
   }
 
+  #[must_use]
   pub fn allocation_size<T: Key>(t: &HashSet<T>) -> usize {
     return map::internal::allocation_size(&t.map);
   }
 
+  #[must_use]
   pub fn load_factor<T: Key>(t: &HashSet<T>) -> f64 {
     return map::internal::load_factor(&t.map);
   }

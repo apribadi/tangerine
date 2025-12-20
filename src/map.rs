@@ -113,6 +113,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
 
+  #[must_use]
   pub fn new() -> Self {
     return Self::internal_new(K::seed_nondet());
   }
@@ -120,6 +121,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
 
+  #[must_use]
   pub fn new_seeded(rng: &mut impl RngCore) -> Self {
     return Self::internal_new(K::seed(rng));
   }
@@ -127,6 +129,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns the number of items.
 
   #[inline(always)]
+  #[must_use]
   pub fn len(&self) -> usize {
     let w = self.width;
     let s = self.slack;
@@ -137,6 +140,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns whether the map contains zero items.
 
   #[inline(always)]
+  #[must_use]
   pub fn is_empty(&self) -> bool {
     return self.len() == 0;
   }
@@ -144,6 +148,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns whether the map contains the given key.
 
   #[inline(always)]
+  #[must_use]
   pub fn contains_key(&self, key: K) -> bool {
     let m = self.seed0;
     let t = self.table;
@@ -165,6 +170,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// present.
 
   #[inline(always)]
+  #[must_use]
   pub fn get(&self, key: K) -> Option<&V> {
     let m = self.seed0;
     let t = self.table;
@@ -188,6 +194,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// if present.
 
   #[inline(always)]
+  #[must_use]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let m = self.seed0;
     let t = self.table;
@@ -331,7 +338,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// state.
 
   #[inline(always)]
-  pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+  #[must_use]
+  pub fn get_insert(&mut self, key: K, value: V) -> Option<V> {
     let l = self.limit;
 
     if l.is_null() {
@@ -377,11 +385,25 @@ impl<K: Key, V> HashMap<K, V> {
     return None;
   }
 
+  /// Inserts the given key and value into the map.
+  ///
+  /// # Panics
+  ///
+  /// Panics if allocation fails. If that happens, it is possible for the map
+  /// to leak an arbitrary set of items, but the map will remain in a valid
+  /// state.
+
+  #[inline(always)]
+  pub fn insert(&mut self, key: K, value: V) {
+    let _: Option<V> = self.get_insert(key, value);
+  }
+
   /// Removes the given key from the map. Returns the previous value associated
   /// with the given key, if one was present.
 
   #[inline(always)]
-  pub fn remove(&mut self, key: K) -> Option<V> {
+  #[must_use]
+  pub fn get_remove(&mut self, key: K) -> Option<V> {
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
@@ -415,6 +437,13 @@ impl<K: Key, V> HashMap<K, V> {
     unsafe { slot_hash(a).write(K::ZERO) };
 
     return Some(value);
+  }
+
+  /// Removes the given key from the map.
+
+  #[inline(always)]
+  pub fn remove(&mut self, key: K) {
+    let _: Option<V> = self.get_remove(key);
   }
 
   /// Removes every item from the map. Retains heap-allocated memory.
@@ -540,6 +569,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns an iterator yielding each key and a reference to its associated
   /// value. The iterator item type is `(K, &'_ V)`.
 
+  #[inline(always)]
+  #[must_use]
   pub fn iter(&self) -> Iter<'_, K, V> {
     let m = self.seed1;
     let t = self.table;
@@ -555,6 +586,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns an iterator yielding each key and a mutable reference to its
   /// associated value. The iterator item type is `(K, &'_ mut V)`.
 
+  #[inline(always)]
+  #[must_use]
   pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
     let m = self.seed1;
     let t = self.table;
@@ -569,6 +602,8 @@ impl<K: Key, V> HashMap<K, V> {
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
 
+  #[inline(always)]
+  #[must_use]
   pub fn keys(&self) -> Keys<'_, K, V> {
     let m = self.seed1;
     let t = self.table;
@@ -584,6 +619,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns an iterator yielding a reference to each value. The iterator item
   /// type is `&'_ V`.
 
+  #[inline(always)]
+  #[must_use]
   pub fn values(&self) -> Values<'_, K, V> {
     let t = self.table;
     let w = self.width;
@@ -598,6 +635,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns an iterator yielding a mutable reference to each value. The
   /// iterator item type is `&'_ mut V`.
 
+  #[inline(always)]
+  #[must_use]
   pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
     let t = self.table;
     let w = self.width;
@@ -927,14 +966,17 @@ pub mod internal {
   use super::HashMap;
   use super::Key;
 
+  #[must_use]
   pub fn num_slots<K: Key, V>(t: &HashMap<K, V>) -> usize {
     return t.internal_num_slots();
   }
 
+  #[must_use]
   pub fn allocation_size<K: Key, V>(t: &HashMap<K, V>) -> usize {
     return t.internal_allocation_size();
   }
 
+  #[must_use]
   pub fn load_factor<K: Key, V>(t: &HashMap<K, V>) -> f64 {
     return t.internal_load_factor();
   }
