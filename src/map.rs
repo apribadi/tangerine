@@ -98,11 +98,12 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   fn internal_new(m: K::Seed) -> Self {
+    // NB: a map refers to EMPTY_TABLE iff width == 0
     Self {
       seed0: m,
       seed1: K::invert_seed(m),
       table: ptr::from(&EMPTY_TABLE).cast(),
-      width: 1,
+      width: 0,
       slack: 0,
       limit: ptr::NULL,
       _phantom_data: PhantomData,

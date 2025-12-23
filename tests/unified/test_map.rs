@@ -6,30 +6,30 @@ use tangerine::map::HashMap;
 use dandelion::Rng;
 
 #[test]
-fn test_basic() -> Result<(), std::fmt::Error> {
+fn test_basic() {
   let mut s = String::new();
   let mut g = Rng::from_u64(0);
   let mut t = HashMap::new_seeded(&mut g);
 
   let key = NonZeroU64::new(13).unwrap();
 
-  write!(s, "{:?} <- t.len()\n", t.len())?;
-  write!(s, "{:?} <- t.is_empty()\n", t.is_empty())?;
-  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key)?;
-  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key)?;
-  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key)?;
-  write!(s, "{:?} <- t.get_insert({:?}, {:?})\n", t.get_insert(key, 42), key, 42)?;
-  write!(s, "{:?} <- t.len()\n", t.len())?;
-  write!(s, "{:?} <- t.is_empty()\n", t.is_empty())?;
-  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key)?;
-  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key)?;
-  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key)?;
-  write!(s, "{:?} <- t.get_remove({:?})\n", t.get_remove(key), key)?;
-  write!(s, "{:?} <- t.len()\n", t.len())?;
-  write!(s, "{:?} <- t.is_empty()\n", t.is_empty())?;
-  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key)?;
-  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key)?;
-  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key)?;
+  write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
+  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
+  write!(s, "{:?} <- t.get_insert({:?}, {:?})\n", t.get_insert(key, 42), key, 42).unwrap();
+  write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
+  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
+  write!(s, "{:?} <- t.get_remove({:?})\n", t.get_remove(key), key).unwrap();
+  write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
+  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
 
   expect![[r#"
       0 <- t.len()
@@ -49,9 +49,24 @@ fn test_basic() -> Result<(), std::fmt::Error> {
       false <- t.contains_key(13)
       None <- t.get(13)
       None <- t.get_mut(13)
-  "#]].assert_eq(&s);
+  "#]].assert_eq(s.drain(..).as_str());
+}
 
-  Ok(())
+
+#[test]
+fn test_empty() {
+  let mut s = String::new();
+  let mut t = HashMap::<NonZeroU64, u64>::new();
+
+  write!(s, "num_slots = {}\n", tangerine::map::internal::num_slots(&t)).unwrap();
+  write!(s, "load = {}\n", tangerine::map::internal::load_factor(&t)).unwrap();
+  write!(s, "allocation_size = {}\n", tangerine::map::internal::allocation_size(&t)).unwrap();
+
+  expect![[r#"
+      num_slots = 0
+      load = NaN
+      allocation_size = 0
+  "#]].assert_eq(s.drain(..).as_str());
 }
 
 #[test]
