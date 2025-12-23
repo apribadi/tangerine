@@ -12,7 +12,6 @@ extern crate alloc;
 
 use core::cmp::max;
 use core::iter::ExactSizeIterator;
-use core::iter::FusedIterator;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
@@ -105,7 +104,7 @@ impl<K: Key, V> HashMap<K, V> {
       table: ptr::from(&EMPTY_TABLE).cast(),
       width: 1,
       slack: 0,
-      limit: ptr::null(),
+      limit: ptr::NULL,
       _phantom_data: PhantomData,
     }
   }
@@ -339,7 +338,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   #[must_use]
-  pub fn get_insert(&mut self, key: K, value: V) -> Option<V> {
+  pub fn get_insert_0(&mut self, key: K, value: V) -> Option<V> {
     let l = self.limit;
 
     if l.is_null() {
@@ -396,6 +395,25 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn insert(&mut self, key: K, value: V) {
     let _: Option<V> = self.get_insert(key, value);
+  }
+
+  /// TODO
+
+  #[inline(always)]
+  #[must_use]
+  pub fn get_or_init<F: FnOnce() -> V>(&mut self, key: K, init: F) -> &mut V {
+    let _ = self;
+    let _ = key;
+    let _ = init;
+    unimplemented!()
+  }
+
+  /// TODO
+
+  #[inline(always)]
+  #[must_use]
+  pub fn get_or_insert(&mut self, key: K, value: V) -> &mut V {
+    return self.get_or_init(key, || value);
   }
 
   /// Removes the given key from the map. Returns the previous value associated
@@ -533,7 +551,7 @@ impl<K: Key, V> HashMap<K, V> {
     self.table = ptr::from(&EMPTY_TABLE).cast();
     self.width = 1;
     self.slack = 0;
-    self.limit = ptr::null();
+    self.limit = ptr::NULL;
 
     if needs_drop::<V>() {
       if n != 0 {
@@ -666,6 +684,66 @@ impl<K: Key, V> HashMap<K, V> {
   fn internal_load_factor(&self) -> f64 {
     // NB: NaN if no allocation
     return self.len() as f64 / self.internal_num_slots() as f64;
+  }
+
+  /// TODO
+
+  #[inline(always)]
+  #[must_use]
+  pub fn get_insert(&mut self, key: K, value: V) -> Option<V> {
+    let m = self.seed0;
+    let t = self.table;
+    let w = self.width;
+    let h = K::hash(key, m);
+
+    let mut a = t - K::slot(h, w);
+    let mut x = unsafe { slot_hash(a).read() };
+
+    while x > h {
+      a = a + 1;
+      x = unsafe { slot_hash(a).read() };
+    }
+
+    if x == h {
+      return Some(unsafe { slot_data(a).replace(value) });
+    }
+
+    let l = self.limit;
+
+    if l.is_null() {
+      self.internal_init(key, value);
+
+      return None;
+    }
+
+    let mut y = value;
+
+    unsafe { slot_hash(a).write(h) };
+
+    while x != K::ZERO {
+      y = unsafe { slot_data(a).replace(y) };
+      a = a + 1;
+      x = unsafe { slot_hash(a).replace(x) };
+    }
+
+    unsafe { slot_data(a).write(y) };
+
+    let s = self.slack - 1;
+    self.slack = s;
+
+    if s < 0 || a == l { self.internal_grow(); }
+
+    return None;
+  }
+}
+
+impl<K: Key, V: Default> HashMap<K, V> {
+  /// TODO
+
+  #[inline(always)]
+  #[must_use]
+  pub fn get_or_default(&mut self, key: K) -> &mut V {
+    return self.get_or_init(key, V::default);
   }
 }
 
@@ -935,21 +1013,6 @@ impl<'a, K: Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {
   fn len(&self) -> usize {
     return self.size;
   }
-}
-
-impl<'a, K: Key, V> FusedIterator for Iter<'a, K, V> {
-}
-
-impl<'a, K: Key, V> FusedIterator for IterMut<'a, K, V> {
-}
-
-impl<'a, K: Key, V> FusedIterator for Keys<'a, K, V> {
-}
-
-impl<'a, K: Key, V> FusedIterator for Values<'a, K, V> {
-}
-
-impl<'a, K: Key, V> FusedIterator for ValuesMut<'a, K, V> {
 }
 
 impl<K: Key, V> Default for HashMap<K, V> {
