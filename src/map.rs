@@ -78,8 +78,7 @@ fn log2(n: usize) -> usize {
 fn increment_size_class(n: usize) -> usize {
   debug_assert!(2 <= n && n <= isize::MAX as usize);
   let n = 2 * n - 1;
-  let k = usize::BITS - 1 - n.leading_zeros();
-  let a = 1 << k;
+  let a = 1 << usize::BITS - 1 - n.leading_zeros();
   let b = a >> 1;
   return a + (n & b);
 }
@@ -232,7 +231,6 @@ impl<K: Key, V> HashMap<K, V> {
 
     let old_e = old_l - old_t;
     let old_d = old_w + old_e;
-    let old_p = old_t - (old_w - 1);
 
     let new_d = increment_size_class(old_d * size_of::<Slot<K, V>>()) / size_of::<Slot<K, V>>();
     let new_e = old_e + (log2(new_d) - log2(old_d)) + ((last_written_slot == old_l) as usize);
@@ -244,6 +242,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     // Alloc new table.
 
+    let old_p = old_t - (old_w - 1);
     let new_p = unsafe { global::alloc_slice_zeroed::<Slot<K, V>>(new_d) };
     let new_t = new_p + (new_w - 1);
     let new_l = new_p + (new_d - 1);
@@ -284,7 +283,7 @@ impl<K: Key, V> HashMap<K, V> {
     self.slack = new_s;
     self.limit = new_l;
 
-    // The map is now in a valid state, even if `global_dealloc` panics.
+    // The map is now in a valid state, even if deallocating panics.
 
     unsafe { global::dealloc_slice(old_p, old_d) };
   }
