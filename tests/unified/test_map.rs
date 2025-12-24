@@ -18,13 +18,13 @@ fn test_basic() {
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
-  write!(s, "{:?} <- t.get_insert({:?}, {:?})\n", t.get_insert(key, 42), key, 42).unwrap();
+  write!(s, "{:?} <- t.get_and_insert({:?}, {:?})\n", t.get_and_insert(key, 42), key, 42).unwrap();
   write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
-  write!(s, "{:?} <- t.get_remove({:?})\n", t.get_remove(key), key).unwrap();
+  write!(s, "{:?} <- t.get_and_remove({:?})\n", t.get_and_remove(key), key).unwrap();
   write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
@@ -37,13 +37,13 @@ fn test_basic() {
       false <- t.contains_key(13)
       None <- t.get(13)
       None <- t.get_mut(13)
-      None <- t.get_insert(13, 42)
+      None <- t.get_and_insert(13, 42)
       1 <- t.len()
       false <- t.is_empty()
       true <- t.contains_key(13)
       Some(42) <- t.get(13)
       Some(42) <- t.get_mut(13)
-      Some(42) <- t.get_remove(13)
+      Some(42) <- t.get_and_remove(13)
       0 <- t.len()
       true <- t.is_empty()
       false <- t.contains_key(13)
@@ -124,7 +124,7 @@ fn test_1() -> Result<(), std::fmt::Error> {
   for i in 1 ..= 100 {
     if i & 1 == 0 {
       let k = NonZeroU64::new(i).unwrap();
-      assert!(t.get_remove(k).is_some());
+      assert!(t.get_and_remove(k).is_some());
     }
   }
 

@@ -53,6 +53,12 @@ fn capacity(w: usize) -> usize {
   return (w >> 1) - (w >> 3); // ~ 0.375
 }
 
+#[inline(always)]
+fn log2(n: usize) -> usize {
+  debug_assert!(n >= 1);
+  return (usize::BITS - 1 - n.leading_zeros()) as usize;
+}
+
 // SIZE CLASS MATH
 //
 // 0           A     B     C           D           E
@@ -229,7 +235,7 @@ impl<K: Key, V> HashMap<K, V> {
     let old_p = old_t - (old_w - 1);
 
     let new_d = increment_size_class(old_d * size_of::<Slot<K, V>>()) / size_of::<Slot<K, V>>();
-    let new_e = old_e + 1;
+    let new_e = old_e + (log2(new_d) - log2(old_d)) + ((last_written_slot == old_l) as usize);
     let new_w = new_d - new_e;
 
     // Panic if we would overflow the layout.
@@ -243,7 +249,8 @@ impl<K: Key, V> HashMap<K, V> {
     let new_l = new_p + (new_d - 1);
 
     // At this point, we know that we can finish growing the table without
-    // panicking, so we re-add the last written slot.
+    // panicking, so we re-add the last written slot before initializing the
+    // new table.
 
     unsafe { slot_hash(last_written_slot).write(h) };
 
@@ -287,8 +294,8 @@ impl<K: Key, V> HashMap<K, V> {
   fn internal_init(&mut self, h: K::Hash, value: V) {
     // Initialize table, then insert.
 
-    let w = 14;
-    let e = 2;
+    let w = 13;
+    let e = 3;
     let d = w + e;
 
     assert!(d <= Self::MAX_NUM_SLOTS);
@@ -323,8 +330,6 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
-    let s = self.slack;
-    let l = self.limit;
     let h = K::hash(key, m);
 
     let mut a = t - K::slot(h, w);
@@ -338,6 +343,9 @@ impl<K: Key, V> HashMap<K, V> {
     if x == h {
       return Some(unsafe { slot_data(a).replace(value) });
     }
+
+    let s = self.slack;
+    let l = self.limit;
 
     if l.is_null() {
       self.internal_init(h, value);
@@ -387,7 +395,6 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
-    let s = self.slack;
     let h = K::hash(key, m);
 
     let mut a = t - K::slot(h, w);
@@ -399,6 +406,8 @@ impl<K: Key, V> HashMap<K, V> {
     }
 
     if x != h { return None; }
+
+    let s = self.slack;
 
     self.slack = s + 1;
 
