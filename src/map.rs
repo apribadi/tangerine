@@ -51,8 +51,6 @@ static EMPTY_TABLE: u64 = 0;
 #[inline(always)]
 fn capacity(w: usize) -> usize {
   return (w >> 1) - (w >> 3); // ~ 0.375
-  // return w >> 1;
-  // return w >> 2;
 }
 
 // SIZE CLASS MATH
@@ -73,11 +71,11 @@ fn capacity(w: usize) -> usize {
 #[inline(always)]
 fn increment_size_class(n: usize) -> usize {
   debug_assert!(2 <= n && n <= isize::MAX as usize);
-  let m = 2 * n - 1;
-  let k = usize::BITS - 1 - m.leading_zeros();
+  let n = 2 * n - 1;
+  let k = usize::BITS - 1 - n.leading_zeros();
   let a = 1 << k;
   let b = a >> 1;
-  return a + (b & m);
+  return a + (n & b);
 }
 
 #[inline(always)]
@@ -212,10 +210,10 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn internal_grow(&mut self, last_slot_write: ptr<Slot<K, V>>) {
+  fn internal_grow(&mut self, last_written_slot: ptr<Slot<K, V>>) {
     // Temporarily place table in a valid state, in case we panic.
 
-    let h = unsafe { slot_hash(last_slot_write).replace(K::ZERO) };
+    let h = unsafe { slot_hash(last_written_slot).replace(K::ZERO) };
 
     let old_t = self.table;
     let old_w = self.width;
@@ -244,10 +242,10 @@ impl<K: Key, V> HashMap<K, V> {
     let new_t = new_p + (new_w - 1);
     let new_l = new_p + (new_d - 1);
 
-    // At this point, we can finish growing the table without panicking, so we
-    // re-add the last inserted slot.
+    // At this point, we know that we can finish growing the table without
+    // panicking, so we re-add the last written slot.
 
-    unsafe { slot_hash(last_slot_write).write(h) };
+    unsafe { slot_hash(last_written_slot).write(h) };
 
     let old_n = capacity(old_w) - old_s + 1;
     let new_s = old_s + (capacity(new_w) - capacity(old_w)) - 1;
@@ -321,7 +319,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   #[must_use]
-  pub fn get_insert(&mut self, key: K, value: V) -> Option<V> {
+  pub fn get_and_insert(&mut self, key: K, value: V) -> Option<V> {
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
@@ -377,7 +375,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   pub fn insert(&mut self, key: K, value: V) {
-    let _: Option<V> = self.get_insert(key, value);
+    let _: Option<V> = self.get_and_insert(key, value);
   }
 
   /// Removes the given key from the map. Returns the previous value associated
@@ -385,7 +383,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   #[must_use]
-  pub fn get_remove(&mut self, key: K) -> Option<V> {
+  pub fn get_and_remove(&mut self, key: K) -> Option<V> {
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
@@ -426,7 +424,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   pub fn remove(&mut self, key: K) {
-    let _: Option<V> = self.get_remove(key);
+    let _: Option<V> = self.get_and_remove(key);
   }
 
   /// Removes every item from the map. Retains heap-allocated memory.
