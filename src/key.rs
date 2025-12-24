@@ -28,7 +28,7 @@ impl<T: IntoKey> Key for T {
 ///
 /// SAFETY: It must be safe to do `project(inject(_))`.
 
-pub unsafe trait IntoKey: Copy {
+pub unsafe trait IntoKey: Copy + Ord {
   #![allow(missing_docs)]
 
   type Key: Key;
@@ -221,7 +221,7 @@ unsafe impl<T: IntoKey> private::Key for T {
 pub(crate) mod private {
   use rand_core::RngCore;
 
-  pub(crate) unsafe trait Key: Copy {
+  pub(crate) unsafe trait Key: Copy + Ord {
     type Seed: Copy;
 
     type Hash: Copy + Ord;

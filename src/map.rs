@@ -1,17 +1,13 @@
 //! This module provides a fast hash map keyed by types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
-// TODO: Clone
-// TODO: Debug
 // TODO: IntoIterator
 // TODO: drain
 // TODO: shrink_to_fit
-// TODO: try_insert
 // TODO: get_or_insert_with
 
-extern crate alloc;
-
 use core::cmp::max;
+use core::fmt::Debug;
 use core::iter::ExactSizeIterator;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
@@ -727,6 +723,31 @@ impl<K: Key, V, T, F: FnMut(K::Hash, ptr<Slot<K, V>>) -> T> ExactSizeIterator fo
   #[inline(always)]
   fn len(&self) -> usize {
     return self.size;
+  }
+}
+
+impl<K: Key, V: Clone> Clone for HashMap<K, V> {
+  fn clone(&self) -> Self {
+    let mut t = Self::new();
+    for (x, y) in self.iter() {
+      t.insert(x, y.clone());
+    }
+    return t;
+  }
+
+  fn clone_from(&mut self, source: &Self) {
+    self.clear();
+    for (x, y) in source.iter() {
+      self.insert(x, y.clone());
+    }
+  }
+}
+
+impl <K: Key + Debug, V: Debug> Debug for HashMap<K, V> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut a = self.iter().collect::<Box<[_]>>();
+    a.sort_by_key(|&(x, _)| x);
+    return f.debug_map().entries(a.into_iter()).finish();
   }
 }
 

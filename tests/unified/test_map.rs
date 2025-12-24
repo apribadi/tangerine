@@ -99,7 +99,7 @@ fn test_iter() -> Result<(), std::fmt::Error> {
 
   let values = t.values();
   let _ = t.get(NonZeroU64::new(1).unwrap());
-  let mut values = values.collect::<Vec<_>>();
+  let mut values = values.collect::<Box<[_]>>();
   values.sort();
 
   write!(s, "{:?}\n", values)?;
@@ -109,7 +109,13 @@ fn test_iter() -> Result<(), std::fmt::Error> {
       load = 0.3125
       allocation_size = 512
       [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-  "#]].assert_eq(&s);
+  "#]].assert_eq(&s.drain(..).as_str());
+
+  write!(s, "{:?}\n", t)?;
+
+  expect![[r#"
+      {1: 10, 2: 20, 3: 30, 4: 40, 5: 50, 6: 60, 7: 70, 8: 80, 9: 90, 10: 100}
+  "#]].assert_eq(&s.drain(..).as_str());
 
   Ok(())
 }
