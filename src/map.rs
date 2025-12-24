@@ -7,6 +7,7 @@
 // TODO: drain
 // TODO: shrink_to_fit
 // TODO: try_insert
+// TODO: get_or_insert_with
 
 extern crate alloc;
 
@@ -441,8 +442,6 @@ impl<K: Key, V> HashMap<K, V> {
     let s = self.slack;
     let l = self.limit;
 
-    if l.is_null() { return; }
-
     let c = capacity(w);
     let n = c - s;
 
@@ -510,6 +509,7 @@ impl<K: Key, V> HashMap<K, V> {
     let e = l - t;
     let d = w + e;
     let n = capacity(w) - s;
+    let p = t - (w - 1);
 
     self.table = ptr::from(&EMPTY_TABLE).cast();
     self.width = 1;
@@ -527,7 +527,7 @@ impl<K: Key, V> HashMap<K, V> {
         // call to `drop` panics then we can just safely leak the table.
 
         let mut n = n;
-        let mut a = t - (w - 1);
+        let mut a = p;
 
         loop {
           if unsafe { slot_hash(a).read() } != K::ZERO {
@@ -541,8 +541,6 @@ impl<K: Key, V> HashMap<K, V> {
         }
       }
     }
-
-    let p = t - (w - 1);
 
     unsafe { global::dealloc_slice(p, d) };
   }
