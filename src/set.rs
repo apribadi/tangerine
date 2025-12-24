@@ -2,7 +2,6 @@
 //! `NonZeroU32` or `NonZeroU64`.
 
 use core::iter::ExactSizeIterator;
-use core::iter::FusedIterator;
 use rand_core::RngCore;
 
 use crate::key::Key;
@@ -88,40 +87,9 @@ impl<T: Key> HashSet<T> {
 
   #[inline(always)]
   #[must_use]
-  pub fn iter(&self) -> Iter<'_, T> {
-    return Iter { keys: self.map.keys() };
+  pub fn iter(&self) -> impl ExactSizeIterator<Item = T> + use<'_, T> {
+    return self.map.keys();
   }
-}
-
-/// Iterator returned by [`HashSet::iter`].
-
-#[derive(Clone)]
-pub struct Iter<'a, T: Key> {
-  keys: map::Keys<'a, T, ()>,
-}
-
-impl<'a, T: Key> Iterator for Iter<'a, T> {
-  type Item = T;
-
-  #[inline(always)]
-  fn next(&mut self) -> Option<Self::Item> {
-    return self.keys.next();
-  }
-
-  #[inline(always)]
-  fn size_hint(&self) -> (usize, Option<usize>) {
-    return self.keys.size_hint();
-  }
-}
-
-impl<'a, T: Key> ExactSizeIterator for Iter<'a, T> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.keys.len();
-  }
-}
-
-impl<'a, T: Key> FusedIterator for Iter<'a, T> {
 }
 
 impl<T: Key> Default for HashSet<T> {

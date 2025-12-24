@@ -5,6 +5,20 @@ use std::write;
 use tangerine::map::HashMap;
 use dandelion::Rng;
 
+/*
+#[test]
+fn test_lifetime() {
+  let mut g = Rng::from_u64(0);
+  let mut t = HashMap::new_seeded(&mut g);
+  let key = NonZeroU64::new(13).unwrap();
+  t.insert(key, 1u64);
+  let mut i = t.keys();
+  let _ = i.next();
+  t.reset();
+  let _ = i.next();
+}
+*/
+
 #[test]
 fn test_basic() {
   let mut s = String::new();

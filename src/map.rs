@@ -553,85 +553,90 @@ impl<K: Key, V> HashMap<K, V> {
   }
 
   /// Returns an iterator yielding each key and a reference to its associated
-  /// value. The iterator item type is `(K, &'_ V)`.
+  /// value. The iterator item type is `(K, &V)`.
 
   #[inline(always)]
   #[must_use]
-  pub fn iter(&self) -> Iter<'_, K, V> {
+  pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
     let m = self.seed1;
     let t = self.table;
     let w = self.width;
     let s = self.slack;
 
-    let n = capacity(w) - s;
-    let a = t - (w - 1);
-
-    return Iter { size: n, slot: a, seed: m, _phantom_data: PhantomData };
+    return Iter {
+      size: capacity(w) - s,
+      slot: t - (w - 1),
+      func: move |x, a| unsafe { (K::invert_hash(x, m), slot_data(a).as_ref()) }
+    };
   }
 
   /// Returns an iterator yielding each key and a mutable reference to its
-  /// associated value. The iterator item type is `(K, &'_ mut V)`.
+  /// associated value. The iterator item type is `(K, &mut V)`.
 
   #[inline(always)]
   #[must_use]
-  pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
+  pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V>{
     let m = self.seed1;
     let t = self.table;
     let w = self.width;
     let s = self.slack;
 
-    let n = capacity(w) - s;
-    let a = t - (w - 1);
-
-    return IterMut { size: n, slot: a, seed: m, _phantom_data: PhantomData };
+    return Iter {
+      size: capacity(w) - s,
+      slot: t - (w - 1),
+      func: move |x, a| unsafe { (K::invert_hash(x, m), slot_data(a).as_mut_ref()) }
+    };
   }
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
 
   #[inline(always)]
   #[must_use]
-  pub fn keys(&self) -> Keys<'_, K, V> {
+  pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V> {
     let m = self.seed1;
     let t = self.table;
     let w = self.width;
     let s = self.slack;
 
-    let n = capacity(w) - s;
-    let a = t - (w - 1);
-
-    return Keys { size: n, slot: a, seed: m, _phantom_data: PhantomData };
+    return Iter {
+      size: capacity(w) - s,
+      slot: t - (w - 1),
+      func: move |x, _| unsafe { K::invert_hash(x, m) }
+    };
   }
 
   /// Returns an iterator yielding a reference to each value. The iterator item
-  /// type is `&'_ V`.
+  /// type is `&V`.
 
   #[inline(always)]
   #[must_use]
-  pub fn values(&self) -> Values<'_, K, V> {
+  pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, K, V> {
     let t = self.table;
     let w = self.width;
     let s = self.slack;
 
-    let n = capacity(w) - s;
-    let a = t - (w - 1);
-
-    return Values { size: n, slot: a, _phantom_data: PhantomData };
+    return Iter {
+      size: capacity(w) - s,
+      slot: t - (w - 1),
+      func: move |_, a| unsafe { slot_data(a).as_ref() }
+    };
   }
 
   /// Returns an iterator yielding a mutable reference to each value. The
-  /// iterator item type is `&'_ mut V`.
+  /// iterator item type is `&mut V`.
 
   #[inline(always)]
   #[must_use]
-  pub fn values_mut(&mut self) -> ValuesMut<'_, K, V> {
+  pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V> {
     let t = self.table;
     let w = self.width;
     let s = self.slack;
 
-    let n = capacity(w) - s;
-    let a = t - (w - 1);
-
-    return ValuesMut { size: n, slot: a, _phantom_data: PhantomData };
+    return Iter {
+      size: capacity(w) - s,
+      slot: t - (w - 1),
+      func: move |_, a| unsafe { slot_data(a).as_mut_ref() }
+    };
   }
 
   fn internal_num_slots(&self) -> usize {
@@ -684,54 +689,14 @@ impl<K: Key, V> IndexMut<K> for HashMap<K, V> {
   }
 }
 
-/// Iterator returned by [`HashMap::iter`].
-
-#[derive(Clone)]
-pub struct Iter<'a, K: Key, V> {
+struct Iter<K: Key, V, T, F: FnMut(K::Hash, ptr<Slot<K, V>>) -> T> {
   size: usize,
   slot: ptr<Slot<K, V>>,
-  seed: K::Seed,
-  _phantom_data: PhantomData<(&'a K, &'a V)>,
+  func: F,
 }
 
-/// Iterator returned by [`HashMap::iter_mut`].
-
-pub struct IterMut<'a, K: Key, V> {
-  size: usize,
-  slot: ptr<Slot<K, V>>,
-  seed: K::Seed,
-  _phantom_data: PhantomData<(&'a K, &'a mut V)>,
-}
-
-/// Iterator returned by [`HashMap::keys`].
-
-#[derive(Clone)]
-pub struct Keys<'a, K: Key, V> {
-  size: usize,
-  slot: ptr<Slot<K, V>>,
-  seed: K::Seed,
-  _phantom_data: PhantomData<&'a K>,
-}
-
-/// Iterator returned by [`HashMap::values`].
-
-#[derive(Clone)]
-pub struct Values<'a, K: Key, V> {
-  size: usize,
-  slot: ptr<Slot<K, V>>,
-  _phantom_data: PhantomData<&'a V>,
-}
-
-/// Iterator returned by [`HashMap::values_mut`].
-
-pub struct ValuesMut<'a, K: Key, V> {
-  size: usize,
-  slot: ptr<Slot<K, V>>,
-  _phantom_data: PhantomData<&'a mut V>,
-}
-
-impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
-  type Item = (K, &'a V);
+impl<K: Key, V, T, F: FnMut(K::Hash, ptr<Slot<K, V>>) -> T> Iterator for Iter<K, V, T, F> {
+  type Item = T;
 
   #[inline(always)]
   fn next(&mut self) -> Option<Self::Item> {
@@ -747,13 +712,10 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
       x = unsafe { slot_hash(a).read() };
     }
 
-    let x = unsafe { K::invert_hash(x, self.seed) };
-    let y = unsafe { slot_data(a).as_ref() };
-
     self.size = n - 1;
     self.slot = a + 1;
 
-    return Some((x, y));
+    return Some((self.func)(x, a));
   }
 
   #[inline(always)]
@@ -762,160 +724,7 @@ impl<'a, K: Key, V> Iterator for Iter<'a, K, V> {
   }
 }
 
-impl<'a, K: Key, V> Iterator for IterMut<'a, K, V> {
-  type Item = (K, &'a mut V);
-
-  #[inline(always)]
-  fn next(&mut self) -> Option<Self::Item> {
-    let n = self.size;
-
-    if n == 0 { return None; }
-
-    let mut a = self.slot;
-    let mut x = unsafe { slot_hash(a).read() };
-
-    while x == K::ZERO {
-      a = a + 1;
-      x = unsafe { slot_hash(a).read() };
-    }
-
-    let x = unsafe { K::invert_hash(x, self.seed) };
-    let y = unsafe { slot_data(a).as_mut_ref() };
-
-    self.size = n - 1;
-    self.slot = a + 1;
-
-    return Some((x, y));
-  }
-
-  #[inline(always)]
-  fn size_hint(&self) -> (usize, Option<usize>) {
-    return (self.size, Some(self.size));
-  }
-}
-
-impl<'a, K: Key, V> Iterator for Keys<'a, K, V> {
-  type Item = K;
-
-  #[inline(always)]
-  fn next(&mut self) -> Option<Self::Item> {
-    let n = self.size;
-
-    if n == 0 { return None; }
-
-    let mut a = self.slot;
-    let mut x = unsafe { slot_hash(a).read() };
-
-    while x == K::ZERO {
-      a = a + 1;
-      x = unsafe { slot_hash(a).read() };
-    }
-
-    let x = unsafe { K::invert_hash(x, self.seed) };
-
-    self.size = n - 1;
-    self.slot = a + 1;
-
-    return Some(x);
-  }
-
-  #[inline(always)]
-  fn size_hint(&self) -> (usize, Option<usize>) {
-    return (self.size, Some(self.size));
-  }
-}
-
-impl<'a, K: Key, V> Iterator for Values<'a, K, V> {
-  type Item = &'a V;
-
-  #[inline(always)]
-  fn next(&mut self) -> Option<Self::Item> {
-    let n = self.size;
-
-    if n == 0 { return None; }
-
-    let mut a = self.slot;
-    let mut x = unsafe { slot_hash(a).read() };
-
-    while x == K::ZERO {
-      a = a + 1;
-      x = unsafe { slot_hash(a).read() };
-    }
-
-    let y = unsafe { slot_data(a).as_ref() };
-
-    self.size = n - 1;
-    self.slot = a + 1;
-
-    return Some(y);
-  }
-
-  #[inline(always)]
-  fn size_hint(&self) -> (usize, Option<usize>) {
-    return (self.size, Some(self.size));
-  }
-}
-
-impl<'a, K: Key, V> Iterator for ValuesMut<'a, K, V> {
-  type Item = &'a mut V;
-
-  #[inline(always)]
-  fn next(&mut self) -> Option<Self::Item> {
-    let n = self.size;
-
-    if n == 0 { return None; }
-
-    let mut a = self.slot;
-    let mut x = unsafe { slot_hash(a).read() };
-
-    while x == K::ZERO {
-      a = a + 1;
-      x = unsafe { slot_hash(a).read() };
-    }
-
-    let y = unsafe { slot_data(a).as_mut_ref() };
-
-    self.size = n - 1;
-    self.slot = a + 1;
-
-    return Some(y);
-  }
-
-  #[inline(always)]
-  fn size_hint(&self) -> (usize, Option<usize>) {
-    return (self.size, Some(self.size));
-  }
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for Iter<'a, K, V> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.size;
-  }
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for IterMut<'a, K, V> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.size;
-  }
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for Keys<'a, K, V> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.size;
-  }
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for Values<'a, K, V> {
-  #[inline(always)]
-  fn len(&self) -> usize {
-    return self.size;
-  }
-}
-
-impl<'a, K: Key, V> ExactSizeIterator for ValuesMut<'a, K, V> {
+impl<K: Key, V, T, F: FnMut(K::Hash, ptr<Slot<K, V>>) -> T> ExactSizeIterator for Iter<K, V, T, F> {
   #[inline(always)]
   fn len(&self) -> usize {
     return self.size;
