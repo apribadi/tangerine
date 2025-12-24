@@ -3,6 +3,7 @@
 
 // TODO: IntoIterator
 // TODO: drain
+// TODO: try_insert
 // TODO: shrink_to_fit
 // TODO: get_or_insert_with
 
