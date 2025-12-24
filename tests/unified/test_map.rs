@@ -56,7 +56,7 @@ fn test_basic() {
 #[test]
 fn test_empty() {
   let mut s = String::new();
-  let mut t = HashMap::<NonZeroU64, u64>::new();
+  let t = HashMap::<NonZeroU64, u64>::new();
 
   write!(s, "num_slots = {}\n", tangerine::map::internal::num_slots(&t)).unwrap();
   write!(s, "load = {}\n", tangerine::map::internal::load_factor(&t)).unwrap();

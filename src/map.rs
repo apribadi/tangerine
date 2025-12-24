@@ -32,7 +32,7 @@ pub struct HashMap<K: Key, V> {
   seed1: K::Seed,
   table: ptr<Slot<K, V>>, // NB: invariant
   width: usize,
-  slack: isize,
+  slack: usize,
   limit: ptr<Slot<K, V>>,
   _phantom_data: PhantomData<(K, V)>
 }
@@ -48,8 +48,10 @@ struct Slot<K: Key, V> {
 static EMPTY_TABLE: u64 = 0;
 
 #[inline(always)]
-fn capacity(w: usize) -> isize {
-  return ((w >> 1) - (w >> 3)) as isize // ~ 0.375
+fn capacity(w: usize) -> usize {
+  return (w >> 1) - (w >> 3); // ~ 0.375
+  // return w >> 1;
+  // return w >> 2;
 }
 
 // SIZE CLASS MATH
@@ -74,13 +76,7 @@ fn increment_size_class(n: usize) -> usize {
   let k = usize::BITS - 1 - m.leading_zeros();
   let a = 1 << k;
   let b = a >> 1;
-  return a | b & m;
-}
-
-#[inline(always)]
-fn log2(n: usize) -> usize {
-  debug_assert!(n >= 1);
-  return (usize::BITS - 1 - n.leading_zeros()) as usize;
+  return a + (b & m);
 }
 
 #[inline(always)]
@@ -98,12 +94,11 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   fn internal_new(m: K::Seed) -> Self {
-    // NB: a map refers to EMPTY_TABLE iff width == 0
     Self {
       seed0: m,
       seed1: K::invert_seed(m),
       table: ptr::from(&EMPTY_TABLE).cast(),
-      width: 0,
+      width: 1,
       slack: 0,
       limit: ptr::NULL,
       _phantom_data: PhantomData,
@@ -134,7 +129,7 @@ impl<K: Key, V> HashMap<K, V> {
     let w = self.width;
     let s = self.slack;
 
-    return (capacity(w) - s) as usize;
+    return capacity(w) - s;
   }
 
   /// Returns whether the map contains zero items.
@@ -216,85 +211,45 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn internal_init(&mut self, key: K, value: V) {
-    let m = self.seed0;
-    let w = 12;
-    let e = 4;
-    let d = w + e;
+  fn internal_grow(&mut self, last_slot_write: ptr<Slot<K, V>>) {
+    // Temporarily place table in a valid state, in case we panic.
 
-    assert!(d <= Self::MAX_NUM_SLOTS);
+    let h = unsafe { slot_hash(last_slot_write).replace(K::ZERO) };
 
-    let p = unsafe { global::alloc_slice_zeroed::<Slot<K, V>>(d) };
-
-    let t = p + (w - 1);
-    let l = p + (d - 1);
-    let h = K::hash(key, m);
-    let a = t - K::slot(h, w);
-
-    unsafe { slot_hash(a).write(h) };
-    unsafe { slot_data(a).write(value) };
-
-    // We only modify `self` after we know that allocation has succeeded so
-    // that the hash map will still be valid after a panic.
-
-    self.table = t;
-    self.width = w;
-    self.slack = capacity(w) - 1;
-    self.limit = l;
-  }
-
-  #[inline(never)]
-  #[cold]
-  fn internal_grow(&mut self) {
     let old_t = self.table;
     let old_w = self.width;
-    let old_s = self.slack;
+    let old_s = self.slack.wrapping_add(1);
     let old_l = self.limit;
+
+    self.slack = old_s;
+
+    // Compute new size.
+
     let old_e = old_l - old_t;
     let old_d = old_w + old_e;
     let old_p = old_t - (old_w - 1);
-    let old_n = (capacity(old_w) - old_s) as usize;
-
-    let old_l_hash = unsafe { slot_hash(old_l).read() };
-    let is_overflow = old_l_hash != K::ZERO;
-
-    // WARNING!
-    //
-    // We must be careful to leave the map in a valid state even if attempting
-    // to allocate a new table results in a panic.
-    //
-    // It turns out that the `self.slack < 0` state actually *is* valid, but
-    // the `is_overflow` state *is not* valid.
-    //
-    // In the latter case, we temporarily remove the item in the final slot and
-    // restore it after we have succeeded at allocating a new table.
-    //
-    // This is an instance of the infamous PPYP design pattern.
-
-    if is_overflow {
-      unsafe { slot_hash(old_l).write(K::ZERO) };
-      self.slack = old_s + 1;
-    }
 
     let new_d = increment_size_class(old_d * size_of::<Slot<K, V>>()) / size_of::<Slot<K, V>>();
-    let new_e = old_e + (log2(new_d) - log2(old_d)) + (is_overflow as usize);
+    let new_e = old_e + 1;
     let new_w = new_d - new_e;
-    let new_s = old_s + (capacity(new_w) - capacity(old_w));
 
     // Panic if we would overflow the layout.
 
     assert!(new_d <= Self::MAX_NUM_SLOTS);
 
+    // Alloc new table.
+
     let new_p = unsafe { global::alloc_slice_zeroed::<Slot<K, V>>(new_d) };
-
-    // At this point we know that allocating a new table has succeeded. We
-    // make sure to re-write the last slot before copying from the old table to
-    // the new table.
-
-    unsafe { slot_hash(old_l).write(old_l_hash) };
-
     let new_t = new_p + (new_w - 1);
     let new_l = new_p + (new_d - 1);
+
+    // At this point, we can finish growing the table without panicking, so we
+    // re-add the last inserted slot.
+
+    unsafe { slot_hash(last_slot_write).write(h) };
+
+    let old_n = capacity(old_w) - old_s + 1;
+    let new_s = old_s + (capacity(new_w) - capacity(old_w)) - 1;
 
     let mut a = old_p;
     let mut b = new_p;
@@ -309,7 +264,7 @@ impl<K: Key, V> HashMap<K, V> {
         unsafe { slot_hash(b).write(x) }
         unsafe { slot_data(b).write(slot_data(a).read()) };
 
-        n -= 1;
+        n = n - 1;
         if n == 0 { break; }
 
         b = b + 1;
@@ -328,6 +283,32 @@ impl<K: Key, V> HashMap<K, V> {
     unsafe { global::dealloc_slice(old_p, old_d) };
   }
 
+  #[inline(never)]
+  #[cold]
+  fn internal_init(&mut self, h: K::Hash, value: V) {
+    // Initialize table, then insert.
+
+    let w = 14;
+    let e = 2;
+    let d = w + e;
+
+    assert!(d <= Self::MAX_NUM_SLOTS);
+
+    let p = unsafe { global::alloc_slice_zeroed::<Slot<K, V>>(d) };
+
+    let t = p + (w - 1);
+    let l = p + (d - 1);
+    let a = t - K::slot(h, w);
+
+    unsafe { slot_hash(a).write(h) };
+    unsafe { slot_data(a).write(value) };
+
+    self.table = t;
+    self.width = w;
+    self.slack = capacity(w) - 1;
+    self.limit = l;
+  }
+
   /// Inserts the given key and value into the map. Returns the previous value
   /// associated with given key, if one was present.
   ///
@@ -339,18 +320,12 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(always)]
   #[must_use]
-  pub fn get_insert_0(&mut self, key: K, value: V) -> Option<V> {
-    let l = self.limit;
-
-    if l.is_null() {
-      self.internal_init(key, value);
-
-      return None;
-    }
-
+  pub fn get_insert(&mut self, key: K, value: V) -> Option<V> {
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
+    let s = self.slack;
+    let l = self.limit;
     let h = K::hash(key, m);
 
     let mut a = t - K::slot(h, w);
@@ -365,6 +340,11 @@ impl<K: Key, V> HashMap<K, V> {
       return Some(unsafe { slot_data(a).replace(value) });
     }
 
+    if l.is_null() {
+      self.internal_init(h, value);
+      return None;
+    }
+
     let mut y = value;
 
     unsafe { slot_hash(a).write(h) };
@@ -377,10 +357,11 @@ impl<K: Key, V> HashMap<K, V> {
 
     unsafe { slot_data(a).write(y) };
 
-    let s = self.slack - 1;
-    self.slack = s;
+    self.slack = s.wrapping_sub(1);
 
-    if s < 0 || a == l { self.internal_grow(); }
+    if s == 0 || a == l {
+      self.internal_grow(a);
+    }
 
     return None;
   }
@@ -398,25 +379,6 @@ impl<K: Key, V> HashMap<K, V> {
     let _: Option<V> = self.get_insert(key, value);
   }
 
-  /// TODO
-
-  #[inline(always)]
-  #[must_use]
-  pub fn get_or_init<F: FnOnce() -> V>(&mut self, key: K, init: F) -> &mut V {
-    let _ = self;
-    let _ = key;
-    let _ = init;
-    unimplemented!()
-  }
-
-  /// TODO
-
-  #[inline(always)]
-  #[must_use]
-  pub fn get_or_insert(&mut self, key: K, value: V) -> &mut V {
-    return self.get_or_init(key, || value);
-  }
-
   /// Removes the given key from the map. Returns the previous value associated
   /// with the given key, if one was present.
 
@@ -426,6 +388,7 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed0;
     let t = self.table;
     let w = self.width;
+    let s = self.slack;
     let h = K::hash(key, m);
 
     let mut a = t - K::slot(h, w);
@@ -438,7 +401,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     if x != h { return None; }
 
-    self.slack += 1;
+    self.slack = s + 1;
 
     let value = unsafe { slot_data(a).read() };
     let mut a = a;
@@ -473,15 +436,15 @@ impl<K: Key, V> HashMap<K, V> {
   /// a valid but otherwise unspecified state.
 
   pub fn clear(&mut self) {
+    let t = self.table;
+    let w = self.width;
+    let s = self.slack;
     let l = self.limit;
 
     if l.is_null() { return; }
 
-    let t = self.table;
-    let w = self.width;
-    let s = self.slack;
     let c = capacity(w);
-    let n = (c - s) as usize;
+    let n = c - s;
 
     if needs_drop::<V>() {
       if n != 0 {
@@ -503,12 +466,12 @@ impl<K: Key, V> HashMap<K, V> {
           if unsafe { slot_hash(a).read() } != K::ZERO {
             unsafe { slot_hash(a).write(K::ZERO) };
 
-            s += 1;
+            s = s + 1;
             self.slack = s;
 
             unsafe { slot_data(a).drop_in_place() };
 
-            n -= 1;
+            n = n - 1;
             if n == 0 { break; }
           }
 
@@ -537,17 +500,16 @@ impl<K: Key, V> HashMap<K, V> {
   /// happens, the map will be in a valid but otherwise unspecified state.
 
   pub fn reset(&mut self) {
+    let t = self.table;
+    let w = self.width;
+    let s = self.slack;
     let l = self.limit;
 
     if l.is_null() { return; }
 
-    let t = self.table;
-    let w = self.width;
-    let s = self.slack;
     let e = l - t;
     let d = w + e;
-    let c = capacity(w);
-    let n = (c - s) as usize;
+    let n = capacity(w) - s;
 
     self.table = ptr::from(&EMPTY_TABLE).cast();
     self.width = 1;
@@ -571,7 +533,7 @@ impl<K: Key, V> HashMap<K, V> {
           if unsafe { slot_hash(a).read() } != K::ZERO {
             unsafe { slot_data(a).drop_in_place() };
 
-            n -= 1;
+            n = n - 1;
             if n == 0 { break; }
           }
 
@@ -596,7 +558,7 @@ impl<K: Key, V> HashMap<K, V> {
     let w = self.width;
     let s = self.slack;
 
-    let n = (capacity(w) - s) as usize;
+    let n = capacity(w) - s;
     let a = t - (w - 1);
 
     return Iter { size: n, slot: a, seed: m, _phantom_data: PhantomData };
@@ -613,7 +575,7 @@ impl<K: Key, V> HashMap<K, V> {
     let w = self.width;
     let s = self.slack;
 
-    let n = (capacity(w) - s) as usize;
+    let n = capacity(w) - s;
     let a = t - (w - 1);
 
     return IterMut { size: n, slot: a, seed: m, _phantom_data: PhantomData };
@@ -629,7 +591,7 @@ impl<K: Key, V> HashMap<K, V> {
     let w = self.width;
     let s = self.slack;
 
-    let n = (capacity(w) - s) as usize;
+    let n = capacity(w) - s;
     let a = t - (w - 1);
 
     return Keys { size: n, slot: a, seed: m, _phantom_data: PhantomData };
@@ -645,7 +607,7 @@ impl<K: Key, V> HashMap<K, V> {
     let w = self.width;
     let s = self.slack;
 
-    let n = (capacity(w) - s) as usize;
+    let n = capacity(w) - s;
     let a = t - (w - 1);
 
     return Values { size: n, slot: a, _phantom_data: PhantomData };
@@ -661,21 +623,20 @@ impl<K: Key, V> HashMap<K, V> {
     let w = self.width;
     let s = self.slack;
 
-    let n = (capacity(w) - s) as usize;
+    let n = capacity(w) - s;
     let a = t - (w - 1);
 
     return ValuesMut { size: n, slot: a, _phantom_data: PhantomData };
   }
 
   fn internal_num_slots(&self) -> usize {
+    let t = self.table;
+    let w = self.width;
     let l = self.limit;
 
     if l.is_null() { return 0; }
 
-    let t = self.table;
-    let w = self.width;
-
-    return l - t + w;
+    return w + (l - t);
   }
 
   fn internal_allocation_size(&self) -> usize {
@@ -685,66 +646,6 @@ impl<K: Key, V> HashMap<K, V> {
   fn internal_load_factor(&self) -> f64 {
     // NB: NaN if no allocation
     return self.len() as f64 / self.internal_num_slots() as f64;
-  }
-
-  /// TODO
-
-  #[inline(always)]
-  #[must_use]
-  pub fn get_insert(&mut self, key: K, value: V) -> Option<V> {
-    let m = self.seed0;
-    let t = self.table;
-    let w = self.width;
-    let h = K::hash(key, m);
-
-    let mut a = t - K::slot(h, w);
-    let mut x = unsafe { slot_hash(a).read() };
-
-    while x > h {
-      a = a + 1;
-      x = unsafe { slot_hash(a).read() };
-    }
-
-    if x == h {
-      return Some(unsafe { slot_data(a).replace(value) });
-    }
-
-    let l = self.limit;
-
-    if l.is_null() {
-      self.internal_init(key, value);
-
-      return None;
-    }
-
-    let mut y = value;
-
-    unsafe { slot_hash(a).write(h) };
-
-    while x != K::ZERO {
-      y = unsafe { slot_data(a).replace(y) };
-      a = a + 1;
-      x = unsafe { slot_hash(a).replace(x) };
-    }
-
-    unsafe { slot_data(a).write(y) };
-
-    let s = self.slack - 1;
-    self.slack = s;
-
-    if s < 0 || a == l { self.internal_grow(); }
-
-    return None;
-  }
-}
-
-impl<K: Key, V: Default> HashMap<K, V> {
-  /// TODO
-
-  #[inline(always)]
-  #[must_use]
-  pub fn get_or_default(&mut self, key: K) -> &mut V {
-    return self.get_or_init(key, V::default);
   }
 }
 
