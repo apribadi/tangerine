@@ -715,17 +715,8 @@ impl<K: Key, V, T, F: FnMut(K::Hash, ptr<Slot<K, V>>) -> T> ExactSizeIterator fo
 impl<K: Key, V: Clone> Clone for HashMap<K, V> {
   fn clone(&self) -> Self {
     let mut t = Self::new();
-    for (x, y) in self.iter() {
-      t.insert(x, y.clone());
-    }
+    self.iter().for_each(|(x, y)| t.insert(x, y.clone()));
     return t;
-  }
-
-  fn clone_from(&mut self, source: &Self) {
-    self.clear();
-    for (x, y) in source.iter() {
-      self.insert(x, y.clone());
-    }
   }
 }
 
@@ -733,7 +724,7 @@ impl <K: Key + Debug, V: Debug> Debug for HashMap<K, V> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut a = self.iter().collect::<Box<[_]>>();
     a.sort_by_key(|&(x, _)| x);
-    return f.debug_map().entries(a.into_iter()).finish();
+    return f.debug_map().entries(a).finish();
   }
 }
 
@@ -743,22 +734,10 @@ impl<K: Key, V> Default for HashMap<K, V> {
   }
 }
 
-impl<const N: usize, K: Key, V> From<[(K, V); N]> for HashMap<K, V> {
-  fn from(value: [(K, V); N]) -> Self {
-    let mut t = HashMap::new();
-    for (x, y) in value.into_iter() {
-      t.insert(x, y);
-    }
-    return t;
-  }
-}
-
 impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
-  fn from_iter<T>(iter: T) -> Self where T: IntoIterator<Item = (K, V)> {
-    let mut t = HashMap::new();
-    for (x, y) in iter.into_iter() {
-      t.insert(x, y);
-    }
+  fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+    let mut t = Self::new();
+    iter.into_iter().for_each(|(x, y)| t.insert(x, y));
     return t;
   }
 }

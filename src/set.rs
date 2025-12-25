@@ -1,6 +1,7 @@
 //! This module provides a fast hash set containing types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
+use core::fmt::Debug;
 use core::iter::ExactSizeIterator;
 use rand_core::RngCore;
 
@@ -92,9 +93,33 @@ impl<T: Key> HashSet<T> {
   }
 }
 
+impl<T: Key> Clone for HashSet<T> {
+  fn clone(&self) -> Self {
+    let mut t = Self::new();
+    self.iter().for_each(|x| t.insert(x));
+    return t;
+  }
+}
+
+impl <T: Key + Debug> Debug for HashSet<T> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut a = self.iter().collect::<Box<[_]>>();
+    a.sort();
+    return f.debug_set().entries(a).finish();
+  }
+}
+
 impl<T: Key> Default for HashSet<T> {
   fn default() -> Self {
-    return Self { map: HashMap::default() };
+    return Self::new();
+  }
+}
+
+impl<T: Key> FromIterator<T> for HashSet<T> {
+  fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+    let mut t = Self::new();
+    iter.into_iter().for_each(|x| t.insert(x));
+    return t;
   }
 }
 
