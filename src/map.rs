@@ -109,7 +109,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
 
-  #[must_use]
   pub fn new() -> Self {
     return Self::internal_new(K::seed_nondet());
   }
@@ -117,7 +116,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
 
-  #[must_use]
   pub fn new_seeded(rng: &mut impl RngCore) -> Self {
     return Self::internal_new(K::seed(rng));
   }
@@ -125,7 +123,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns the number of items.
 
   #[inline(always)]
-  #[must_use]
   pub fn len(&self) -> usize {
     let w = self.width;
     let s = self.slack;
@@ -136,7 +133,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns whether the map contains zero items.
 
   #[inline(always)]
-  #[must_use]
   pub fn is_empty(&self) -> bool {
     return self.len() == 0;
   }
@@ -144,7 +140,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns whether the map contains the given key.
 
   #[inline(always)]
-  #[must_use]
   pub fn contains_key(&self, key: K) -> bool {
     let m = self.seed0;
     let t = self.table;
@@ -166,7 +161,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// present.
 
   #[inline(always)]
-  #[must_use]
   pub fn get(&self, key: K) -> Option<&V> {
     let m = self.seed0;
     let t = self.table;
@@ -190,7 +184,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// if present.
 
   #[inline(always)]
-  #[must_use]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let m = self.seed0;
     let t = self.table;
@@ -321,7 +314,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// state.
 
   #[inline(always)]
-  #[must_use]
   pub fn get_and_insert(&mut self, key: K, value: V) -> Option<V> {
     let m = self.seed0;
     let t = self.table;
@@ -386,7 +378,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// with the given key, if one was present.
 
   #[inline(always)]
-  #[must_use]
   pub fn get_and_remove(&mut self, key: K) -> Option<V> {
     let m = self.seed0;
     let t = self.table;
@@ -509,10 +500,9 @@ impl<K: Key, V> HashMap<K, V> {
 
     if l.is_null() { return; }
 
-    let e = l - t;
-    let d = w + e;
     let n = capacity(w) - s;
     let p = t - (w - 1);
+    let d = w + (l - t);
 
     self.table = ptr::from(&EMPTY_TABLE).cast();
     self.width = 1;
@@ -552,7 +542,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// value. The iterator item type is `(K, &V)`.
 
   #[inline(always)]
-  #[must_use]
   pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
     let m = self.seed1;
     let t = self.table;
@@ -570,7 +559,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// associated value. The iterator item type is `(K, &mut V)`.
 
   #[inline(always)]
-  #[must_use]
   pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V>{
     let m = self.seed1;
     let t = self.table;
@@ -587,7 +575,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns an iterator yielding each key. The iterator item type is `K`.
 
   #[inline(always)]
-  #[must_use]
   pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V> {
     let m = self.seed1;
     let t = self.table;
@@ -605,7 +592,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// type is `&V`.
 
   #[inline(always)]
-  #[must_use]
   pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, K, V> {
     let t = self.table;
     let w = self.width;
@@ -622,7 +608,6 @@ impl<K: Key, V> HashMap<K, V> {
   /// iterator item type is `&mut V`.
 
   #[inline(always)]
-  #[must_use]
   pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V> {
     let t = self.table;
     let w = self.width;
@@ -758,6 +743,26 @@ impl<K: Key, V> Default for HashMap<K, V> {
   }
 }
 
+impl<const N: usize, K: Key, V> From<[(K, V); N]> for HashMap<K, V> {
+  fn from(value: [(K, V); N]) -> Self {
+    let mut t = HashMap::new();
+    for (x, y) in value.into_iter() {
+      t.insert(x, y);
+    }
+    return t;
+  }
+}
+
+impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
+  fn from_iter<T>(iter: T) -> Self where T: IntoIterator<Item = (K, V)> {
+    let mut t = HashMap::new();
+    for (x, y) in iter.into_iter() {
+      t.insert(x, y);
+    }
+    return t;
+  }
+}
+
 pub mod internal {
   //! Unstable API exposing implementation details for benchmarks and tests.
 
@@ -766,17 +771,14 @@ pub mod internal {
   use super::HashMap;
   use super::Key;
 
-  #[must_use]
   pub fn num_slots<K: Key, V>(t: &HashMap<K, V>) -> usize {
     return t.internal_num_slots();
   }
 
-  #[must_use]
   pub fn allocation_size<K: Key, V>(t: &HashMap<K, V>) -> usize {
     return t.internal_allocation_size();
   }
 
-  #[must_use]
   pub fn load_factor<K: Key, V>(t: &HashMap<K, V>) -> f64 {
     return t.internal_load_factor();
   }
