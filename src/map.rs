@@ -87,6 +87,8 @@ fn slot_hash<K: Key, V>(a: ptr<Slot<K, V>>) -> ptr<K::Hash> {
 
 #[inline(always)]
 fn slot_data<K: Key, V>(a: ptr<Slot<K, V>>) -> ptr<V> {
+  // NOTE: We could improve code generation in a few places by
+  // `std::hint::assert_unchecked`-ing that the result is non-nuull.
   return a.byte_add(offset_of!(Slot<K, V>, data));
 }
 
@@ -702,6 +704,33 @@ impl<K: Key, V, T, F: FnMut(K::Hash, ptr<Slot<K, V>>) -> T> Iterator for Iter<K,
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
     return (self.size, Some(self.size));
+  }
+
+  #[inline(always)]
+  fn fold<B, G: FnMut(B, Self::Item) -> B>(self, init: B, g: G) -> B {
+    // internal iteration
+
+    let mut n = self.size;
+    let mut a = self.slot;
+    let mut f = self.func;
+    let mut b = init;
+    let mut g = g;
+
+    if n != 0 {
+      loop {
+        let x = unsafe { slot_hash(a).read() };
+
+        if x != K::ZERO {
+          b = g(b, f(x, a));
+          n = n - 1;
+          if n == 0 { break; }
+        }
+
+        a = a + 1;
+      }
+    }
+
+    return b;
   }
 }
 

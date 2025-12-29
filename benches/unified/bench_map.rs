@@ -17,8 +17,8 @@ fn insert_remove_tangerine() {
   let mut t: [_; N] = array::from_fn(|_| tangerine::map::HashMap::new());
   for _ in 0 .. K {
     for i in 0 .. N {
-      for x in 0 .. C { let _ = t[i].insert(make_key(x), x); }
-      for x in (0 .. C).rev() { let _ = t[i].remove(make_key(x)); }
+      for x in 0 .. C { t[i].insert(make_key(x), x); }
+      for x in (0 .. C).rev() { t[i].remove(make_key(x)); }
     }
   }
 }
