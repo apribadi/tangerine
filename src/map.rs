@@ -342,6 +342,8 @@ impl<K: Key, V> HashMap<K, V> {
       return None;
     }
 
+    self.slack = s.wrapping_sub(1);
+
     let mut y = value;
 
     unsafe { slot_hash(a).write(h) };
@@ -353,8 +355,6 @@ impl<K: Key, V> HashMap<K, V> {
     }
 
     unsafe { slot_data(a).write(y) };
-
-    self.slack = s.wrapping_sub(1);
 
     if s == 0 || a == l {
       self.internal_grow(a);
