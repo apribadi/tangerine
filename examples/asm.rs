@@ -8,6 +8,14 @@ fn new() -> HashMap<NonZeroU64, u64> {
   return HashMap::new();
 }
 
+fn len(t: &HashMap<NonZeroU64, u64>) -> usize {
+  return t.len();
+}
+
+fn is_empty(t: &HashMap<NonZeroU64, u64>) -> bool {
+  return t.is_empty();
+}
+
 fn contains_key(t: &HashMap<NonZeroU64, u64>, k: NonZeroU64) -> bool {
   return t.contains_key(k);
 }
@@ -56,6 +64,8 @@ pub fn main() {
   let _ =
     black_box([
       new as *mut u8,
+      len as *mut u8,
+      is_empty as *mut u8,
       contains_key as *mut u8,
       get as *mut u8,
       insert as *mut u8,

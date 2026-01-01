@@ -12,35 +12,58 @@ fn make_key(x: usize) -> NonZeroU64 {
   return unsafe { NonZeroU64::new_unchecked((x as u64).rotate_left(16) | 1) };
 }
 
-#[divan::bench]
-fn insert_remove_tangerine() {
-  let mut t: [_; N] = array::from_fn(|_| tangerine::map::HashMap::new());
+#[inline(never)]
+fn insert_only<T: crate::util::Map>() {
+  let mut t: [_; N] = array::from_fn(|_| T::new());
   for _ in 0 .. K {
     for i in 0 .. N {
-      for x in 0 .. C { t[i].insert(make_key(x), x); }
-      for x in (0 .. C).rev() { t[i].remove(make_key(x)); }
+      let t = &mut t[i];
+      *t = T::new();
+      for x in 0 .. C { t.insert(make_key(x), x as u64); }
+      *t = T::new();
+      for x in 0 .. C { t.insert(make_key(x), x as u64); }
     }
   }
+}
+
+#[inline(never)]
+fn insert_remove<T: crate::util::Map>() {
+  let mut t: [_; N] = array::from_fn(|_| T::new());
+  for _ in 0 .. K {
+    for i in 0 .. N {
+      let t = &mut t[i];
+      for x in 0 .. C { t.insert(make_key(x), x as u64); }
+      for x in 0 .. C { t.remove(make_key(x)); }
+    }
+  }
+}
+
+#[divan::bench]
+fn insert_only_tangerine() {
+  insert_only::<tangerine::map::HashMap<NonZeroU64, u64>>();
+}
+
+#[divan::bench]
+fn insert_only_ahash() {
+  insert_only::<ahash::AHashMap<NonZeroU64, u64>>();
+}
+
+#[divan::bench]
+fn insert_only_foldhash() {
+  insert_only::<foldhash::HashMap<NonZeroU64, u64>>();
+}
+
+#[divan::bench]
+fn insert_remove_tangerine() {
+  insert_remove::<tangerine::map::HashMap<NonZeroU64, u64>>();
 }
 
 #[divan::bench]
 fn insert_remove_ahash() {
-  let mut t: [_; N] = array::from_fn(|_| ahash::AHashMap::new());
-  for _ in 0 .. K {
-    for i in 0 .. N {
-      for x in 0 .. C { let _ = t[i].insert(make_key(x), x); }
-      for x in (0 .. C).rev() { let _ = t[i].remove(&make_key(x)); }
-    }
-  }
+  insert_remove::<ahash::AHashMap<NonZeroU64, u64>>();
 }
 
 #[divan::bench]
 fn insert_remove_foldhash() {
-  let mut t: [_; N] = array::from_fn(|_| <foldhash::HashMap<_, _> as foldhash::HashMapExt>::new());
-  for _ in 0 .. K {
-    for i in 0 .. N {
-      for x in 0 .. C { let _ = t[i].insert(make_key(x), x); }
-      for x in (0 .. C).rev() { let _ = t[i].remove(&make_key(x)); }
-    }
-  }
+  insert_remove::<foldhash::HashMap<NonZeroU64, u64>>();
 }

@@ -47,7 +47,8 @@ static EMPTY_TABLE: u64 = 0;
 
 #[inline(always)]
 fn capacity(w: usize) -> usize {
-  return (w >> 1) - (w >> 3); // ~ 0.375
+  // return (w >> 1) - (w >> 3); // ~ 0.375
+  return w >> 1;
 }
 
 #[inline(always)]
@@ -75,6 +76,7 @@ fn log2(n: usize) -> usize {
 fn increment_size_class(n: usize) -> usize {
   debug_assert!(2 <= n && n <= isize::MAX as usize);
   let n = 2 * n - 1;
+  // let n = 4 * n - 1;
   let a = 1 << usize::BITS - 1 - n.leading_zeros();
   let b = a >> 1;
   return a + (n & b);
