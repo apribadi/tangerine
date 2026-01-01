@@ -47,8 +47,7 @@ static EMPTY_TABLE: u64 = 0;
 
 #[inline(always)]
 fn capacity(w: usize) -> usize {
-  // return (w >> 1) - (w >> 3); // ~ 0.375
-  return w >> 1;
+  return (w >> 1) - (w >> 3); // ~ 0.375
 }
 
 #[inline(always)]
