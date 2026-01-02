@@ -242,15 +242,22 @@ impl<K: Key, V> HashMap<K, V> {
     let new_l = new_p + (new_d - 1);
 
     // At this point, we know that we can finish growing the table without
-    // panicking, so we re-add the last written slot before initializing the
-    // new table.
+    // panicking.
+
+    // Re-add the last written slot, and compute some values that include that
+    // slot.
 
     unsafe { slot_hash(last_written_slot).write(h) };
 
-    // These quantities are computed with the final slot re-added.
-
     let old_n = old_c - old_s + 1;
     let new_s = old_s + (new_c - old_c) - 1;
+
+    // Update struct fields.
+
+    self.table = new_t;
+    self.width = new_w;
+    self.slack = new_s;
+    self.limit = new_l;
 
     // Compress non-empty slots.
 
@@ -287,11 +294,6 @@ impl<K: Key, V> HashMap<K, V> {
       b = b + 1;
       k = k - 1;
     }
-
-    self.table = new_t;
-    self.width = new_w;
-    self.slack = new_s;
-    self.limit = new_l;
 
     // The map is now in a valid state, even if deallocating panics.
 
