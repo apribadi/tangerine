@@ -7,8 +7,8 @@
 // TODO: shrink_to_fit
 // TODO: get_or_insert_with
 
+use core::cmp::max;
 use core::fmt::Debug;
-use core::hint::select_unpredictable;
 use core::iter::ExactSizeIterator;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
@@ -247,12 +247,12 @@ impl<K: Key, V> HashMap<K, V> {
 
     unsafe { slot_hash(last_written_slot).write(h) };
 
-    //
+    // These quantities are computed with the final slot re-added.
 
     let old_n = old_c - old_s + 1;
     let new_s = old_s + (new_c - old_c) - 1;
 
-    //
+    // Compress non-empty slots.
 
     let mut a = old_p;
     let mut b = old_p;
@@ -260,13 +260,16 @@ impl<K: Key, V> HashMap<K, V> {
 
     while k != 0 {
       let x = unsafe { slot_hash(a).read() };
-      let y = unsafe { slot_data(a).read() };
+
       unsafe { slot_hash(b).write(x) };
-      unsafe { slot_data(b).write(y) };
+      unsafe { slot_data(b).write(slot_data(a).read()) };
+
       a = a + 1;
       b = b + (x != K::ZERO) as usize;
       k = k - 1;
     }
+
+    // Copy slots to new allocated block.
 
     let mut a = old_p;
     let mut b = new_p;
@@ -274,16 +277,14 @@ impl<K: Key, V> HashMap<K, V> {
 
     while k != 0 {
       let x = unsafe { slot_hash(a).read() };
-      let y = unsafe { slot_data(a).read() };
 
-      let c = new_t - K::slot(x, new_w);
-      let c = select_unpredictable(b <= c, c, b);
+      b = max(b, new_t - K::slot(x, new_w));
 
-      unsafe { slot_hash(c).write(x) };
-      unsafe { slot_data(c).write(y) };
+      unsafe { slot_hash(b).write(x) };
+      unsafe { slot_data(b).write(slot_data(a).read()) };
 
       a = a + 1;
-      b = c + 1;
+      b = b + 1;
       k = k - 1;
     }
 
@@ -493,10 +494,12 @@ impl<K: Key, V> HashMap<K, V> {
     } else {
       if n != 0 {
         let mut a = t - (w - 1);
+        let mut k = w + (t - l);
 
-        while a <= l {
+        while k != 0 {
           unsafe { slot_hash(a).write(K::ZERO) };
           a = a + 1;
+          k = k - 1;
         }
 
         self.slack = c;
