@@ -7,8 +7,8 @@
 // TODO: shrink_to_fit
 // TODO: get_or_insert_with
 
-use core::cmp::max;
 use core::fmt::Debug;
+use core::hint::select_unpredictable;
 use core::iter::ExactSizeIterator;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
@@ -75,7 +75,6 @@ fn log2(n: usize) -> usize {
 fn increment_size_class(n: usize) -> usize {
   debug_assert!(2 <= n && n <= isize::MAX as usize);
   let n = 2 * n - 1;
-  // let n = 4 * n - 1;
   let a = 1 << usize::BITS - 1 - n.leading_zeros();
   let b = a >> 1;
   return a + (n & b);
@@ -220,14 +219,17 @@ impl<K: Key, V> HashMap<K, V> {
 
     self.slack = old_s;
 
-    // Compute new size.
-
+    let old_p = old_t - (old_w - 1);
     let old_e = old_l - old_t;
     let old_d = old_w + old_e;
+    let old_c = capacity(old_w);
+
+    // Compute new size.
 
     let new_d = increment_size_class(old_d * size_of::<Slot<K, V>>()) / size_of::<Slot<K, V>>();
     let new_e = old_e + (log2(new_d) - log2(old_d)) + ((last_written_slot == old_l) as usize);
     let new_w = new_d - new_e;
+    let new_c = capacity(new_w);
 
     // Panic if we would overflow the layout.
 
@@ -235,7 +237,6 @@ impl<K: Key, V> HashMap<K, V> {
 
     // Alloc new table.
 
-    let old_p = old_t - (old_w - 1);
     let new_p = unsafe { global::alloc_slice_zeroed::<Slot<K, V>>(new_d) };
     let new_t = new_p + (new_w - 1);
     let new_l = new_p + (new_d - 1);
@@ -246,29 +247,44 @@ impl<K: Key, V> HashMap<K, V> {
 
     unsafe { slot_hash(last_written_slot).write(h) };
 
-    let old_n = capacity(old_w) - old_s + 1;
-    let new_s = old_s + (capacity(new_w) - capacity(old_w)) - 1;
+    //
+
+    let old_n = old_c - old_s + 1;
+    let new_s = old_s + (new_c - old_c) - 1;
+
+    //
+
+    let mut a = old_p;
+    let mut b = old_p;
+    let mut k = old_d;
+
+    while k != 0 {
+      let x = unsafe { slot_hash(a).read() };
+      let y = unsafe { slot_data(a).read() };
+      unsafe { slot_hash(b).write(x) };
+      unsafe { slot_data(b).write(y) };
+      a = a + 1;
+      b = b + (x != K::ZERO) as usize;
+      k = k - 1;
+    }
 
     let mut a = old_p;
     let mut b = new_p;
-    let mut n = old_n;
+    let mut k = old_n;
 
-    loop {
+    while k != 0 {
       let x = unsafe { slot_hash(a).read() };
+      let y = unsafe { slot_data(a).read() };
 
-      if x != K::ZERO {
-        b = max(b, new_t - K::slot(x, new_w));
+      let c = new_t - K::slot(x, new_w);
+      let c = select_unpredictable(b <= c, c, b);
 
-        unsafe { slot_hash(b).write(x) }
-        unsafe { slot_data(b).write(slot_data(a).read()) };
-
-        n = n - 1;
-        if n == 0 { break; }
-
-        b = b + 1;
-      }
+      unsafe { slot_hash(c).write(x) };
+      unsafe { slot_data(c).write(y) };
 
       a = a + 1;
+      b = c + 1;
+      k = k - 1;
     }
 
     self.table = new_t;
