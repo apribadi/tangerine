@@ -237,7 +237,7 @@ impl<K: Key, V> HashMap<K, V> {
 
     // Alloc new table.
 
-    let new_p = unsafe { global::alloc_slice_zeroed::<Slot<K, V>>(new_d) };
+    let new_p = unsafe { global::alloc_slice::<Slot<K, V>>(new_d) };
     let new_t = new_p + (new_w - 1);
     let new_l = new_p + (new_d - 1);
 
@@ -259,6 +259,18 @@ impl<K: Key, V> HashMap<K, V> {
     self.slack = new_s;
     self.limit = new_l;
 
+    // Zero new table.
+
+    let mut a = new_p;
+    let mut k = new_d;
+
+    while k != 0 {
+      unsafe { slot_hash(a).write(K::ZERO) };
+
+      a = a + 1;
+      k = k - 1;
+    }
+
     // Compress non-empty slots.
 
     let mut a = old_p;
@@ -267,9 +279,10 @@ impl<K: Key, V> HashMap<K, V> {
 
     while k != 0 {
       let x = unsafe { slot_hash(a).read() };
+      let y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
 
       unsafe { slot_hash(b).write(x) };
-      unsafe { slot_data(b).write(slot_data(a).read()) };
+      unsafe { slot_data(b).cast::<MaybeUninit<V>>().write(y) };
 
       a = a + 1;
       b = b + (x != K::ZERO) as usize;
@@ -284,11 +297,12 @@ impl<K: Key, V> HashMap<K, V> {
 
     while k != 0 {
       let x = unsafe { slot_hash(a).read() };
+      let y = unsafe { slot_data(a).read() };
 
       b = max(b, new_t - K::slot(x, new_w));
 
       unsafe { slot_hash(b).write(x) };
-      unsafe { slot_data(b).write(slot_data(a).read()) };
+      unsafe { slot_data(b).write(y) };
 
       a = a + 1;
       b = b + 1;
@@ -311,7 +325,17 @@ impl<K: Key, V> HashMap<K, V> {
 
     assert!(d <= Self::MAX_NUM_SLOTS);
 
-    let p = unsafe { global::alloc_slice_zeroed::<Slot<K, V>>(d) };
+    let p = unsafe { global::alloc_slice::<Slot<K, V>>(d) };
+
+    let mut a = p;
+    let mut k = d;
+
+    while k != 0 {
+      unsafe { slot_hash(a).write(K::ZERO) };
+
+      a = a + 1;
+      k = k - 1;
+    }
 
     let t = p + (w - 1);
     let l = p + (d - 1);
