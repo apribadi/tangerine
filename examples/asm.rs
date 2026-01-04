@@ -4,6 +4,9 @@ use std::num::NonZeroU64;
 use std::hint::black_box;
 use tangerine::map::HashMap;
 
+fn drop(_: HashMap<NonZeroU64, u64>) {
+}
+
 fn new() -> HashMap<NonZeroU64, u64> {
   return HashMap::new();
 }
@@ -63,6 +66,7 @@ fn std_clear(t: &mut std::collections::HashMap<NonZeroU64, u64>) {
 pub fn main() {
   let _ =
     black_box([
+      drop as *mut u8,
       new as *mut u8,
       len as *mut u8,
       is_empty as *mut u8,

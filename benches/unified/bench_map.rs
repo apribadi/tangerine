@@ -43,12 +43,10 @@ fn insert_only_tangerine() {
   insert_only::<tangerine::map::HashMap<NonZeroU64, u64>>();
 }
 
-/*
 #[divan::bench]
 fn insert_only_ahash() {
   insert_only::<ahash::AHashMap<NonZeroU64, u64>>();
 }
-*/
 
 #[divan::bench]
 fn insert_only_foldhash() {
@@ -60,12 +58,10 @@ fn insert_remove_tangerine() {
   insert_remove::<tangerine::map::HashMap<NonZeroU64, u64>>();
 }
 
-/*
 #[divan::bench]
 fn insert_remove_ahash() {
   insert_remove::<ahash::AHashMap<NonZeroU64, u64>>();
 }
-*/
 
 #[divan::bench]
 fn insert_remove_foldhash() {
