@@ -26,6 +26,7 @@ ahash = "0.8.12"
 divan = "0.1.21"
 expect-test = "1.5.1"
 foldhash = "0.2.0"
+mimalloc = { version = "0.1.48", features = ["v3"] }
 
 [profile.release]
 
