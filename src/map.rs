@@ -278,11 +278,9 @@ impl<K: Key, V> HashMap<K, V> {
     let mut k = old_d;
 
     while k != 0 {
-      let x = unsafe { slot_hash(a).read() };
-      let y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
-
-      unsafe { slot_hash(b).write(x) };
-      unsafe { slot_data(b).cast::<MaybeUninit<V>>().write(y) };
+      let u = unsafe { a.read() };
+      let x = u.hash;
+      unsafe { b.write(u) };
 
       a = a + 1;
       b = b + (x != K::ZERO) as usize;
@@ -296,13 +294,10 @@ impl<K: Key, V> HashMap<K, V> {
     let mut k = old_n;
 
     while k != 0 {
-      let x = unsafe { slot_hash(a).read() };
-      let y = unsafe { slot_data(a).read() };
-
+      let u = unsafe { a.read() };
+      let x = u.hash;
       b = max(b, new_t - K::slot(x, new_w));
-
-      unsafe { slot_hash(b).write(x) };
-      unsafe { slot_data(b).write(y) };
+      unsafe { b.write(u) };
 
       a = a + 1;
       b = b + 1;
