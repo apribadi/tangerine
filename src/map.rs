@@ -47,7 +47,6 @@ static EMPTY_TABLE: u64 = 0;
 
 #[inline(always)]
 fn capacity(w: usize) -> usize {
-  // return w >> 1;
   return (w >> 1) - (w >> 3); // ~ 0.375
 }
 
@@ -228,7 +227,6 @@ impl<K: Key, V> HashMap<K, V> {
     // Compute new size.
 
     let new_d = increment_size_class(old_d * size_of::<Slot<K, V>>()) / size_of::<Slot<K, V>>();
-    // let new_d = old_d * 2;
     let new_e = old_e + (log2(new_d) - log2(old_d)) + ((last_written_slot == old_l) as usize);
     let new_w = new_d - new_e;
     let new_c = capacity(new_w);
