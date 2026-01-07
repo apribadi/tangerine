@@ -515,7 +515,7 @@ impl<K: Key, V> HashMap<K, V> {
     } else {
       if n != 0 {
         let mut a = t - (w - 1);
-        let mut k = w + (t - l);
+        let mut k = w + (l - t);
 
         while k != 0 {
           unsafe { slot_hash(a).write(K::ZERO) };
