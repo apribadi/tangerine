@@ -123,8 +123,6 @@ unsafe impl private::Key for NonZeroU32 {
 
   #[inline(always)]
   fn slot(h: Self::Hash, w: usize) -> usize {
-    // NB: We will run out of memory before `w as u64` truncates on a
-    // hypothetical 128-bit machine.
     return umulh((h as u64) << 32, w as u64) as usize;
   }
 }
@@ -178,8 +176,6 @@ unsafe impl private::Key for NonZeroU64 {
 
   #[inline(always)]
   fn slot(h: Self::Hash, w: usize) -> usize {
-    // NB: We will run out of memory before `w as u64` truncates on a
-    // hypothetical 128-bit machine.
     return umulh(h, w as u64) as usize;
   }
 }
