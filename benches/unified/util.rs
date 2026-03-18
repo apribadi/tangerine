@@ -3,6 +3,8 @@ use std::num::NonZeroU64;
 pub(crate) trait Map<T> {
   fn new() -> Self;
 
+  fn len(&self) -> usize;
+
   fn get(&self, _: NonZeroU64) -> Option<&T>;
 
   fn insert(&mut self, _: NonZeroU64, _: T);
@@ -13,6 +15,9 @@ pub(crate) trait Map<T> {
 impl<T> Map<T> for tangerine::map::HashMap<NonZeroU64, T> {
   #[inline(always)]
   fn new() -> Self { tangerine::map::HashMap::new() }
+
+  #[inline(always)]
+  fn len(&self) -> usize { self.len() }
 
   #[inline(always)]
   fn get(&self, k: NonZeroU64) -> Option<&T> { self.get(k) }
@@ -29,6 +34,9 @@ impl<T> Map<T> for tangerine::two::HashMap<T> {
   fn new() -> Self { tangerine::two::HashMap::new() }
 
   #[inline(always)]
+  fn len(&self) -> usize { self.len() }
+
+  #[inline(always)]
   fn get(&self, k: NonZeroU64) -> Option<&T> { self.get(k) }
 
   #[inline(always)]
@@ -43,6 +51,12 @@ impl<T> Map<T> for ahash::AHashMap<NonZeroU64, T> {
   fn new() -> Self { ahash::AHashMap::new() }
 
   #[inline(always)]
+  fn len(&self) -> usize {
+    let t: &std::collections::HashMap<_, _, _> = &self;
+    t.len()
+  }
+
+  #[inline(always)]
   fn get(&self, k: NonZeroU64) -> Option<&T> { self.get(&k) }
 
   #[inline(always)]
@@ -55,6 +69,9 @@ impl<T> Map<T> for ahash::AHashMap<NonZeroU64, T> {
 impl<T> Map<T> for foldhash::HashMap<NonZeroU64, T> {
   #[inline(always)]
   fn new() -> Self { <foldhash::HashMap<_, _> as foldhash::HashMapExt>::new() }
+
+  #[inline(always)]
+  fn len(&self) -> usize { self.len() }
 
   #[inline(always)]
   fn get(&self, k: NonZeroU64) -> Option<&T> { self.get(&k) }
