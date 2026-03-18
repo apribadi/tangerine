@@ -27,18 +27,33 @@ pub struct HashMap<V> {
 static EMPTY: [u64; 3] = [u64::MAX; 3];
 
 #[inline(always)]
-fn allocation_size<V>(d: usize) -> usize {
-  d * (size_of::<u64>() + size_of::<V>())
+fn allocation_slot_size<V>() -> usize {
+  size_of::<u64>() + size_of::<V>()
+}
+
+#[inline(always)]
+fn allocation_max_num_slots<V>() -> usize {
+  isize::MAX as usize / allocation_slot_size::<V>()
+}
+
+#[inline(always)]
+fn allocation_size<V>(num_slots: usize) -> usize {
+  num_slots * allocation_slot_size::<V>()
 }
 
 #[inline(always)]
 fn allocation_align<V>() -> usize {
-  align_of::<(u64, V)>()
+  usize::max(align_of::<u64>(), align_of::<V>())
 }
 
 #[inline(always)]
-unsafe fn allocation_layout<V>(d: usize) -> Layout {
-  unsafe { Layout::from_size_align_unchecked(allocation_size::<V>(d), allocation_align::<V>()) }
+fn allocation_chunk<V>() -> usize {
+  1 << align_of::<V>().trailing_zeros().saturating_sub(size_of::<u64>().trailing_zeros())
+}
+
+#[inline(always)]
+unsafe fn allocation_layout<V>(num_slots: usize) -> Layout {
+  unsafe { Layout::from_size_align_unchecked(allocation_size::<V>(num_slots), allocation_align::<V>()) }
 }
 
 #[inline(always)]
@@ -161,9 +176,26 @@ impl<V> HashMap<V> {
   #[inline(never)]
   #[cold]
   fn internal_init(&mut self, h: u64, value: V) {
-    let _ = h;
-    let _ = value;
-    unimplemented!()
+    let w = usize::max(16, 4 * allocation_chunk::<V>());
+    let e = usize::max(4, allocation_chunk::<V>());
+    let d = w + e;
+    let s = 64 - w.trailing_zeros() as usize;
+    assert!(d <= allocation_max_num_slots::<V>());
+    let l = unsafe { allocation_layout::<V>(d) };
+    let a = unsafe { alloc(l) } as *mut u64;
+    if a.is_null() {
+      match handle_alloc_error(l) {
+      }
+    }
+    let b = a.wrapping_add(d) as *mut V;
+    let k = slot(h, s);
+    for i in 0 .. d { unsafe { a.wrapping_add(i).write(u64::MAX) } }
+    unsafe { a.wrapping_add(k).write(h) };
+    unsafe { b.wrapping_add(k).write(value) };
+    self.s = s;
+    self.a = a;
+    self.b = b;
+    self.r = capacity(s) - 1;
   }
 
   #[inline(never)]
