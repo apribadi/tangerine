@@ -48,6 +48,7 @@ static EMPTY_TABLE: u64 = 0;
 #[inline(always)]
 fn capacity(w: usize) -> usize {
   return (w >> 1) - (w >> 3); // ~ 0.375
+  // return w >> 1;
 }
 
 #[inline(always)]
@@ -88,7 +89,7 @@ fn slot_hash<K: Key, V>(a: ptr<Slot<K, V>>) -> ptr<K::Hash> {
 #[inline(always)]
 fn slot_data<K: Key, V>(a: ptr<Slot<K, V>>) -> ptr<V> {
   // NOTE: We could improve code generation in a few places by
-  // `std::hint::assert_unchecked`-ing that the result is non-nuull.
+  // `std::hint::assert_unchecked`-ing that the result is non-null.
   return a.byte_add(offset_of!(Slot<K, V>, data));
 }
 
