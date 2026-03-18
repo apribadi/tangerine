@@ -253,6 +253,7 @@ impl<V> HashMap<V> {
       j = j + (x != u64::MAX) as usize;
       if i == old_d { break }
     }
+    debug_assert!(j == old_n, "{} {}", j, old_n);
     // Copy slots to new allocated block.
     let mut i = 0;
     let mut j = 0;
@@ -263,6 +264,7 @@ impl<V> HashMap<V> {
       unsafe { new_a.wrapping_add(j).write(x) };
       unsafe { new_b.wrapping_add(j).write(y) };
       i = i + 1;
+      j = j + 1;
       if i == old_n { break }
     }
     // The map is now in a valid state, even if deallocating panics.
@@ -273,7 +275,7 @@ impl<V> HashMap<V> {
   pub fn insert(&mut self, key: NonZeroU64, value: V) -> Option<V> {
     let m = self.m;
     let s = self.s;
-    let a = self.a;
+    let a = self.a as *mut u64;
     let b = self.b as *mut V;
     let h = hash(key, m);
     let k = slot(h, s);
@@ -293,7 +295,6 @@ impl<V> HashMap<V> {
       if b.is_null() {
         self.internal_init(h, value);
       } else {
-        let a = a as *mut u64;
         let r = self.r;
         self.r = r.wrapping_sub(1);
         let mut i = i;
@@ -310,6 +311,7 @@ impl<V> HashMap<V> {
           self.internal_grow(i);
         }
       }
+      debug_assert!({ self.internal_invariant(); true });
       None
     }
   }
@@ -334,6 +336,7 @@ impl<V> HashMap<V> {
     let i = select_unpredictable(u < h, i, k);
     let x = select_unpredictable(u < h, x, u);
     if x != h {
+      debug_assert!({ self.internal_invariant(); true });
       None
     } else {
       self.r = r + 1;
@@ -348,6 +351,7 @@ impl<V> HashMap<V> {
         i = i + 1;
       }
       unsafe { a.wrapping_add(i).write(u64::MAX) };
+      debug_assert!({ self.internal_invariant(); true });
       Some(value)
     }
   }
@@ -456,6 +460,18 @@ impl<V> HashMap<V> {
       b: self.b as *mut V,
       f: move |_, b| unsafe { &mut *b }
     }
+  }
+
+  fn internal_invariant(&self) {
+    let a = self.a;
+    let b = self.b;
+    let mut n = 0;
+    let mut p = a;
+    while ! addr_eq(p, b) {
+      if unsafe { p.read() } != u64::MAX { n = n + 1; }
+      p = p.wrapping_add(1);
+    }
+    debug_assert!(n == self.len(), "{} {}", n, self.len());
   }
 
   fn internal_num_slots(&self) -> usize {

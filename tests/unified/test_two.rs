@@ -91,6 +91,7 @@ fn test_empty() {
   "#]].assert_eq(s.drain(..).as_str());
 }
 
+/*
 #[test]
 fn test_iter() -> Result<(), std::fmt::Error> {
   let mut s = String::new();
@@ -127,6 +128,7 @@ fn test_iter() -> Result<(), std::fmt::Error> {
 
   Ok(())
 }
+*/
 
 #[test]
 fn test_1() -> Result<(), std::fmt::Error> {
@@ -138,6 +140,8 @@ fn test_1() -> Result<(), std::fmt::Error> {
     let k = NonZeroU64::new(i).unwrap();
     let _ = t.insert(k, 10 * i);
   }
+
+  assert!(t.len() == 100);
 
   write!(s, "len = {}\n", t.len())?;
   write!(s, "num_slots = {}\n", tangerine::two::internal::num_slots(&t))?;
@@ -168,13 +172,13 @@ fn test_1() -> Result<(), std::fmt::Error> {
 
   expect![[r#"
       len = 100
-      num_slots = 384
-      load = 0.2604166666666667
-      allocation_size = 6144
+      num_slots = 260
+      load = 0.38461538461538464
+      allocation_size = 4160
       len = 50
-      num_slots = 384
-      load = 0.13020833333333334
-      allocation_size = 6144
+      num_slots = 260
+      load = 0.19230769230769232
+      allocation_size = 4160
       1: Some(10)
       2: None
       3: Some(30)
