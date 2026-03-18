@@ -77,7 +77,7 @@ impl<V> HashMap<V> {
     Self {
       m: m | 1,
       s: 63,
-      a: &raw const EMPTY[0],
+      a: &EMPTY as *const u64,
       b: null(),
       r: 1,
     }
@@ -272,7 +272,7 @@ impl<V> HashMap<V> {
   pub fn insert(&mut self, key: NonZeroU64, value: V) -> Option<V> {
     let m = self.m;
     let s = self.s;
-    let a = self.a as *mut u64;
+    let a = self.a;
     let b = self.b as *mut V;
     let h = hash(key, m);
     let k = slot(h, s);
@@ -292,6 +292,7 @@ impl<V> HashMap<V> {
       if b.is_null() {
         self.internal_init(h, value);
       } else {
+        let a = a as *mut u64;
         let r = self.r;
         self.r = r.wrapping_sub(1);
         let mut i = i;
@@ -407,7 +408,7 @@ impl<V> HashMap<V> {
     let n = capacity(s) - r;
     let d = unsafe { (b as *mut u64).offset_from_unsigned(a) };
     self.s = 63;
-    self.a = &raw const EMPTY[0];
+    self.a = &EMPTY as *const u64;
     self.b = null();
     self.r = 1;
     if needs_drop::<V>() {
