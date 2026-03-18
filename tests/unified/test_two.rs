@@ -91,7 +91,6 @@ fn test_empty() {
   "#]].assert_eq(s.drain(..).as_str());
 }
 
-/*
 #[test]
 fn test_iter() -> Result<(), std::fmt::Error> {
   let mut s = String::new();
@@ -114,21 +113,22 @@ fn test_iter() -> Result<(), std::fmt::Error> {
   write!(s, "{:?}\n", values)?;
 
   expect![[r#"
-      num_slots = 32
-      load = 0.3125
-      allocation_size = 512
+      num_slots = 40
+      load = 0.25
+      allocation_size = 640
       [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
   "#]].assert_eq(&s.drain(..).as_str());
 
+  /*
   write!(s, "{:?}\n", t)?;
 
   expect![[r#"
       {1: 10, 2: 20, 3: 30, 4: 40, 5: 50, 6: 60, 7: 70, 8: 80, 9: 90, 10: 100}
   "#]].assert_eq(&s.drain(..).as_str());
+  */
 
   Ok(())
 }
-*/
 
 #[test]
 fn test_1() -> Result<(), std::fmt::Error> {
@@ -172,13 +172,13 @@ fn test_1() -> Result<(), std::fmt::Error> {
 
   expect![[r#"
       len = 100
-      num_slots = 260
-      load = 0.38461538461538464
-      allocation_size = 4160
+      num_slots = 264
+      load = 0.3787878787878788
+      allocation_size = 4224
       len = 50
-      num_slots = 260
-      load = 0.19230769230769232
-      allocation_size = 4160
+      num_slots = 264
+      load = 0.1893939393939394
+      allocation_size = 4224
       1: Some(10)
       2: None
       3: Some(30)
