@@ -27,6 +27,21 @@ pub struct HashMap<V> {
 static EMPTY: [u64; 3] = [u64::MAX; 3];
 
 #[inline(always)]
+fn allocation_size<V>(d: usize) -> usize {
+  d * (size_of::<u64>() + size_of::<V>())
+}
+
+#[inline(always)]
+fn allocation_align<V>() -> usize {
+  align_of::<(u64, V)>()
+}
+
+#[inline(always)]
+unsafe fn allocation_layout<V>(d: usize) -> Layout {
+  unsafe { Layout::from_size_align_unchecked(allocation_size::<V>(d), allocation_align::<V>()) }
+}
+
+#[inline(always)]
 fn capacity(s: usize) -> usize {
   1 << 64 - s - 1
 }
@@ -245,8 +260,10 @@ impl<V> HashMap<V> {
     let a = self.a as *mut u64;
     let b = self.b as *mut V;
     let r = self.r;
+    if b.is_null() { return }
     let c = capacity(s);
     let n = c - r;
+    let d = unsafe { (b as *mut u64).offset_from_unsigned(a) };
     if needs_drop::<V>() {
       if n != 0 {
         // WARNING!
@@ -260,7 +277,7 @@ impl<V> HashMap<V> {
         // Also, we update `self.r` as we go instead of once at the end.
         let mut n = n;
         let mut r = r;
-        let mut i = unsafe { (b as *mut u64).offset_from_unsigned(a) } - 1;
+        let mut i = d - 1;
         loop {
           if unsafe { a.wrapping_add(i).read() } != u64::MAX {
             unsafe { a.wrapping_add(i).write(u64::MAX) };
@@ -276,11 +293,11 @@ impl<V> HashMap<V> {
     } else {
       if n != 0 {
         self.r = c;
-        let mut p = a;
+        let mut i = 0;
         loop {
-          unsafe { write_bytes(p, 0xff, 4) };
-          p = p.wrapping_add(4);
-          if addr_eq(p, b) { break }
+          unsafe { write_bytes(a.wrapping_add(i), 0xff, 4) };
+          i = i + 4;
+          if i == d { break }
         }
       }
     }
@@ -291,31 +308,35 @@ impl<V> HashMap<V> {
     let a = self.a;
     let b = self.b as *mut V;
     let r = self.r;
-    if b.is_null() { return; }
+    if b.is_null() { return }
+    let n = capacity(s) - r;
+    let d = unsafe { (b as *mut u64).offset_from_unsigned(a) };
     self.s = 63;
     self.a = &raw const EMPTY[0];
     self.b = null();
     self.r = 1;
     if needs_drop::<V>() {
-      let n = capacity(s) - r;
       if n != 0 {
+        // WARNING!
+        //
+        // We must be careful to leave the map in a valid state even if a call to
+        // `drop` panics.
+        //
+        // Here, we have already put `self` into the valid initial state, so if a
+        // call to `drop` panics then we can just safely leak the table.
         let mut n = n;
-        let mut p = a;
-        let mut q = b;
+        let mut i = d - 1;
         loop {
-          if unsafe { p.read() } != u64::MAX {
-            unsafe { q.drop_in_place() };
+          if unsafe { a.wrapping_add(i).read() } != u64::MAX {
+            unsafe { b.wrapping_add(i).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
           }
-          p = p.wrapping_add(1);
-          q = q.wrapping_add(1);
+          i = i - 1;
         }
       }
     }
-    let d = unsafe { (b as *mut u64).offset_from_unsigned(a) };
-    // let l = unsafe { Layout::from_size_align_unchecked
-    unimplemented!()
+    unsafe { dealloc(a as *mut u8, allocation_layout::<V>(d)) };
   }
 
   #[inline(always)]
@@ -348,7 +369,7 @@ impl<V> HashMap<V> {
   }
 
   fn internal_allocation_size(&self) -> usize {
-    self.internal_num_slots() * (size_of::<u64>() + size_of::<V>())
+    allocation_size::<V>(self.internal_num_slots())
   }
 
   fn internal_load_factor(&self) -> f64 {
@@ -505,4 +526,8 @@ pub fn remove(t: &mut HashMap<u32>, key: NonZeroU64) {
 
 pub fn clear(t: &mut HashMap<u32>) {
   t.clear();
+}
+
+pub fn reset(t: &mut HashMap<u32>) {
+  t.reset();
 }
