@@ -7,6 +7,7 @@ use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use core::fmt::Debug;
+use core::mem::MaybeUninit;
 use core::hint::select_unpredictable;
 use core::mem::needs_drop;
 use core::num::NonZeroU64;
@@ -245,9 +246,9 @@ impl<V> HashMap<V> {
     let mut j = 0;
     loop {
       let x = unsafe { old_a.wrapping_add(i).read() };
-      let y = unsafe { old_b.wrapping_add(i).read() };
+      let y = unsafe { old_b.wrapping_add(i).cast::<MaybeUninit<V>>().read() };
       unsafe { old_a.wrapping_add(j).write(x) };
-      unsafe { old_b.wrapping_add(j).write(y) };
+      unsafe { old_b.wrapping_add(j).cast::<MaybeUninit<V>>().write(y) };
       i = i + 1;
       j = j + (x != u64::MAX) as usize;
       if i == old_d { break }
