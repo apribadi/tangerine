@@ -322,6 +322,7 @@ impl<V> HashMap<V> {
   pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, V> {
     Iter {
       n: capacity(self.s) - self.r,
+      i: 0,
       a: self.a,
       b: self.b as *mut V,
       f: move |_, b| unsafe { &*b }
@@ -332,6 +333,7 @@ impl<V> HashMap<V> {
   pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, V> {
     Iter {
       n: capacity(self.s) - self.r,
+      i: 0,
       a: self.a,
       b: self.b as *mut V,
       f: move |_, b| unsafe { &mut *b }
@@ -365,12 +367,13 @@ impl<V> Index<NonZeroU64> for HashMap<V> {
 
   #[inline(always)]
   fn index(&self, index: NonZeroU64) -> &Self::Output {
-    return self.get(index).unwrap();
+    self.get(index).unwrap()
   }
 }
 
 struct Iter<V, T, F: FnMut(u64, *mut V) -> T> {
   n: usize,
+  i: usize,
   a: *const u64,
   b: *mut V,
   f: F,
@@ -383,44 +386,43 @@ impl<V, T, F: FnMut(u64, *mut V) -> T> Iterator for Iter<V, T, F> {
   fn next(&mut self) -> Option<Self::Item> {
     let n = self.n;
     if n == 0 { return None; }
-    let mut a = self.a;
-    let mut b = self.b;
+    let a = self.a;
+    let b = self.b;
+    let mut i = self.i;
     let mut x;
     loop {
-      x = unsafe { a.read() };
+      x = unsafe { a.wrapping_add(i).read() };
       if x != u64::MAX { break }
-      a = a.wrapping_add(1);
-      b = b.wrapping_add(1);
+      i = i + 1;
     }
     self.n = n - 1;
-    self.a = a.wrapping_add(1);
-    self.b = b.wrapping_add(1);
-    Some((self.f)(x, b))
+    self.i = i + 1;
+    Some((self.f)(x, b.wrapping_add(i)))
   }
 
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
-    return (self.n, Some(self.n));
+    (self.n, Some(self.n))
   }
 
   #[inline(always)]
   fn fold<U, G: FnMut(U, T) -> U>(self, init: U, g: G) -> U {
+    let a = self.a;
+    let b = self.b;
     let mut n = self.n;
-    let mut a = self.a;
-    let mut b = self.b;
+    let mut i = self.i;
     let mut f = self.f;
     let mut u = init;
     let mut g = g;
     if n != 0 {
       loop {
-        let x = unsafe { a.read() };
+        let x = unsafe { a.wrapping_add(i).read() };
         if x != u64::MAX {
-          u = g(u, f(x, b));
+          u = g(u, f(x, b.wrapping_add(i)));
           n = n - 1;
           if n == 0 { break }
         }
-        a = a.wrapping_add(1);
-        b = b.wrapping_add(1);
+        i = i + 1;
       }
     }
     u
