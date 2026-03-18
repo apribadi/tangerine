@@ -34,6 +34,7 @@ const SIZES: [usize; 10] = [
 ];
 */
 
+/*
 const SIZES: [usize; 10] = [
   5000,
   5360,
@@ -46,8 +47,8 @@ const SIZES: [usize; 10] = [
   8710,
   9330,
 ];
+*/
 
-/*
 const SIZES: [usize; 10] = [
   50000,
   53600,
@@ -60,7 +61,6 @@ const SIZES: [usize; 10] = [
   87100,
   93300,
 ];
-*/
 
 fn make_key(x: usize) -> NonZeroU64 {
   unsafe { NonZeroU64::new_unchecked((x as u64).rotate_left(16) | 1) }
@@ -72,6 +72,7 @@ fn make_key(x: usize) -> NonZeroU64 {
     ahash::AHashMap<NonZeroU64, NonZeroU64>,
     foldhash::HashMap<NonZeroU64, NonZeroU64>,
     tangerine::map::HashMap<NonZeroU64, NonZeroU64>,
+    tangerine::new::HashMap<NonZeroU64>,
     tangerine::two::HashMap<NonZeroU64>,
   ])]
 #[inline(never)]
@@ -104,6 +105,7 @@ fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>) {
     ahash::AHashMap<NonZeroU64, u64>,
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
+    tangerine::new::HashMap<u64>,
     tangerine::two::HashMap<u64>,
   ])]
 #[inline(never)]
@@ -140,6 +142,7 @@ const _: () = assert!(K * N * C * 2 == 1_000_000); // number of operations
     ahash::AHashMap<NonZeroU64, u64>,
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
+    tangerine::new::HashMap<u64>,
     tangerine::two::HashMap<u64>,
   ])]
 #[inline(never)]
