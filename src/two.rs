@@ -48,7 +48,7 @@ fn allocation_align<V>() -> usize {
 
 #[inline(always)]
 fn allocation_chunk<V>() -> usize {
-  1 << align_of::<V>().trailing_zeros().saturating_sub(size_of::<u64>().trailing_zeros())
+  1 << u32::max(2, align_of::<V>().trailing_zeros().saturating_sub(size_of::<u64>().trailing_zeros()))
 }
 
 #[inline(always)]
@@ -176,17 +176,14 @@ impl<V> HashMap<V> {
   #[inline(never)]
   #[cold]
   fn internal_init(&mut self, h: u64, value: V) {
-    let w = usize::max(16, 4 * allocation_chunk::<V>());
-    let e = usize::max(4, allocation_chunk::<V>());
+    let w = 4 * allocation_chunk::<V>();
+    let e = allocation_chunk::<V>();
     let d = w + e;
     let s = 64 - w.trailing_zeros() as usize;
     assert!(d <= allocation_max_num_slots::<V>());
     let l = unsafe { allocation_layout::<V>(d) };
     let a = unsafe { alloc(l) } as *mut u64;
-    if a.is_null() {
-      match handle_alloc_error(l) {
-      }
-    }
+    if a.is_null() { match handle_alloc_error(l) { } }
     let b = a.wrapping_add(d) as *mut V;
     let k = slot(h, s);
     for i in 0 .. d { unsafe { a.wrapping_add(i).write(u64::MAX) } }
@@ -200,9 +197,75 @@ impl<V> HashMap<V> {
 
   #[inline(never)]
   #[cold]
-  fn internal_grow(&mut self, last_written_slot: usize) {
-    let _ = last_written_slot;
-    unimplemented!()
+  fn internal_grow(&mut self, last_write: usize) {
+    let old_s = self.s;
+    let old_a = self.a as *mut u64;
+    let old_b = self.b as *mut V;
+    let old_r = self.r.wrapping_add(1);
+    let old_c = capacity(old_s);
+    let old_d = unsafe { (old_b as *mut u64).offset_from_unsigned(old_a) };
+    let old_w = 1 << 64 - old_s;
+    let old_e = old_d - old_w;
+    let old_l = unsafe { allocation_layout::<V>(old_d) };
+    // Temporarily place the table in a valid state in case we panic.
+    let h = unsafe { old_a.wrapping_add(last_write).replace(u64::MAX) };
+    self.r = old_r;
+    let new_s = if old_r == 0 { old_s - 1 } else { old_s };
+    let new_c = capacity(new_s);
+    let new_w = 1 << 64 - new_s;
+    let new_e = if last_write == old_d - 1 { 2 * old_e } else { old_e };
+    let new_d = new_w + new_e;
+    // Panic if the layout would overflow.
+    assert!(new_d <= allocation_max_num_slots::<V>());
+    // Alloc.
+    let new_l = unsafe { allocation_layout::<V>(new_d) };
+    let new_a = unsafe { alloc(new_l) } as *mut u64;
+    if new_a.is_null() { match handle_alloc_error(new_l) { } }
+    // At this point, we're guaranteed to successfully finish growing the
+    // table.
+    let new_b = new_a.wrapping_add(new_d) as *mut V;
+    // We re-add the last write and compute some values that include that slot.
+    unsafe { old_a.wrapping_add(last_write).write(h) };
+    let old_n = old_c - old_r + 1;
+    let new_r = old_r + (new_c - old_c) - 1;
+    // Update struct fields.
+    self.s = new_s;
+    self.a = new_a;
+    self.b = new_b;
+    self.r = new_r;
+    // Initialize new table.
+    let mut i = 0;
+    loop {
+      unsafe { write_bytes(new_a.wrapping_add(i), 0xff, 4) };
+      i = i + 4;
+      if i == new_d { break }
+    }
+    // Compress non-empty slots.
+    let mut i = 0;
+    let mut j = 0;
+    loop {
+      let x = unsafe { old_a.wrapping_add(i).read() };
+      let y = unsafe { old_b.wrapping_add(i).read() };
+      unsafe { old_a.wrapping_add(j).write(x) };
+      unsafe { old_b.wrapping_add(j).write(y) };
+      i = i + 1;
+      j = j + (x != u64::MAX) as usize;
+      if i == old_d { break }
+    }
+    // Copy slots to new allocated block.
+    let mut i = 0;
+    let mut j = 0;
+    loop {
+      let x = unsafe { old_a.wrapping_add(i).read() };
+      let y = unsafe { old_b.wrapping_add(i).read() };
+      j = usize::max(j, slot(x, new_s));
+      unsafe { new_a.wrapping_add(j).write(x) };
+      unsafe { new_b.wrapping_add(j).write(y) };
+      i = i + 1;
+      if i == old_n { break }
+    }
+    // The map is now in a valid state, even if deallocating panics.
+    unsafe { dealloc(old_a as *mut u8, old_l) }
   }
 
   #[inline(always)]
