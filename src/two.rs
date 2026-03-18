@@ -6,9 +6,10 @@ use alloc::alloc::Layout;
 use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
+use core::cmp::max;
 use core::fmt::Debug;
-use core::mem::MaybeUninit;
 use core::hint::select_unpredictable;
+use core::mem::MaybeUninit;
 use core::mem::needs_drop;
 use core::num::NonZeroU64;
 use core::ops::Index;
@@ -18,6 +19,7 @@ use core::ptr::write_bytes;
 use rand_core::RngCore;
 
 pub struct HashMap<V> {
+  z: u64,
   m: u64,
   s: usize,
   a: *const u64,
@@ -26,6 +28,11 @@ pub struct HashMap<V> {
 }
 
 static EMPTY: [u64; 3] = [u64::MAX; 3];
+
+#[inline(always)]
+fn ctz(n: usize) -> usize {
+  n.trailing_zeros() as usize
+}
 
 #[inline(always)]
 fn allocation_slot_size<V>() -> usize {
@@ -44,17 +51,19 @@ fn allocation_size<V>(num_slots: usize) -> usize {
 
 #[inline(always)]
 fn allocation_align<V>() -> usize {
-  usize::max(align_of::<u64>(), align_of::<V>())
+  max(align_of::<u64>(), align_of::<V>())
 }
 
 #[inline(always)]
 fn allocation_chunk<V>() -> usize {
-  1 << u32::max(2, align_of::<V>().trailing_zeros().saturating_sub(size_of::<u64>().trailing_zeros()))
+  1 << max(3, ctz(align_of::<V>()).saturating_sub(ctz(size_of::<u64>())))
 }
 
 #[inline(always)]
 unsafe fn allocation_layout<V>(num_slots: usize) -> Layout {
-  unsafe { Layout::from_size_align_unchecked(allocation_size::<V>(num_slots), allocation_align::<V>()) }
+  let s = allocation_size::<V>(num_slots);
+  let a = allocation_align::<V>();
+  unsafe { Layout::from_size_align_unchecked(s, a) }
 }
 
 #[inline(always)]
@@ -68,14 +77,36 @@ fn hash(key: NonZeroU64, m: u64) -> u64 {
 }
 
 #[inline(always)]
+unsafe fn invert_hash(h: u64, m: u64) -> NonZeroU64 {
+  unsafe { NonZeroU64::new_unchecked(h.wrapping_add(1).wrapping_mul(m)) }
+}
+
+#[inline(always)]
 fn slot(h: u64, s: usize) -> usize {
   (h >> s) as usize
+}
+
+#[inline(always)]
+fn invert64(a: u64) -> u64 {
+  // https://arxiv.org/abs/2204.04342
+
+  let x = a.wrapping_mul(3) ^ 2;
+  let y = 1u64.wrapping_sub(a.wrapping_mul(x));
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  let y = y.wrapping_mul(y);
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  let y = y.wrapping_mul(y);
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  let y = y.wrapping_mul(y);
+  let x = x.wrapping_mul(y.wrapping_add(1));
+  return x;
 }
 
 impl<V> HashMap<V> {
   #[inline(always)]
   fn internal_new(m: u64) -> Self {
     Self {
+      z: invert64(m | 1),
       m: m | 1,
       s: 63,
       a: &EMPTY as *const u64,
@@ -180,7 +211,7 @@ impl<V> HashMap<V> {
     let w = 4 * allocation_chunk::<V>();
     let e = allocation_chunk::<V>();
     let d = w + e;
-    let s = 64 - w.trailing_zeros() as usize;
+    let s = 64 - ctz(w);
     assert!(d <= allocation_max_num_slots::<V>());
     let l = unsafe { allocation_layout::<V>(d) };
     let a = unsafe { alloc(l) } as *mut u64;
@@ -260,7 +291,7 @@ impl<V> HashMap<V> {
     loop {
       let x = unsafe { old_a.wrapping_add(i).read() };
       let y = unsafe { old_b.wrapping_add(i).read() };
-      j = usize::max(j, slot(x, new_s));
+      j = max(j, slot(x, new_s));
       unsafe { new_a.wrapping_add(j).write(x) };
       unsafe { new_b.wrapping_add(j).write(y) };
       i = i + 1;
@@ -311,7 +342,6 @@ impl<V> HashMap<V> {
           self.internal_grow(i);
         }
       }
-      debug_assert!({ self.internal_invariant(); true });
       None
     }
   }
@@ -336,7 +366,6 @@ impl<V> HashMap<V> {
     let i = select_unpredictable(u < h, i, k);
     let x = select_unpredictable(u < h, x, u);
     if x != h {
-      debug_assert!({ self.internal_invariant(); true });
       None
     } else {
       self.r = r + 1;
@@ -351,7 +380,6 @@ impl<V> HashMap<V> {
         i = i + 1;
       }
       unsafe { a.wrapping_add(i).write(u64::MAX) };
-      debug_assert!({ self.internal_invariant(); true });
       Some(value)
     }
   }
@@ -441,6 +469,42 @@ impl<V> HashMap<V> {
   }
 
   #[inline(always)]
+  pub fn iter(&self) -> impl ExactSizeIterator<Item = (NonZeroU64, &V)> + use<'_, V> {
+    let z = self.z;
+    Iter {
+      n: capacity(self.s) - self.r,
+      i: 0,
+      a: self.a,
+      b: self.b as *mut V,
+      f: move |x, b| unsafe { (invert_hash(x, z), &*b) }
+    }
+  }
+
+  #[inline(always)]
+  pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (NonZeroU64, &mut V)> + use<'_, V> {
+    let z = self.z;
+    Iter {
+      n: capacity(self.s) - self.r,
+      i: 0,
+      a: self.a,
+      b: self.b as *mut V,
+      f: move |x, b| unsafe { (invert_hash(x, z), &mut *b) }
+    }
+  }
+
+  #[inline(always)]
+  pub fn keys(&self) -> impl ExactSizeIterator<Item = NonZeroU64> + use<'_, V> {
+    let z = self.z;
+    Iter {
+      n: capacity(self.s) - self.r,
+      i: 0,
+      a: self.a,
+      b: self.b as *mut V,
+      f: move |x, _| unsafe { invert_hash(x, z) }
+    }
+  }
+
+  #[inline(always)]
   pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, V> {
     Iter {
       n: capacity(self.s) - self.r,
@@ -462,6 +526,7 @@ impl<V> HashMap<V> {
     }
   }
 
+  #[allow(unused)]
   fn internal_invariant(&self) {
     let a = self.a;
     let b = self.b;
@@ -471,7 +536,7 @@ impl<V> HashMap<V> {
       if unsafe { p.read() } != u64::MAX { n = n + 1; }
       p = p.wrapping_add(1);
     }
-    debug_assert!(n == self.len(), "{} {}", n, self.len());
+    assert!(n == self.len(), "{} == {}", n, self.len());
   }
 
   fn internal_num_slots(&self) -> usize {
@@ -572,14 +637,17 @@ impl<V, T, F: FnMut(u64, *mut V) -> T> ExactSizeIterator for Iter<V, T, F> {
 
 impl<V: Clone> Clone for HashMap<V> {
   fn clone(&self) -> Self {
-    unimplemented!()
+    let mut t = Self::new();
+    self.iter().for_each(|(x, y)| { let _ = t.insert(x, y.clone()); });
+    t
   }
 }
 
 impl <V: Debug> Debug for HashMap<V> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let _ = f;
-    unimplemented!()
+    let mut a = self.iter().collect::<Box<[_]>>();
+    a.sort_by_key(|&(x, _)| x);
+    f.debug_map().entries(a).finish()
   }
 }
 

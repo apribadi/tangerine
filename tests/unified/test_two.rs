@@ -119,13 +119,11 @@ fn test_iter() -> Result<(), std::fmt::Error> {
       [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
   "#]].assert_eq(&s.drain(..).as_str());
 
-  /*
   write!(s, "{:?}\n", t)?;
 
   expect![[r#"
       {1: 10, 2: 20, 3: 30, 4: 40, 5: 50, 6: 60, 7: 70, 8: 80, 9: 90, 10: 100}
   "#]].assert_eq(&s.drain(..).as_str());
-  */
 
   Ok(())
 }
