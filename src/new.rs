@@ -6,7 +6,6 @@ use alloc::alloc::Layout;
 use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
-use core::cmp::max;
 use core::fmt::Debug;
 use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
@@ -267,13 +266,6 @@ impl<V> HashMap<V> {
     self.s = new_s;
     self.r = new_r;
     self.u = new_u;
-    // Initialize new table.
-    let mut a = new_t;
-    loop {
-      unsafe { slot_hash(a).write(0) };
-      a = a.wrapping_add(1);
-      if a == new_u { break }
-    }
     // Compress non-empty slots.
     let mut a = old_t;
     let mut b = old_t;
@@ -287,13 +279,21 @@ impl<V> HashMap<V> {
       if a == old_u { break }
     }
     debug_assert!(unsafe { b.offset_from_unsigned(old_t) } == old_n);
+    // Initialize new table.
+    let mut a = new_u;
+    loop {
+      a = a.wrapping_sub(1);
+      unsafe { slot_hash(a).write(0) };
+      if a == new_t { break }
+    }
     // Copy slots to new allocated block.
     let mut i = 0;
     let mut j = 0;
     loop {
       let x = unsafe { slot_hash(old_t.wrapping_add(i)).read() };
       let y = unsafe { slot_data(old_t.wrapping_add(i)).read() };
-      j = max(j, slot(x, new_s));
+      let k = slot(x, new_s);
+      j = select_unpredictable(j > k, j, k);
       unsafe { slot_hash(new_t.wrapping_add(j)).write(x) };
       unsafe { slot_data(new_t.wrapping_add(j)).write(y) };
       i = i + 1;
@@ -386,16 +386,14 @@ impl<V> HashMap<V> {
     }
   }
 
-  /*
   pub fn clear(&mut self) {
+    let t = self.t as *mut Slot<V>;
     let s = self.s;
-    let a = self.a as *mut u64;
-    let b = self.b as *mut V;
     let r = self.r;
-    if b.is_null() { return }
+    let u = self.u as *mut Slot<V>;
+    if u.is_null() { return }
     let c = capacity(s);
     let n = c - r;
-    let d = unsafe { (b as *mut u64).offset_from_unsigned(a) };
     if needs_drop::<V>() {
       if n != 0 {
         // WARNING!
@@ -409,32 +407,31 @@ impl<V> HashMap<V> {
         // Also, we update `self.r` as we go instead of once at the end.
         let mut n = n;
         let mut r = r;
-        let mut i = d - 1;
+        let mut a = u;
         loop {
-          if unsafe { a.wrapping_add(i).read() } != u64::MAX {
-            unsafe { a.wrapping_add(i).write(u64::MAX) };
+          a = a.wrapping_sub(1);
+          if unsafe { slot_hash(a).read() } != 0 {
+            unsafe { slot_hash(a).write(0) };
             r = r + 1;
             self.r = r;
-            unsafe { b.wrapping_add(i).drop_in_place() };
+            unsafe { slot_data(a).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
           }
-          i = i - 1;
         }
       }
     } else {
       if n != 0 {
         self.r = c;
-        let mut i = 0;
+        let mut a = u;
         loop {
-          unsafe { write_bytes(a.wrapping_add(i), 0xff, 4) };
-          i = i + 4;
-          if i == d { break }
+          a = a.wrapping_sub(1);
+          unsafe { slot_hash(a).write(0) };
+          if a == t { break }
         }
       }
     }
   }
-  */
 
   pub fn reset(&mut self) {
     let t = self.t as *mut Slot<V>;
@@ -450,13 +447,6 @@ impl<V> HashMap<V> {
     self.u = null();
     if needs_drop::<V>() {
       if n != 0 {
-        // WARNING!
-        //
-        // We must be careful to leave the map in a valid state even if a call to
-        // `drop` panics.
-        //
-        // Here, we have already put `self` into the valid initial state, so if a
-        // call to `drop` panics then we can just safely leak the table.
         let mut n = n;
         let mut a = u;
         loop {
@@ -680,11 +670,9 @@ pub fn remove(t: &mut HashMap<u32>, key: NonZeroU64) {
   let _ = t.remove(key);
 }
 
-/*
 pub fn clear(t: &mut HashMap<u32>) {
   t.clear();
 }
-*/
 
 pub fn reset(t: &mut HashMap<u32>) {
   t.reset();

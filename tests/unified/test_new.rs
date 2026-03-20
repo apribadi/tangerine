@@ -25,7 +25,7 @@ fn test_basic() {
   let mut g = Rng::from_u64(0);
   let mut t = HashMap::new_seeded(&mut g);
 
-  // t.clear();
+  t.clear();
   t.reset();
 
   let key = NonZeroU64::new(13).unwrap();
@@ -48,8 +48,8 @@ fn test_basic() {
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
 
-  // let _ = t.insert(key, 0);
-  // t.clear();
+  let _ = t.insert(key, 0);
+  t.clear();
   let _ = t.insert(key, 0);
   t.reset();
 

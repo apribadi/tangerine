@@ -147,9 +147,9 @@ fn bench_get_unchained<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize
 fn bench_insert<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
   let mut t: [_; 10] = array::from_fn(|_| T::new());
+  let mut g = KeyGen::new();
   bencher.bench_local(|| {
     let mut n = 1_000_000;
-    let mut g = KeyGen::new();
     'done: loop {
       for (i, t) in t.iter_mut().enumerate() {
         let limit = sizes[i];
