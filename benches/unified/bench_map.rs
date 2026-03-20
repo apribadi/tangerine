@@ -39,6 +39,24 @@ impl KeyGen {
   }
 }
 
+/*
+struct KeyGen(u64);
+
+impl KeyGen {
+  const INITIAL: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(1) };
+
+  fn new() -> Self {
+    KeyGen(0)
+  }
+
+  fn next(&mut self) -> NonZeroU64 {
+    let x = self.0;
+    self.0 = x.wrapping_add(1);
+    unsafe { NonZeroU64::new_unchecked(x.reverse_bits() | 1) }
+  }
+}
+*/
+
 #[divan::bench(
   args = [10_000, 100_000, 1_000_000],
   sample_count = 9,

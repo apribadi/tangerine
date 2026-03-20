@@ -17,12 +17,12 @@ use core::ptr::null;
 use rand_core::RngCore;
 
 pub struct HashMap<V> {
+  z: (u64, u64),
+  m: (u64, u64),
   t: *const Slot<V>,
-  m: u64,
   s: usize,
-  r: usize,
   u: *const Slot<V>,
-  z: u64,
+  r: usize,
 }
 
 struct Slot<V> {
@@ -75,13 +75,20 @@ fn capacity(s: usize) -> usize {
 }
 
 #[inline(always)]
-fn hash(key: NonZeroU64, m: u64) -> u64 {
-  key.get().wrapping_mul(m)
+fn hash(key: NonZeroU64, m: (u64, u64)) -> u64 {
+  let h = key.get();
+  let h = h.wrapping_mul(m.0);
+  let h = h.swap_bytes();
+  let h = h.wrapping_mul(m.1);
+  h
 }
 
 #[inline(always)]
-unsafe fn invert_hash(h: u64, m: u64) -> NonZeroU64 {
-  unsafe { NonZeroU64::new_unchecked(h.wrapping_mul(m)) }
+unsafe fn invert_hash(h: u64, m: (u64, u64)) -> NonZeroU64 {
+  let h = h.wrapping_mul(m.0);
+  let h = h.swap_bytes();
+  let h = h.wrapping_mul(m.1);
+  unsafe { NonZeroU64::new_unchecked(h) }
 }
 
 #[inline(always)]
@@ -90,7 +97,7 @@ fn slot(h: u64, s: usize) -> usize {
 }
 
 #[inline(always)]
-fn invert64(a: u64) -> u64 {
+fn invert_u64(a: u64) -> u64 {
   // https://arxiv.org/abs/2204.04342
   let x = a.wrapping_mul(3) ^ 2;
   let y = 1u64.wrapping_sub(a.wrapping_mul(x));
@@ -104,25 +111,38 @@ fn invert64(a: u64) -> u64 {
   x
 }
 
+#[inline(always)]
+fn invert_seed(m: (u64, u64)) -> (u64, u64) {
+  let a = m.0;
+  let b = m.1;
+  let c = invert_u64(a.wrapping_mul(b));
+  (c.wrapping_mul(a), c.wrapping_mul(b))
+}
+
 impl<V> HashMap<V> {
   #[inline(always)]
-  fn internal_new(m: u64) -> Self {
+  fn internal_new(m: (u64, u64)) -> Self {
     Self {
       t: empty::<V>(),
-      m: m | 1,
+      m: m,
       s: 63,
       r: capacity(63),
       u: null(),
-      z: invert64(m | 1),
+      z: invert_seed(m),
     }
   }
 
   pub fn new() -> Self {
-    Self::internal_new(dandelion::thread_local::u64())
+    let n = dandelion::thread_local::u128();
+    let a = (n as u64) | 1;
+    let b = ((n >> 64) as u64) | 1;
+    Self::internal_new((a, b))
   }
 
   pub fn new_seeded(rng: &mut impl RngCore) -> Self {
-    Self::internal_new(rng.next_u64())
+    let a = rng.next_u64() | 1;
+    let b = rng.next_u64() | 1;
+    Self::internal_new((a, b))
   }
 
   #[inline(always)]
