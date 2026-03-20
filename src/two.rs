@@ -686,6 +686,8 @@ pub mod internal {
   }
 }
 
+/*
+
 pub fn get(t: &HashMap<u32>, key: NonZeroU64) -> Option<&u32> {
   t.get(key)
 }
@@ -713,3 +715,4 @@ pub fn clear(t: &mut HashMap<u32>) {
 pub fn reset(t: &mut HashMap<u32>) {
   t.reset();
 }
+*/

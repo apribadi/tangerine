@@ -306,7 +306,6 @@ impl<V> HashMap<V> {
 
   #[inline(always)]
   pub fn insert(&mut self, key: NonZeroU64, value: V) -> Option<V> {
-    debug_assert!({ self.internal_invariant(); true });
     let t = self.t as *mut Slot<V>;
     let m = self.m;
     let s = self.s;
@@ -352,7 +351,6 @@ impl<V> HashMap<V> {
 
   #[inline(always)]
   pub fn remove(&mut self, key: NonZeroU64) -> Option<V> {
-    debug_assert!({ self.internal_invariant(); true });
     let t = self.t as *mut Slot<V>;
     let m = self.m;
     let s = self.s;
@@ -479,7 +477,7 @@ impl<V> HashMap<V> {
     let z = self.z;
     Iter {
       n: capacity(self.s) - self.r,
-      a: self.t as *mut Slot<V>,
+      a: self.u as *mut Slot<V>,
       f: move |x, a| unsafe { (invert_hash(x, z), &*slot_data(a)) }
     }
   }
@@ -489,7 +487,7 @@ impl<V> HashMap<V> {
     let z = self.z;
     Iter {
       n: capacity(self.s) - self.r,
-      a: self.t as *mut Slot<V>,
+      a: self.u as *mut Slot<V>,
       f: move |x, a| unsafe { (invert_hash(x, z), &mut *slot_data(a)) }
     }
   }
@@ -499,7 +497,7 @@ impl<V> HashMap<V> {
     let z = self.z;
     Iter {
       n: capacity(self.s) - self.r,
-      a: self.t as *mut Slot<V>,
+      a: self.u as *mut Slot<V>,
       f: move |x, _| unsafe { invert_hash(x, z) }
     }
   }
@@ -508,7 +506,7 @@ impl<V> HashMap<V> {
   pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, V> {
     Iter {
       n: capacity(self.s) - self.r,
-      a: self.t as *mut Slot<V>,
+      a: self.u as *mut Slot<V>,
       f: move |_, a| unsafe { &*slot_data(a) }
     }
   }
@@ -517,7 +515,7 @@ impl<V> HashMap<V> {
   pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, V> {
     Iter {
       n: capacity(self.s) - self.r,
-      a: self.t as *mut Slot<V>,
+      a: self.u as *mut Slot<V>,
       f: move |_, a| unsafe { &mut *slot_data(a) }
     }
   }
@@ -535,19 +533,6 @@ impl<V> HashMap<V> {
 
   fn internal_load_factor(&self) -> f64 {
     self.len() as f64 / self.internal_num_slots() as f64
-  }
-
-  #[allow(unused)]
-  fn internal_invariant(&self) {
-    if self.u.is_null() { return }
-    let mut a = self.t as *mut Slot<V>;
-    let mut n = 0;
-    let u = self.u as *mut Slot<V>;
-    while a != u {
-      if unsafe { slot_hash(a).read() } != 0 { n = n + 1; }
-      a = a.wrapping_add(1);
-    }
-    assert!(n == self.len(), "{} == {}", n, self.len());
   }
 }
 
@@ -582,12 +567,12 @@ impl<V, T, F: FnMut(u64, *mut Slot<V>) -> T> Iterator for Iter<V, T, F> {
     let mut a = self.a;
     let mut x;
     loop {
+      a = a.wrapping_sub(1);
       x = unsafe { slot_hash(a).read() };
       if x != 0 { break }
-      a = a.wrapping_add(1);
     }
     self.n = n - 1;
-    self.a = a.wrapping_add(1);
+    self.a = a;
     Some((self.f)(x, a))
   }
 
@@ -605,13 +590,13 @@ impl<V, T, F: FnMut(u64, *mut Slot<V>) -> T> Iterator for Iter<V, T, F> {
     let mut g = g;
     if n != 0 {
       loop {
+        a = a.wrapping_sub(1);
         let x = unsafe { slot_hash(a).read() };
         if x != 0 {
           u = g(u, f(x, a));
           n = n - 1;
           if n == 0 { break }
         }
-        a = a.wrapping_add(1);
       }
     }
     u

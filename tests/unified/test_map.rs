@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use expect_test::expect;
 use std::fmt::Write;
 use std::num::NonZeroU64;
@@ -301,5 +303,8 @@ fn test_working_set() {
   let mut s = String::new();
   write!(s, "{:?}\n", size_from_working_set(10_000));
   write!(s, "{:?}\n", size_from_working_set(10_000).iter().sum::<usize>());
-  expect![[r#""#]].assert_eq(&s.drain(..).as_str());
+  expect![[r#"
+      [717, 774, 817, 889, 946, 1018, 1090, 1162, 1248, 1334]
+      9995
+  "#]].assert_eq(&s.drain(..).as_str());
 }
