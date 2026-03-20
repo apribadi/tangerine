@@ -1,4 +1,3 @@
-#![allow(unused)]
 #![allow(missing_docs)]
 
 extern crate alloc;
@@ -15,9 +14,7 @@ use core::mem::needs_drop;
 use core::mem::offset_of;
 use core::num::NonZeroU64;
 use core::ops::Index;
-use core::ptr::addr_eq;
 use core::ptr::null;
-use core::ptr::write_bytes;
 use rand_core::RngCore;
 
 pub struct HashMap<V> {

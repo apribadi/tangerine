@@ -279,3 +279,27 @@ fn test_1() -> Result<(), std::fmt::Error> {
 
   Ok(())
 }
+
+fn size_from_working_set(working_set: usize) -> [usize; 10] {
+  let n: [usize; 10] = [
+    50,
+    54,
+    57,
+    62,
+    66,
+    71,
+    76,
+    81,
+    87,
+    93,
+  ];
+  n.map(|k| k * working_set / n.iter().sum::<usize>())
+}
+
+#[test]
+fn test_working_set() {
+  let mut s = String::new();
+  write!(s, "{:?}\n", size_from_working_set(10_000));
+  write!(s, "{:?}\n", size_from_working_set(10_000).iter().sum::<usize>());
+  expect![[r#""#]].assert_eq(&s.drain(..).as_str());
+}
