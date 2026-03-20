@@ -1,23 +1,9 @@
+use dandelion::Rng;
 use expect_test::expect;
 use std::fmt::Write;
 use std::num::NonZeroU64;
 use std::write;
 use tangerine::new::HashMap;
-use dandelion::Rng;
-
-/*
-#[test]
-fn test_lifetime() {
-  let mut g = Rng::from_u64(0);
-  let mut t = HashMap::new_seeded(&mut g);
-  let key = NonZeroU64::new(13).unwrap();
-  t.insert(key, 1u64);
-  let mut i = t.keys();
-  let _ = i.next();
-  t.reset();
-  let _ = i.next();
-}
-*/
 
 #[test]
 fn test_basic() {
@@ -73,7 +59,6 @@ fn test_basic() {
       None <- t.get_mut(13)
   "#]].assert_eq(s.drain(..).as_str());
 }
-
 
 #[test]
 fn test_empty() {
