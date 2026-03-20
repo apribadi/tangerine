@@ -23,7 +23,7 @@ fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
 struct KeyGen(NonZeroU64);
 
 impl KeyGen {
-  const INITIAL: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(1) };
+  const INITIAL: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(0xcafe_babe_cafe_babe) };
 
   fn new() -> Self {
     KeyGen(KeyGen::INITIAL)
