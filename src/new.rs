@@ -101,7 +101,7 @@ fn invert64(a: u64) -> u64 {
   let x = x.wrapping_mul(y.wrapping_add(1));
   let y = y.wrapping_mul(y);
   let x = x.wrapping_mul(y.wrapping_add(1));
-  return x;
+  x
 }
 
 impl<V> HashMap<V> {
@@ -513,7 +513,7 @@ impl<V> HashMap<V> {
   fn internal_num_slots(&self) -> usize {
     let t = self.t;
     let u = self.u;
-    if u.is_null() { return 0; }
+    if u.is_null() { return 0 }
     unsafe { u.offset_from_unsigned(t) }
   }
 
@@ -553,7 +553,7 @@ impl<V, T, F: FnMut(u64, *mut Slot<V>) -> T> Iterator for Iter<V, T, F> {
   #[inline(always)]
   fn next(&mut self) -> Option<Self::Item> {
     let n = self.n;
-    if n == 0 { return None; }
+    if n == 0 { return None }
     let mut a = self.a;
     let mut x;
     loop {
@@ -610,7 +610,7 @@ impl<V: Clone> Clone for HashMap<V> {
 
 impl <V: Debug> Debug for HashMap<V> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let mut a = self.iter().collect::<Box<[_]>>();
+    let mut a = self.iter().collect::<Box<[(NonZeroU64, &V)]>>();
     a.sort_by_key(|&(x, _)| x);
     f.debug_map().entries(a).finish()
   }
@@ -638,15 +638,15 @@ pub mod internal {
   use super::HashMap;
 
   pub fn num_slots<V>(t: &HashMap<V>) -> usize {
-    return t.internal_num_slots();
+    t.internal_num_slots()
   }
 
   pub fn allocation_size<V>(t: &HashMap<V>) -> usize {
-    return t.internal_allocation_size();
+    t.internal_allocation_size()
   }
 
   pub fn load_factor<V>(t: &HashMap<V>) -> f64 {
-    return t.internal_load_factor();
+    t.internal_load_factor()
   }
 }
 
@@ -676,4 +676,8 @@ pub fn clear(t: &mut HashMap<u32>) {
 
 pub fn reset(t: &mut HashMap<u32>) {
   t.reset();
+}
+
+pub fn clone(t: &mut HashMap<u32>) -> HashMap<u32> {
+  t.clone()
 }
