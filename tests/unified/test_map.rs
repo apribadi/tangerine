@@ -282,7 +282,7 @@ fn test_1() -> Result<(), std::fmt::Error> {
   Ok(())
 }
 
-fn size_from_working_set(working_set: usize) -> [usize; 10] {
+fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
   let n: [usize; 10] = [
     50,
     54,
@@ -295,14 +295,18 @@ fn size_from_working_set(working_set: usize) -> [usize; 10] {
     87,
     93,
   ];
-  n.map(|k| k * working_set / n.iter().sum::<usize>())
+  let s = n.iter().sum::<usize>();
+  let mut r = [0; 10];
+  for i in 0 .. 9 { r[i] = n[i] * working_set / s; }
+  r[9] = working_set - r[0 .. 9].iter().sum::<usize>();
+  r
 }
 
 #[test]
 fn test_working_set() {
   let mut s = String::new();
-  write!(s, "{:?}\n", size_from_working_set(10_000));
-  write!(s, "{:?}\n", size_from_working_set(10_000).iter().sum::<usize>());
+  write!(s, "{:?}\n", sizes_from_working_set(10_000));
+  write!(s, "{:?}\n", sizes_from_working_set(10_000).iter().sum::<usize>());
   expect![[r#"
       [717, 774, 817, 889, 946, 1018, 1090, 1162, 1248, 1334]
       9995

@@ -17,7 +17,11 @@ fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
     87,
     93,
   ];
-  n.map(|k| k * working_set / n.iter().sum::<usize>())
+  let s = n.iter().sum::<usize>();
+  let mut r = [0; 10];
+  for i in 0 .. 9 { r[i] = n[i] * working_set / s; }
+  r[9] = working_set - r[0 .. 9].iter().sum::<usize>();
+  r
 }
 
 struct KeyGen(NonZeroU64);
