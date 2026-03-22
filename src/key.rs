@@ -1,12 +1,13 @@
-//! This module provides traits for hashable keys representable as `NonZeroU32`
-//! or `NonZeroU64`.
+//! This module provides traits for hashable keys representable as [`NonZeroU32`]
+//! or [`NonZeroU64`].
 
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 use rand_core::RngCore;
 
-/// A sealed trait for hashable keys representable as `NonZeroU32` or
-/// `NonZeroU64`.
+/// A sealed trait for hashable keys representable as [`NonZeroU32`] or
+/// [`NonZeroU64`]. The only way to implement this trait for additional types is
+/// to implement the [`IntoKey`] trait.
 #[allow(private_bounds)]
 pub trait Key: private::Key {
 }
@@ -20,12 +21,21 @@ impl Key for NonZeroU64 {
 impl<T: IntoKey> Key for T {
 }
 
-/// A trait for representing keys as `NonZeroU32` or `NonZeroU64`.
+/// A trait for representing keys as [`NonZeroU32`] or [`NonZeroU64`].
 ///
 /// For logical correctness, the key ought to be in some sense "the same" after
 /// a round trip.
 ///
-/// SAFETY: It must be safe to do `project(inject(_))`.
+/// # Safety
+///
+/// It must be safe to `project` the result of any `inject`, possibly
+/// multiple times, e.g.
+///
+/// ```text
+/// let y = inject(x);
+/// let _ = project(y);
+/// let _ = project(y);
+/// ```
 pub unsafe trait IntoKey: Copy + Ord {
   #![allow(missing_docs)]
 
@@ -37,7 +47,7 @@ pub unsafe trait IntoKey: Copy + Ord {
 }
 
 #[inline(always)]
-fn invert32(a: u32) -> u32 {
+fn invert_u32(a: u32) -> u32 {
   // https://jeffhurchalla.com/2022/04/25/a-faster-multiplicative-inverse-mod-a-power-of-2/
 
   let x = a.wrapping_mul(3) ^ 2;
@@ -51,7 +61,7 @@ fn invert32(a: u32) -> u32 {
 }
 
 #[inline(always)]
-fn invert64(a: u64) -> u64 {
+fn invert_u64(a: u64) -> u64 {
   // https://arxiv.org/abs/2204.04342
 
   let x = a.wrapping_mul(3) ^ 2;
@@ -95,7 +105,7 @@ unsafe impl private::Key for NonZeroU32 {
   fn invert_seed(m: Self::Seed) -> Self::Seed {
     let a = m.0;
     let b = m.1;
-    let c = invert32(a.wrapping_mul(b));
+    let c = invert_u32(a.wrapping_mul(b));
     (c.wrapping_mul(a), c.wrapping_mul(b))
   }
 
@@ -150,7 +160,7 @@ unsafe impl private::Key for NonZeroU64 {
   fn invert_seed(m: Self::Seed) -> Self::Seed {
     let a = m.0;
     let b = m.1;
-    let c = invert64(a.wrapping_mul(b));
+    let c = invert_u64(a.wrapping_mul(b));
     (c.wrapping_mul(a), c.wrapping_mul(b))
   }
 

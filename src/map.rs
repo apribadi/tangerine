@@ -17,20 +17,26 @@ use rand_core::RngCore;
 
 use crate::key::Key;
 
-/// A fast hash map keyed by types representable as `NonZeroU32` or
-/// `NonZeroU64`.
+/// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
+/// or [`NonZeroU64`](core::num::NonZeroU64).
 pub struct HashMap<K: Key, V> {
-  z: K::Seed,
-  m: K::Seed,
-  t: *const Slot<K, V>,
-  s: usize,
-  u: *const Slot<K, V>,
-  r: usize,
+  seed_inverted: K::Seed,
+  seed: K::Seed,
+  table: *const Slot<K, V>,
+  shift: usize,
+  limit: *const Slot<K, V>,
+  slack: usize,
 }
 
 struct Slot<K: Key, V> {
   hash: K::Hash,
   data: MaybeUninit<V>,
+}
+
+unsafe impl<K: Key + Send, V: Send> Send for HashMap<K, V> {
+}
+
+unsafe impl<K: Key + Sync, V: Sync> Sync for HashMap<K, V> {
 }
 
 #[inline(always)]
@@ -82,12 +88,12 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   fn internal_new(m: K::Seed) -> Self {
     Self {
-      z: K::invert_seed(m),
-      m: m,
-      t: empty_table::<K, V>(),
-      s: K::BITS - 1,
-      r: capacity::<K>(K::BITS - 1),
-      u: null(),
+      seed_inverted: K::invert_seed(m),
+      seed: m,
+      table: empty_table::<K, V>(),
+      shift: K::BITS - 1,
+      limit: null(),
+      slack: capacity::<K>(K::BITS - 1),
     }
   }
 
@@ -106,8 +112,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns the number of items.
   #[inline(always)]
   pub fn len(&self) -> usize {
-    let s = self.s;
-    let r = self.r;
+    let s = self.shift;
+    let r = self.slack;
     capacity::<K>(s) - r
   }
 
@@ -120,9 +126,9 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns whether the map contains the given key.
   #[inline(always)]
   pub fn contains_key(&self, key: K) -> bool {
-    let t = self.t as *mut Slot<K, V>;
-    let m = self.m;
-    let s = self.s;
+    let t = self.table as *mut Slot<K, V>;
+    let m = self.seed;
+    let s = self.shift;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -142,9 +148,9 @@ impl<K: Key, V> HashMap<K, V> {
   /// present.
   #[inline(always)]
   pub fn get(&self, key: K) -> Option<&V> {
-    let t = self.t as *mut Slot<K, V>;
-    let m = self.m;
-    let s = self.s;
+    let t = self.table as *mut Slot<K, V>;
+    let m = self.seed;
+    let s = self.shift;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -169,9 +175,9 @@ impl<K: Key, V> HashMap<K, V> {
   /// if present.
   #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
-    let t = self.t as *mut Slot<K, V>;
-    let m = self.m;
-    let s = self.s;
+    let t = self.table as *mut Slot<K, V>;
+    let m = self.seed;
+    let s = self.shift;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -206,19 +212,19 @@ impl<K: Key, V> HashMap<K, V> {
     for i in 0 .. d { unsafe { slot_hash(t.wrapping_add(i)).write(K::ZERO) } }
     unsafe { slot_hash(t.wrapping_add(k)).write(h) };
     unsafe { slot_data(t.wrapping_add(k)).write(value) };
-    self.t = t;
-    self.s = s;
-    self.r = capacity::<K>(s) - 1;
-    self.u = t.wrapping_add(d);
+    self.table = t;
+    self.shift = s;
+    self.limit = t.wrapping_add(d);
+    self.slack = capacity::<K>(s) - 1;
   }
 
   #[inline(never)]
   #[cold]
   fn internal_grow(&mut self, last_write: *mut Slot<K, V>) {
-    let old_t = self.t as *mut Slot<K, V>;
-    let old_s = self.s;
-    let old_r = self.r.wrapping_add(1);
-    let old_u = self.u as *mut Slot<K, V>;
+    let old_t = self.table as *mut Slot<K, V>;
+    let old_s = self.shift;
+    let old_u = self.limit as *mut Slot<K, V>;
+    let old_r = self.slack.wrapping_add(1);
     let old_c = capacity::<K>(old_s);
     let old_d = unsafe { old_u.offset_from_unsigned(old_t) };
     let old_w = 1 << K::BITS - old_s;
@@ -226,7 +232,7 @@ impl<K: Key, V> HashMap<K, V> {
     let old_l = unsafe { allocation_layout::<K, V>(old_d) };
     // Temporarily place the table in a valid state in case we panic.
     let h = unsafe { slot_hash(last_write).replace(K::ZERO) };
-    self.r = old_r;
+    self.slack = old_r;
     let new_s = if old_r == 0 { old_s - 1 } else { old_s };
     let new_c = capacity::<K>(new_s);
     let new_w = 1 << K::BITS - new_s;
@@ -246,10 +252,10 @@ impl<K: Key, V> HashMap<K, V> {
     let old_n = old_c - old_r + 1;
     let new_r = old_r + (new_c - old_c) - 1;
     // Update struct fields.
-    self.t = new_t;
-    self.s = new_s;
-    self.r = new_r;
-    self.u = new_u;
+    self.table = new_t;
+    self.shift = new_s;
+    self.limit = new_u;
+    self.slack = new_r;
     // Compress non-empty slots.
     let mut a = old_t;
     let mut b = old_t;
@@ -298,11 +304,11 @@ impl<K: Key, V> HashMap<K, V> {
   /// state.
   #[inline(always)]
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-    let t = self.t as *mut Slot<K, V>;
-    let m = self.m;
-    let s = self.s;
-    let r = self.r;
-    let u = self.u as *mut Slot<K, V>;
+    let t = self.table as *mut Slot<K, V>;
+    let m = self.seed;
+    let s = self.shift;
+    let r = self.slack;
+    let u = self.limit as *mut Slot<K, V>;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -322,7 +328,7 @@ impl<K: Key, V> HashMap<K, V> {
       if u.is_null() {
         self.internal_init(h, value);
       } else {
-        self.r = r.wrapping_sub(1);
+        self.slack = r.wrapping_sub(1);
         let mut a = a;
         let mut x = x;
         let mut y = value;
@@ -345,10 +351,10 @@ impl<K: Key, V> HashMap<K, V> {
   /// with the given key, if one was present.
   #[inline(always)]
   pub fn remove(&mut self, key: K) -> Option<V> {
-    let t = self.t as *mut Slot<K, V>;
-    let m = self.m;
-    let s = self.s;
-    let r = self.r;
+    let t = self.table as *mut Slot<K, V>;
+    let m = self.seed;
+    let s = self.shift;
+    let r = self.slack;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let y = unsafe { slot_hash(t.wrapping_add(k)).read() };
@@ -364,7 +370,7 @@ impl<K: Key, V> HashMap<K, V> {
     if x != h {
       None
     } else {
-      self.r = r + 1;
+      self.slack = r + 1;
       let value = unsafe { slot_data(t.wrapping_add(i)).read() };
       let mut i = i;
       loop {
@@ -387,10 +393,10 @@ impl<K: Key, V> HashMap<K, V> {
   /// Panics if [`drop`]ping a value panics. If that happens, the map will be in
   /// a valid but otherwise unspecified state.
   pub fn clear(&mut self) {
-    let t = self.t as *mut Slot<K, V>;
-    let s = self.s;
-    let r = self.r;
-    let u = self.u as *mut Slot<K, V>;
+    let t = self.table as *mut Slot<K, V>;
+    let s = self.shift;
+    let r = self.slack;
+    let u = self.limit as *mut Slot<K, V>;
     if u.is_null() { return }
     let c = capacity::<K>(s);
     let n = c - r;
@@ -404,7 +410,7 @@ impl<K: Key, V> HashMap<K, V> {
         // Here, we traverse the table in reverse order to ensure that we don't
         // remove an item that is currently displacing another item.
         //
-        // Also, we update `self.r` as we go instead of once at the end.
+        // Also, we update `self.slack` as we go instead of once at the end.
         let mut n = n;
         let mut r = r;
         let mut a = u;
@@ -413,7 +419,7 @@ impl<K: Key, V> HashMap<K, V> {
           if unsafe { slot_hash(a).read() } != K::ZERO {
             unsafe { slot_hash(a).write(K::ZERO) };
             r = r + 1;
-            self.r = r;
+            self.slack = r;
             unsafe { slot_data(a).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
@@ -422,7 +428,7 @@ impl<K: Key, V> HashMap<K, V> {
       }
     } else {
       if n != 0 {
-        self.r = c;
+        self.slack = c;
         let mut a = u;
         loop {
           a = a.wrapping_sub(1);
@@ -440,17 +446,17 @@ impl<K: Key, V> HashMap<K, V> {
   /// Panics if [`drop`]ping a value or deallocating memory panics. If that
   /// happens, the map will be in a valid but otherwise unspecified state.
   pub fn reset(&mut self) {
-    let t = self.t as *mut Slot<K, V>;
-    let s = self.s;
-    let r = self.r;
-    let u = self.u as *mut Slot<K, V>;
+    let t = self.table as *mut Slot<K, V>;
+    let s = self.shift;
+    let r = self.slack;
+    let u = self.limit as *mut Slot<K, V>;
     if u.is_null() { return }
     let n = capacity::<K>(s) - r;
     let d = unsafe { u.offset_from_unsigned(t) };
-    self.t = empty_table::<K, V>();
-    self.s = K::BITS - 1;
-    self.r = capacity::<K>(K::BITS - 1);
-    self.u = null();
+    self.table = empty_table::<K, V>();
+    self.shift = K::BITS - 1;
+    self.limit = null();
+    self.slack = capacity::<K>(K::BITS - 1);
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;
@@ -472,11 +478,11 @@ impl<K: Key, V> HashMap<K, V> {
   /// value. The iterator item type is `(K, &V)`.
   #[inline(always)]
   pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
-    let z = self.z;
+    let z = self.seed_inverted;
     Iter {
-      n: capacity::<K>(self.s) - self.r,
-      a: self.u as *mut Slot<K, V>,
-      f: move |x, a| unsafe { (K::invert_hash(x, z), &*slot_data(a)) }
+      len: capacity::<K>(self.shift) - self.slack,
+      ptr: self.limit as *mut Slot<K, V>,
+      fun: move |x, a| unsafe { (K::invert_hash(x, z), &*slot_data(a)) }
     }
   }
 
@@ -484,22 +490,22 @@ impl<K: Key, V> HashMap<K, V> {
   /// associated value. The iterator item type is `(K, &mut V)`.
   #[inline(always)]
   pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V> {
-    let z = self.z;
+    let z = self.seed_inverted;
     Iter {
-      n: capacity::<K>(self.s) - self.r,
-      a: self.u as *mut Slot<K, V>,
-      f: move |x, a| unsafe { (K::invert_hash(x, z), &mut *slot_data(a)) }
+      len: capacity::<K>(self.shift) - self.slack,
+      ptr: self.limit as *mut Slot<K, V>,
+      fun: move |x, a| unsafe { (K::invert_hash(x, z), &mut *slot_data(a)) }
     }
   }
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
   #[inline(always)]
   pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V> {
-    let z = self.z;
+    let z = self.seed_inverted;
     Iter {
-      n: capacity::<K>(self.s) - self.r,
-      a: self.u as *mut Slot<K, V>,
-      f: move |x, _| unsafe { K::invert_hash(x, z) }
+      len: capacity::<K>(self.shift) - self.slack,
+      ptr: self.limit as *mut Slot<K, V>,
+      fun: move |x, _| unsafe { K::invert_hash(x, z) }
     }
   }
 
@@ -508,26 +514,26 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, K, V> {
     Iter {
-      n: capacity::<K>(self.s) - self.r,
-      a: self.u as *mut Slot<K, V>,
-      f: move |_, a| unsafe { &*slot_data(a) }
+      len: capacity::<K>(self.shift) - self.slack,
+      ptr: self.limit as *mut Slot<K, V>,
+      fun: move |_, a| unsafe { &*slot_data(a) }
     }
   }
 
   #[inline(always)]
   pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V> {
     Iter {
-      n: capacity::<K>(self.s) - self.r,
-      a: self.u as *mut Slot<K, V>,
-      f: move |_, a| unsafe { &mut *slot_data(a) }
+      len: capacity::<K>(self.shift) - self.slack,
+      ptr: self.limit as *mut Slot<K, V>,
+      fun: move |_, a| unsafe { &mut *slot_data(a) }
     }
   }
 
   /// Returns an iterator yielding a mutable reference to each value. The
   /// iterator item type is `&mut V`.
   fn internal_num_slots(&self) -> usize {
-    let t = self.t;
-    let u = self.u;
+    let t = self.table;
+    let u = self.limit;
     if u.is_null() { return 0 }
     unsafe { u.offset_from_unsigned(t) }
   }
@@ -557,9 +563,9 @@ impl<K: Key, V> Index<K> for HashMap<K, V> {
 }
 
 struct Iter<K: Key, V, T, F: FnMut(K::Hash, *mut Slot<K, V>) -> T> {
-  n: usize,
-  a: *mut Slot<K, V>,
-  f: F,
+  len: usize,
+  ptr: *mut Slot<K, V>,
+  fun: F,
 }
 
 impl<K: Key, V, T, F: FnMut(K::Hash, *mut Slot<K, V>) -> T> Iterator for Iter<K, V, T, F> {
@@ -567,30 +573,30 @@ impl<K: Key, V, T, F: FnMut(K::Hash, *mut Slot<K, V>) -> T> Iterator for Iter<K,
 
   #[inline(always)]
   fn next(&mut self) -> Option<Self::Item> {
-    let n = self.n;
+    let n = self.len;
     if n == 0 { return None }
-    let mut a = self.a;
+    let mut a = self.ptr;
     let mut x;
     loop {
       a = a.wrapping_sub(1);
       x = unsafe { slot_hash(a).read() };
       if x != K::ZERO { break }
     }
-    self.n = n - 1;
-    self.a = a;
-    Some((self.f)(x, a))
+    self.len = n - 1;
+    self.ptr = a;
+    Some((self.fun)(x, a))
   }
 
   #[inline(always)]
   fn size_hint(&self) -> (usize, Option<usize>) {
-    (self.n, Some(self.n))
+    (self.len, Some(self.len))
   }
 
   #[inline(always)]
   fn fold<U, G: FnMut(U, T) -> U>(self, init: U, g: G) -> U {
-    let mut n = self.n;
-    let mut a = self.a;
-    let mut f = self.f;
+    let mut n = self.len;
+    let mut a = self.ptr;
+    let mut f = self.fun;
     let mut u = init;
     let mut g = g;
     if n != 0 {
@@ -611,7 +617,7 @@ impl<K: Key, V, T, F: FnMut(K::Hash, *mut Slot<K, V>) -> T> Iterator for Iter<K,
 impl<K: Key, V, T, F: FnMut(K::Hash, *mut Slot<K, V>) -> T> ExactSizeIterator for Iter<K, V, T, F> {
   #[inline(always)]
   fn len(&self) -> usize {
-    self.n
+    self.len
   }
 }
 
