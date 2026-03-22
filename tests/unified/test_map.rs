@@ -308,7 +308,7 @@ fn test_working_set() {
   write!(s, "{:?}\n", sizes_from_working_set(10_000));
   write!(s, "{:?}\n", sizes_from_working_set(10_000).iter().sum::<usize>());
   expect![[r#"
-      [717, 774, 817, 889, 946, 1018, 1090, 1162, 1248, 1334]
-      9995
+      [717, 774, 817, 889, 946, 1018, 1090, 1162, 1248, 1339]
+      10000
   "#]].assert_eq(&s.drain(..).as_str());
 }

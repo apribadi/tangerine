@@ -40,10 +40,11 @@ fn slot_data<V>(a: *mut Slot<V>) -> *mut V {
   a.wrapping_byte_add(offset_of!(Slot<V>, data)).cast()
 }
 
+static EMPTY: [u64; 12] = [0u64; 12];
+
 #[inline(always)]
-fn empty<V>() -> *const Slot<V> {
+const fn empty<V>() -> *const Slot<V> {
   const { assert!(size_of::<Slot<V>>() <= 32) };
-  static EMPTY: [u64; 12] = [0u64; 12];
   &EMPTY as *const u64 as *const Slot<V>
 }
 
@@ -53,12 +54,12 @@ fn ctz(n: usize) -> usize {
 }
 
 #[inline(always)]
-fn allocation_max_num_slots<V>() -> usize {
+const fn allocation_max_num_slots<V>() -> usize {
   isize::MAX as usize / size_of::<Slot<V>>()
 }
 
 #[inline(always)]
-fn allocation_size<V>(num_slots: usize) -> usize {
+const fn allocation_size<V>(num_slots: usize) -> usize {
   num_slots * size_of::<Slot<V>>()
 }
 
@@ -230,11 +231,10 @@ impl<V> HashMap<V> {
   #[inline(never)]
   #[cold]
   fn internal_init(&mut self, h: u64, value: V) {
+    const { assert!(40 <= allocation_max_num_slots::<V>()) };
     let w = 32;
-    let e = 8;
-    let d = w + e;
+    let d = 40;
     let s = 64 - ctz(w);
-    assert!(d <= allocation_max_num_slots::<V>());
     let l = unsafe { allocation_layout::<V>(d) };
     let t = unsafe { alloc(l) } as *mut Slot<V>;
     if t.is_null() { match handle_alloc_error(l) { } }
@@ -291,9 +291,9 @@ impl<V> HashMap<V> {
     let mut b = old_t;
     loop {
       let x = unsafe { slot_hash(a).read() };
-      let y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
+      let y = unsafe { slot_data(a).cast_uninit().read() };
       unsafe { slot_hash(b).write(x) };
-      unsafe { slot_data(b).cast::<MaybeUninit<V>>().write(y) };
+      unsafe { slot_data(b).cast_uninit().write(y) };
       a = a.wrapping_add(1);
       b = b.wrapping_add((x != 0) as usize);
       if a == old_u { break }
@@ -324,6 +324,7 @@ impl<V> HashMap<V> {
     unsafe { dealloc(old_t as *mut u8, old_l) }
   }
 
+  /*
   #[inline(never)]
   #[cold]
   fn internal_grow2(&mut self, last_write: *mut Slot<V>) {
@@ -353,54 +354,56 @@ impl<V> HashMap<V> {
     // At this point, we're guaranteed to successfully finish growing the
     // table.
     let new_u = new_t.wrapping_add(new_d);
-    // We re-add the last write and compute some values that include that slot.
-    unsafe { slot_hash(last_write).write(h) };
-    let old_n = old_c - old_r + 1;
-    let new_r = old_r + (new_c - old_c) - 1;
     // Update struct fields.
     self.t = new_t;
     self.s = new_s;
-    self.r = new_r;
+    self.r = old_r + (new_c - old_c) - 1; // includes removed value
     self.u = new_u;
-    /*
-    // Compress non-empty slots.
-    let mut a = old_t;
-    let mut b = old_t;
-    loop {
-      let x = unsafe { slot_hash(a).read() };
-      let y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
-      unsafe { slot_hash(b).write(x) };
-      unsafe { slot_data(b).cast::<MaybeUninit<V>>().write(y) };
-      a = a.wrapping_add(1);
-      b = b.wrapping_add((x != 0) as usize);
-      if a == old_u { break }
-    }
-    debug_assert!(unsafe { b.offset_from_unsigned(old_t) } == old_n);
-    // Initialize new table.
-    let mut a = new_u;
-    loop {
-      a = a.wrapping_sub(1);
-      unsafe { slot_hash(a).write(0) };
-      if a == new_t { break }
-    }
-    // Copy slots to new allocated block.
+    // ???
     let mut i = 0;
     let mut j = 0;
     loop {
-      let x = unsafe { slot_hash(old_t.wrapping_add(i)).read() };
-      let y = unsafe { slot_data(old_t.wrapping_add(i)).read() };
-      let k = slot(x, new_s);
-      j = select_unpredictable(j > k, j, k);
-      unsafe { slot_hash(new_t.wrapping_add(j)).write(x) };
-      unsafe { slot_data(new_t.wrapping_add(j)).write(y) };
+      let x = unsafe { slot_hash(old_t.wrapping_add(j)).read() };
+      let y = unsafe { slot_data(old_t.wrapping_add(j)).cast_uninit().read() };
+      let k = 2 * i;
+      let p = select_unpredictable(slot(x, new_s) <= k && x != 0, u64::MAX, 0);
+      unsafe { slot_hash(new_t.wrapping_add(k)).write(x & p) };
+      unsafe { slot_data(new_t.wrapping_add(k)).cast_uninit().write(y) };
+      j = j.wrapping_sub(p as i64 as isize as usize);
+      let x = unsafe { slot_hash(old_t.wrapping_add(j)).read() };
+      let y = unsafe { slot_data(old_t.wrapping_add(j)).cast_uninit().read() };
+      let k = 2 * i + 1;
+      let p = select_unpredictable(slot(x, new_s) <= k && x != 0, u64::MAX, 0);
+      let q = select_unpredictable(i == j, u64::MAX, p);
+      unsafe { slot_hash(new_t.wrapping_add(k)).write(x & p) };
+      unsafe { slot_data(new_t.wrapping_add(k)).cast_uninit().write(y) };
+      j = j.wrapping_sub(q as i64 as isize as usize);
       i = i + 1;
-      j = j + 1;
-      if i == old_n { break }
+      if i == old_w { break }
     }
-    */
+    // ???
+    let mut k = new_w;
+    loop {
+      let x = unsafe { slot_hash(old_t.wrapping_add(j)).read() };
+      let y = unsafe { slot_data(old_t.wrapping_add(j)).cast_uninit().read() };
+      let p = select_unpredictable(x != 0, u64::MAX, 0);
+      unsafe { slot_hash(new_t.wrapping_add(k)).write(x & p) };
+      unsafe { slot_data(new_t.wrapping_add(k)).cast_uninit().write(y) };
+      j = j.wrapping_sub(p as i64 as isize as usize);
+      k = k + 1;
+      if k == new_d { break };
+    }
+    // ???
+    let mut k = slot(h, new_s);
+    while unsafe { slot_hash(new_t.wrapping_add(k)).read() } != 0 {
+      k = k + 1;
+    }
+    unsafe { slot_hash(new_t.wrapping_add(k)).write(h) };
+    unsafe { slot_data(new_t.wrapping_add(k)).write(slot_data(last_write).read()) };
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, old_l) }
   }
+  */
 
   #[inline(always)]
   pub fn insert(&mut self, key: NonZeroU64, value: V) -> Option<V> {
