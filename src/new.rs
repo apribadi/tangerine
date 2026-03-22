@@ -324,6 +324,84 @@ impl<V> HashMap<V> {
     unsafe { dealloc(old_t as *mut u8, old_l) }
   }
 
+  #[inline(never)]
+  #[cold]
+  fn internal_grow2(&mut self, last_write: *mut Slot<V>) {
+    let old_t = self.t as *mut Slot<V>;
+    let old_s = self.s;
+    let old_r = self.r.wrapping_add(1);
+    let old_u = self.u as *mut Slot<V>;
+    let old_c = capacity(old_s);
+    let old_d = unsafe { old_u.offset_from_unsigned(old_t) };
+    let old_w = 1 << 64 - old_s;
+    let old_e = old_d - old_w;
+    let old_l = unsafe { allocation_layout::<V>(old_d) };
+    // Temporarily place the table in a valid state in case we panic.
+    let h = unsafe { slot_hash(last_write).replace(0) };
+    self.r = old_r;
+    let new_s = old_s - 1;
+    let new_c = capacity(new_s);
+    let new_w = 1 << 64 - new_s;
+    let new_e = if last_write.wrapping_add(1) == old_u { 2 * old_e } else { old_e };
+    let new_d = new_w + new_e;
+    // Panic if the layout would overflow.
+    assert!(new_d <= allocation_max_num_slots::<V>());
+    // Alloc.
+    let new_l = unsafe { allocation_layout::<V>(new_d) };
+    let new_t = unsafe { alloc(new_l) } as *mut Slot<V>;
+    if new_t.is_null() { match handle_alloc_error(new_l) { } }
+    // At this point, we're guaranteed to successfully finish growing the
+    // table.
+    let new_u = new_t.wrapping_add(new_d);
+    // We re-add the last write and compute some values that include that slot.
+    unsafe { slot_hash(last_write).write(h) };
+    let old_n = old_c - old_r + 1;
+    let new_r = old_r + (new_c - old_c) - 1;
+    // Update struct fields.
+    self.t = new_t;
+    self.s = new_s;
+    self.r = new_r;
+    self.u = new_u;
+    /*
+    // Compress non-empty slots.
+    let mut a = old_t;
+    let mut b = old_t;
+    loop {
+      let x = unsafe { slot_hash(a).read() };
+      let y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
+      unsafe { slot_hash(b).write(x) };
+      unsafe { slot_data(b).cast::<MaybeUninit<V>>().write(y) };
+      a = a.wrapping_add(1);
+      b = b.wrapping_add((x != 0) as usize);
+      if a == old_u { break }
+    }
+    debug_assert!(unsafe { b.offset_from_unsigned(old_t) } == old_n);
+    // Initialize new table.
+    let mut a = new_u;
+    loop {
+      a = a.wrapping_sub(1);
+      unsafe { slot_hash(a).write(0) };
+      if a == new_t { break }
+    }
+    // Copy slots to new allocated block.
+    let mut i = 0;
+    let mut j = 0;
+    loop {
+      let x = unsafe { slot_hash(old_t.wrapping_add(i)).read() };
+      let y = unsafe { slot_data(old_t.wrapping_add(i)).read() };
+      let k = slot(x, new_s);
+      j = select_unpredictable(j > k, j, k);
+      unsafe { slot_hash(new_t.wrapping_add(j)).write(x) };
+      unsafe { slot_data(new_t.wrapping_add(j)).write(y) };
+      i = i + 1;
+      j = j + 1;
+      if i == old_n { break }
+    }
+    */
+    // The map is now in a valid state, even if deallocating panics.
+    unsafe { dealloc(old_t as *mut u8, old_l) }
+  }
+
   #[inline(always)]
   pub fn insert(&mut self, key: NonZeroU64, value: V) -> Option<V> {
     let t = self.t as *mut Slot<V>;

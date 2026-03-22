@@ -4,6 +4,10 @@ use divan::Bencher;
 use divan::black_box;
 use crate::util::Map;
 
+const ARGS: [usize; 4] = [1_000, 10_000, 100_000, 1_000_000];
+const N: usize = 1_000_000;
+const SAMPLE_COUNT: u32 = 9;
+
 fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
   let n: [usize; 10] = [
     50,
@@ -27,13 +31,11 @@ fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
 struct KeyGen(NonZeroU64);
 
 impl KeyGen {
-  const INITIAL: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(0xcafe_babe_cafe_babe) };
-
-  fn new() -> Self {
-    KeyGen(KeyGen::INITIAL)
+  const fn new() -> Self {
+    KeyGen(unsafe { NonZeroU64::new_unchecked(0xcafe_babe_cafe_babe) })
   }
 
-  fn next(&mut self) -> NonZeroU64 {
+  const fn next(&mut self) -> NonZeroU64 {
     let x = self.0;
     let y = x.get();
     let y = y ^ y << 9;
@@ -47,13 +49,11 @@ impl KeyGen {
 struct KeyGen(u64);
 
 impl KeyGen {
-  const INITIAL: NonZeroU64 = unsafe { NonZeroU64::new_unchecked(1) };
-
-  fn new() -> Self {
-    KeyGen(0)
+  const fn new() -> Self {
+    KeyGen(unsafe { NonZeroU64::new_unchecked(1) })
   }
 
-  fn next(&mut self) -> NonZeroU64 {
+  const fn next(&mut self) -> NonZeroU64 {
     let x = self.0;
     self.0 = x.wrapping_add(1);
     unsafe { NonZeroU64::new_unchecked(x.reverse_bits() | 1) }
@@ -62,10 +62,9 @@ impl KeyGen {
 */
 
 #[divan::bench(
-  args = [10_000, 100_000, 1_000_000],
-  sample_count = 9,
+  args = ARGS,
+  sample_count = SAMPLE_COUNT,
   types = [
-    ahash::AHashMap<NonZeroU64, NonZeroU64>,
     foldhash::HashMap<NonZeroU64, NonZeroU64>,
     tangerine::map::HashMap<NonZeroU64, NonZeroU64>,
     tangerine::new::HashMap<NonZeroU64>,
@@ -88,14 +87,14 @@ fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: 
       t
     });
   bencher.bench_local(|| {
-    let mut n = 1_000_000;
-    let mut k = KeyGen::INITIAL;
+    let mut n = N;
+    let mut k = KeyGen::new().next();
     'done: loop {
       for t in t.iter_mut() {
         for _ in 0 .. 500 {
           match t.get(k) {
             None => {
-              k = KeyGen::INITIAL;
+              k = KeyGen::new().next();
             }
             Some(&y) => {
               k = y;
@@ -111,10 +110,9 @@ fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: 
 }
 
 #[divan::bench(
-  args = [10_000, 100_000, 1_000_000],
-  sample_count = 9,
+  args = ARGS,
+  sample_count = SAMPLE_COUNT,
   types = [
-    ahash::AHashMap<NonZeroU64, u64>,
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
     tangerine::new::HashMap<u64>,
@@ -131,7 +129,7 @@ fn bench_get_unchained<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize
       t
     });
   bencher.bench_local(|| {
-    let mut n = 1_000_000;
+    let mut n = N;
     let mut a = 0u64;
     let mut g = KeyGen::new();
     'done: loop {
@@ -156,10 +154,9 @@ fn bench_get_unchained<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize
 
 
 #[divan::bench(
-  sample_count = 9,
-  args = [10_000, 100_000, 1_000_000],
+  sample_count = SAMPLE_COUNT,
+  args = [1_000, 10_000, 100_000, 1_000_000, 10_000_000],
   types = [
-    ahash::AHashMap<NonZeroU64, u64>,
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
     tangerine::new::HashMap<u64>,
@@ -171,7 +168,7 @@ fn bench_insert<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let mut t: [_; 10] = array::from_fn(|_| T::new());
   let mut g = KeyGen::new();
   bencher.bench_local(|| {
-    let mut n = 1_000_000;
+    let mut n = N;
     'done: loop {
       for (i, t) in t.iter_mut().enumerate() {
         let limit = sizes[i];
@@ -200,9 +197,8 @@ const _: () = assert!(N * C == 5_000); // total working set
 const _: () = assert!(K * N * C * 2 == 1_000_000); // number of operations
 
 #[divan::bench(
-  sample_count = 9,
+  sample_count = SAMPLE_COUNT,
   types = [
-    ahash::AHashMap<NonZeroU64, u64>,
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
     tangerine::new::HashMap<u64>,
