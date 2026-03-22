@@ -1,4 +1,10 @@
-#![allow(missing_docs)]
+//! This module provides a fast hash map keyed by types representable as
+//! `NonZeroU32` or `NonZeroU64`.
+
+// TODO: IntoIterator
+// TODO: drain
+// TODO: try_insert
+// TODO: shrink_to_fit
 
 extern crate alloc;
 
@@ -478,11 +484,11 @@ impl<K: Key, V> HashMap<K, V> {
   /// value. The iterator item type is `(K, &V)`.
   #[inline(always)]
   pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
-    let z = self.seed_inverted;
+    let m = self.seed_inverted;
     Iter {
       len: capacity::<K>(self.shift) - self.slack,
       ptr: self.limit as *mut Slot<K, V>,
-      fun: move |x, a| unsafe { (K::invert_hash(x, z), &*slot_data(a)) }
+      fun: move |x, a| unsafe { (K::invert_hash(x, m), &*slot_data(a)) }
     }
   }
 
@@ -490,22 +496,22 @@ impl<K: Key, V> HashMap<K, V> {
   /// associated value. The iterator item type is `(K, &mut V)`.
   #[inline(always)]
   pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V> {
-    let z = self.seed_inverted;
+    let m = self.seed_inverted;
     Iter {
       len: capacity::<K>(self.shift) - self.slack,
       ptr: self.limit as *mut Slot<K, V>,
-      fun: move |x, a| unsafe { (K::invert_hash(x, z), &mut *slot_data(a)) }
+      fun: move |x, a| unsafe { (K::invert_hash(x, m), &mut *slot_data(a)) }
     }
   }
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
   #[inline(always)]
   pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V> {
-    let z = self.seed_inverted;
+    let m = self.seed_inverted;
     Iter {
       len: capacity::<K>(self.shift) - self.slack,
       ptr: self.limit as *mut Slot<K, V>,
-      fun: move |x, _| unsafe { K::invert_hash(x, z) }
+      fun: move |x, _| unsafe { K::invert_hash(x, m) }
     }
   }
 
@@ -520,6 +526,8 @@ impl<K: Key, V> HashMap<K, V> {
     }
   }
 
+  /// Returns an iterator yielding a mutable reference to each value. The
+  /// iterator item type is `&mut V`.
   #[inline(always)]
   pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V> {
     Iter {
