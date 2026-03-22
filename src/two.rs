@@ -163,7 +163,7 @@ impl<V> HashMap<V> {
     let b = self.b;
     let h = hash(key, m);
     let k = slot(h, s);
-    std::hint::prefetch_read(b.wrapping_add(k), std::hint::Locality::L1);
+    // std::hint::prefetch_read(b.wrapping_add(k), std::hint::Locality::L1);
     let u = unsafe { a.wrapping_add(k).read() };
     let mut i = k;
     let mut x;

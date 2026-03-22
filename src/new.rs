@@ -291,9 +291,9 @@ impl<V> HashMap<V> {
     let mut b = old_t;
     loop {
       let x = unsafe { slot_hash(a).read() };
-      let y = unsafe { slot_data(a).cast_uninit().read() };
+      let y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
       unsafe { slot_hash(b).write(x) };
-      unsafe { slot_data(b).cast_uninit().write(y) };
+      unsafe { slot_data(b).cast::<MaybeUninit<V>>().write(y) };
       a = a.wrapping_add(1);
       b = b.wrapping_add((x != 0) as usize);
       if a == old_u { break }
