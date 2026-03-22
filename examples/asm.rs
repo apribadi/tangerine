@@ -8,31 +8,35 @@ fn drop(_: HashMap<NonZeroU64, u64>) {
 }
 
 fn new() -> HashMap<NonZeroU64, u64> {
-  return HashMap::new();
+  HashMap::new()
 }
 
 fn len(t: &HashMap<NonZeroU64, u64>) -> usize {
-  return t.len();
+  t.len()
 }
 
 fn is_empty(t: &HashMap<NonZeroU64, u64>) -> bool {
-  return t.is_empty();
+  t.is_empty()
 }
 
 fn contains_key(t: &HashMap<NonZeroU64, u64>, k: NonZeroU64) -> bool {
-  return t.contains_key(k);
+  t.contains_key(k)
 }
 
 fn get(t: &HashMap<NonZeroU64, u64>, k: NonZeroU64) -> Option<&u64> {
-  return t.get(k);
+  t.get(k)
+}
+
+fn get_value(t: &HashMap<NonZeroU64, u64>, k: NonZeroU64) -> Option<u64> {
+  match t.get(k) { None => None, Some(&y) => Some(y) }
 }
 
 fn insert(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64, v: u64) {
-  t.insert(k, v);
+  let _ = t.insert(k, v);
 }
 
 fn remove(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64) {
-  t.remove(k);
+  let _ = t.remove(k);
 }
 
 fn clear(t: &mut HashMap<NonZeroU64, u64>) {
@@ -44,17 +48,17 @@ fn reset(t: &mut HashMap<NonZeroU64, u64>) {
 }
 
 fn clone(t: &HashMap<NonZeroU64, u64>) -> HashMap<NonZeroU64, u64> {
-  return t.clone();
+  t.clone()
 }
 
 fn sum_fold(t: &mut HashMap<NonZeroU64, u64>) -> u64 {
-  return t.values().fold(0, |x, &y| x.wrapping_add(y));
+  t.values().fold(0, |x, &y| x.wrapping_add(y))
 }
 
 fn sum_loop(t: &mut HashMap<NonZeroU64, u64>) -> u64 {
   let mut x = 0u64;
   for &y in t.values() { x = x.wrapping_add(y); }
-  return x;
+  x
 }
 
 fn std_clear(t: &mut std::collections::HashMap<NonZeroU64, u64>) {
@@ -72,6 +76,7 @@ pub fn main() {
       is_empty as *mut u8,
       contains_key as *mut u8,
       get as *mut u8,
+      get_value as *mut u8,
       insert as *mut u8,
       remove as *mut u8,
       clear as *mut u8,

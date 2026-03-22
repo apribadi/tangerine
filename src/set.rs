@@ -61,14 +61,14 @@ impl<T: Key> HashSet<T> {
 
   #[inline(always)]
   pub fn insert(&mut self, value: T) {
-    self.map.insert(value, ());
+    let _: Option<()> = self.map.insert(value, ());
   }
 
   /// Removes the given value from the set.
 
   #[inline(always)]
   pub fn remove(&mut self, value: T) {
-    self.map.remove(value);
+    let _: Option<()> = self.map.remove(value);
   }
 
   /// Removes every item from the set. Retains heap-allocated memory.
