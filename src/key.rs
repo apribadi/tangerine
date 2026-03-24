@@ -192,7 +192,7 @@ unsafe impl<T: IntoKey> private::Key for T {
 
   type Hash = <T::Key as private::Key>::Hash;
 
-  const BITS: usize = T::Key::BITS;
+  const BITS: usize = <T::Key as private::Key>::BITS;
 
   const ZERO: Self::Hash = <T::Key as private::Key>::ZERO;
 

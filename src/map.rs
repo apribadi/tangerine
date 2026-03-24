@@ -59,6 +59,7 @@ static EMPTY_TABLE: [u64; 12] = [0u64; 12];
 
 #[inline(always)]
 const fn empty_table<K: Key, V>() -> *const Slot<K, V> {
+  // TODO:
   const { assert!(size_of::<Slot<K, V>>() <= 32) };
   &EMPTY_TABLE as *const u64 as *const Slot<K, V>
 }

@@ -67,7 +67,7 @@ impl KeyGen {
   types = [
     foldhash::HashMap<NonZeroU64, NonZeroU64>,
     tangerine::map::HashMap<NonZeroU64, NonZeroU64>,
-    tangerine::new::HashMap<NonZeroU64>,
+    tangerine::old_map::HashMap<NonZeroU64, NonZeroU64>,
     tangerine::two::HashMap<NonZeroU64>,
   ])]
 #[inline(never)]
@@ -115,7 +115,7 @@ fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: 
   types = [
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
-    tangerine::new::HashMap<u64>,
+    tangerine::old_map::HashMap<NonZeroU64, u64>,
     tangerine::two::HashMap<u64>,
   ])]
 #[inline(never)]
@@ -159,7 +159,7 @@ fn bench_get_unchained<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize
   types = [
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
-    tangerine::new::HashMap<u64>,
+    tangerine::old_map::HashMap<NonZeroU64, u64>,
     tangerine::two::HashMap<u64>,
   ])]
 #[inline(never)]
