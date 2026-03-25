@@ -9,7 +9,7 @@
 extern crate alloc;
 
 use alloc::alloc::Layout;
-use alloc::alloc::alloc;
+use alloc::alloc::alloc_zeroed;
 use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use core::fmt::Debug;
@@ -19,6 +19,7 @@ use core::mem::needs_drop;
 use core::mem::offset_of;
 use core::ops::Index;
 use core::ptr::null;
+use core::ptr::write_bytes;
 use rand_core::RngCore;
 
 use crate::key::Key;
@@ -213,10 +214,9 @@ impl<K: Key, V> HashMap<K, V> {
     let d = 40;
     let s = K::BITS - ctz(w);
     let l = unsafe { allocation_layout::<K, V>(d) };
-    let t = unsafe { alloc(l) } as *mut Slot<K, V>;
+    let t = unsafe { alloc_zeroed(l) } as *mut Slot<K, V>;
     if t.is_null() { match handle_alloc_error(l) { } }
     let k = K::slot(h, s);
-    for i in 0 .. d { unsafe { slot_hash(t.wrapping_add(i)).write(K::ZERO) } }
     unsafe { slot_hash(t.wrapping_add(k)).write(h) };
     unsafe { slot_data(t.wrapping_add(k)).write(value) };
     self.table = t;
@@ -232,16 +232,13 @@ impl<K: Key, V> HashMap<K, V> {
     let old_s = self.shift;
     let old_u = self.limit as *mut Slot<K, V>;
     let old_r = self.slack.wrapping_add(1);
-    let old_c = capacity::<K>(old_s);
     let old_d = unsafe { old_u.offset_from_unsigned(old_t) };
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
-    let old_l = unsafe { allocation_layout::<K, V>(old_d) };
     // Temporarily place the table in a valid state in case we panic.
     let h = unsafe { slot_hash(last_write).replace(K::ZERO) };
     self.slack = old_r;
-    let new_s = if old_r == 0 { old_s - 1 } else { old_s };
-    let new_c = capacity::<K>(new_s);
+    let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
     let new_e = if last_write.wrapping_add(1) == old_u { 2 * old_e } else { old_e };
     let new_d = new_w + new_e;
@@ -249,56 +246,33 @@ impl<K: Key, V> HashMap<K, V> {
     assert!(new_d <= allocation_max_num_slots::<K, V>());
     // Alloc.
     let new_l = unsafe { allocation_layout::<K, V>(new_d) };
-    let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
+    let new_t = unsafe { alloc_zeroed(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
-    // At this point, we're guaranteed to successfully finish growing the
-    // table.
     let new_u = new_t.wrapping_add(new_d);
-    // We re-add the last write and compute some values that include that slot.
+    // At this point, we're guaranteed to successfully finish growing the
+    // table. We re-add the last write.
     unsafe { slot_hash(last_write).write(h) };
-    let old_n = old_c - old_r + 1;
-    let new_r = old_r + (new_c - old_c) - 1;
     // Update struct fields.
     self.table = new_t;
     self.shift = new_s;
     self.limit = new_u;
-    self.slack = new_r;
-    // Compress non-empty slots.
+    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
+    // Copy slots.
     let mut a = old_t;
-    let mut b = old_t;
+    let mut i = 0;
     loop {
       let x = unsafe { slot_hash(a).read() };
       let y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
-      unsafe { slot_hash(b).write(x) };
-      unsafe { slot_data(b).cast::<MaybeUninit<V>>().write(y) };
+      let k = K::slot(x, new_s);
+      let k = select_unpredictable(i > k, i, k);
+      unsafe { slot_hash(new_t.wrapping_add(k)).write(x) };
+      unsafe { slot_data(new_t.wrapping_add(k)).cast::<MaybeUninit<V>>().write(y) };
       a = a.wrapping_add(1);
-      b = b.wrapping_add((x != K::ZERO) as usize);
+      i = select_unpredictable(x != K::ZERO, k + 1, i);
       if a == old_u { break }
     }
-    debug_assert!(unsafe { b.offset_from_unsigned(old_t) } == old_n);
-    // Initialize new table.
-    let mut a = new_u;
-    loop {
-      a = a.wrapping_sub(1);
-      unsafe { slot_hash(a).write(K::ZERO) };
-      if a == new_t { break }
-    }
-    // Copy slots to new allocated block.
-    let mut i = 0;
-    let mut j = 0;
-    loop {
-      let x = unsafe { slot_hash(old_t.wrapping_add(i)).read() };
-      let y = unsafe { slot_data(old_t.wrapping_add(i)).read() };
-      let k = K::slot(x, new_s);
-      j = select_unpredictable(j > k, j, k);
-      unsafe { slot_hash(new_t.wrapping_add(j)).write(x) };
-      unsafe { slot_data(new_t.wrapping_add(j)).write(y) };
-      i = i + 1;
-      j = j + 1;
-      if i == old_n { break }
-    }
     // The map is now in a valid state, even if deallocating panics.
-    unsafe { dealloc(old_t as *mut u8, old_l) }
+    unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) }
   }
 
   /// Inserts the given key and value into the map. Returns the previous value
@@ -330,7 +304,7 @@ impl<K: Key, V> HashMap<K, V> {
     let a = select_unpredictable(y > h, a, b);
     let x = select_unpredictable(y > h, x, y);
     if x == h {
-      Some(unsafe { slot_data(b).replace(value) })
+      Some(unsafe { slot_data(a).replace(value) })
     } else {
       if u.is_null() {
         self.internal_init(h, value);
@@ -439,7 +413,7 @@ impl<K: Key, V> HashMap<K, V> {
         let mut a = u;
         loop {
           a = a.wrapping_sub(1);
-          unsafe { slot_hash(a).write(K::ZERO) };
+          unsafe { write_bytes(a, 0, 1) };
           if a == t { break }
         }
       }
@@ -679,4 +653,34 @@ pub mod internal {
   pub fn load_factor<K: Key, V>(t: &HashMap<K, V>) -> f64 {
     t.internal_load_factor()
   }
+}
+
+#[allow(missing_docs)]
+pub fn get(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> Option<&u32> {
+  t.get(key)
+}
+
+#[allow(missing_docs)]
+pub fn get_value(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> Option<u32> {
+  match t.get(key) { None => None, Some(&y) => Some(y) }
+}
+
+#[allow(missing_docs)]
+pub fn contains_key(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> bool {
+  t.contains_key(key)
+}
+
+#[allow(missing_docs)]
+pub fn insert(t: &mut HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64, value: u32) {
+  let _ = t.insert(key, value);
+}
+
+#[allow(missing_docs)]
+pub fn remove(t: &mut HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) {
+  let _ = t.remove(key);
+}
+
+#[allow(missing_docs)]
+pub fn clear(t: &mut HashMap<std::num::NonZeroU64, u32>) {
+  t.clear();
 }
