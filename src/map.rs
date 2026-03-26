@@ -94,7 +94,7 @@ fn capacity<K: Key>(s: usize) -> usize {
 
 impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
-  fn internal_new(m: K::Seed) -> Self {
+  fn from_seed(m: K::Seed) -> Self {
     Self {
       seed_inverted: K::invert_seed(m),
       seed: m,
@@ -108,13 +108,13 @@ impl<K: Key, V> HashMap<K, V> {
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
   pub fn new() -> Self {
-    Self::internal_new(K::seed_nondet())
+    Self::from_seed(K::seed_nondet())
   }
 
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
   pub fn new_seeded(rng: &mut impl RngCore) -> Self {
-    Self::internal_new(K::seed(rng))
+    Self::from_seed(K::seed(rng))
   }
 
   /// Returns the number of items.
@@ -208,7 +208,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn internal_init(&mut self, h: K::Hash, value: V) {
+  fn insert_init(&mut self, h: K::Hash, value: V) {
     const { assert!(40 <= allocation_max_num_slots::<K, V>()) };
     let w = 32;
     let d = 40;
@@ -227,7 +227,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn internal_grow(&mut self, last_write: *mut Slot<K, V>) {
+  fn insert_grow(&mut self, last_write: *mut Slot<K, V>) {
     let old_t = self.table as *mut Slot<K, V>;
     let old_s = self.shift;
     let old_u = self.limit as *mut Slot<K, V>;
@@ -307,7 +307,7 @@ impl<K: Key, V> HashMap<K, V> {
       Some(unsafe { slot_data(a).replace(value) })
     } else {
       if u.is_null() {
-        self.internal_init(h, value);
+        self.insert_init(h, value);
       } else {
         self.slack = r.wrapping_sub(1);
         let mut a = a;
@@ -321,7 +321,7 @@ impl<K: Key, V> HashMap<K, V> {
         }
         unsafe { slot_data(a).write(y) };
         if r == 0 || a.wrapping_add(1) == u {
-          self.internal_grow(a);
+          self.insert_grow(a);
         }
       }
       None
@@ -512,8 +512,6 @@ impl<K: Key, V> HashMap<K, V> {
     }
   }
 
-  /// Returns an iterator yielding a mutable reference to each value. The
-  /// iterator item type is `&mut V`.
   fn internal_num_slots(&self) -> usize {
     let t = self.table;
     let u = self.limit;
@@ -623,6 +621,12 @@ impl <K: Key + Debug, V: Debug> Debug for HashMap<K, V> {
 impl<K: Key, V> Default for HashMap<K, V> {
   fn default() -> Self {
     Self::new()
+  }
+}
+
+impl<K: Key, V> Extend<(K, V)> for HashMap<K, V> {
+  fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
+    iter.into_iter().for_each(|(k, v)| { let _ = self.insert(k, v); });
   }
 }
 
