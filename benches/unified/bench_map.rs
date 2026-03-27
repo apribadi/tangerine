@@ -126,23 +126,24 @@ fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: 
 #[inline(never)]
 fn bench_get_unchained<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
-  let mut t: [_; 10] =
+  let mut ts: [_; 10] =
     sizes.map(|m| {
       let mut t = T::new();
       let mut g = KeyGen::new();
-      for i in 0 .. m { t.insert(g.next(), i as u64); }
-      t
+      for i in 0 .. m {
+        t.insert(g.next(), i as u64);
+      }
+      (t, KeyGen::new())
     });
   bencher.bench_local(|| {
     let mut n = N;
     let mut a = 0u64;
-    let mut g = KeyGen::new();
     'done: loop {
-      for t in t.iter_mut() {
+      for &mut (ref mut t, ref mut g) in ts.iter_mut() {
         for _ in 0 .. 500 {
           match t.get(g.next()) {
             None => {
-              g = KeyGen::new();
+              *g = KeyGen::new();
             }
             Some(&y) => {
               a = a.wrapping_add(y);
