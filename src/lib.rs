@@ -1,3 +1,4 @@
+#![feature(hint_prefetch)]
 #![doc = include_str!("../README.md")]
 
 pub mod key;

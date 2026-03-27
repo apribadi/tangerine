@@ -87,9 +87,8 @@ fn slot(h: u64, s: usize) -> usize {
 }
 
 #[inline(always)]
-fn invert64(a: u64) -> u64 {
+fn invert_u64(a: u64) -> u64 {
   // https://arxiv.org/abs/2204.04342
-
   let x = a.wrapping_mul(3) ^ 2;
   let y = 1u64.wrapping_sub(a.wrapping_mul(x));
   let x = x.wrapping_mul(y.wrapping_add(1));
@@ -106,7 +105,7 @@ impl<V> HashMap<V> {
   #[inline(always)]
   fn internal_new(m: u64) -> Self {
     Self {
-      z: invert64(m | 1),
+      z: invert_u64(m | 1),
       m: m | 1,
       s: 63,
       a: &EMPTY as *const u64,
@@ -163,7 +162,7 @@ impl<V> HashMap<V> {
     let b = self.b;
     let h = hash(key, m);
     let k = slot(h, s);
-    // std::hint::prefetch_read(b.wrapping_add(k), std::hint::Locality::L1);
+    std::hint::prefetch_read(b.wrapping_add(k), std::hint::Locality::L1);
     let u = unsafe { a.wrapping_add(k).read() };
     let mut i = k;
     let mut x;

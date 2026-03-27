@@ -9,7 +9,7 @@ pub(crate) trait Map<T> {
 
   fn insert(&mut self, _: NonZeroU64, _: T);
 
-  fn remove(&mut self, _: NonZeroU64);
+  fn remove(&mut self, _: NonZeroU64) -> Option<T>;
 }
 
 impl<T> Map<T> for tangerine::map::HashMap<NonZeroU64, T> {
@@ -26,7 +26,7 @@ impl<T> Map<T> for tangerine::map::HashMap<NonZeroU64, T> {
   fn insert(&mut self, k: NonZeroU64, v: T) { let _ = self.insert(k, v); }
 
   #[inline(always)]
-  fn remove(&mut self, k: NonZeroU64) { let _ = self.remove(k); }
+  fn remove(&mut self, k: NonZeroU64) -> Option<T> { self.remove(k) }
 }
 
 impl<T> Map<T> for tangerine::old_map::HashMap<NonZeroU64, T> {
@@ -43,7 +43,7 @@ impl<T> Map<T> for tangerine::old_map::HashMap<NonZeroU64, T> {
   fn insert(&mut self, k: NonZeroU64, v: T) { self.insert(k, v); }
 
   #[inline(always)]
-  fn remove(&mut self, k: NonZeroU64) { self.remove(k); }
+  fn remove(&mut self, k: NonZeroU64) -> Option<T> { self.get_and_remove(k) }
 }
 
 impl<T> Map<T> for tangerine::two::HashMap<T> {
@@ -60,7 +60,7 @@ impl<T> Map<T> for tangerine::two::HashMap<T> {
   fn insert(&mut self, k: NonZeroU64, v: T) { let _ = self.insert(k, v); }
 
   #[inline(always)]
-  fn remove(&mut self, k: NonZeroU64) { let _ = self.remove(k); }
+  fn remove(&mut self, k: NonZeroU64) -> Option<T> { self.remove(k) }
 }
 
 impl<T> Map<T> for ahash::AHashMap<NonZeroU64, T> {
@@ -80,7 +80,7 @@ impl<T> Map<T> for ahash::AHashMap<NonZeroU64, T> {
   fn insert(&mut self, k: NonZeroU64, v: T) { let _: Option<_> = self.insert(k, v); }
 
   #[inline(always)]
-  fn remove(&mut self, k: NonZeroU64) { let _: Option<_> = self.remove(&k); }
+  fn remove(&mut self, k: NonZeroU64) -> Option<T> { self.remove(&k) }
 }
 
 impl<T> Map<T> for foldhash::HashMap<NonZeroU64, T> {
@@ -97,5 +97,5 @@ impl<T> Map<T> for foldhash::HashMap<NonZeroU64, T> {
   fn insert(&mut self, k: NonZeroU64, v: T) { let _: Option<_> = self.insert(k, v); }
 
   #[inline(always)]
-  fn remove(&mut self, k: NonZeroU64) { let _: Option<_> = self.remove(&k); }
+  fn remove(&mut self, k: NonZeroU64) -> Option<T> { self.remove(&k) }
 }

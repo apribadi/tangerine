@@ -51,6 +51,10 @@ impl KeyGen {
     self.0 = unsafe { NonZeroU64::new_unchecked(y) };
     x
   }
+
+  const fn peek(&mut self) -> NonZeroU64 {
+    self.0
+  }
 }
 
 /*
@@ -85,11 +89,8 @@ fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: 
     sizes.map(|m| {
       let mut t = T::new();
       let mut g = KeyGen::new();
-      let mut k = g.next();
       for _ in 0 .. m {
-        let x = k;
-        k = g.next();
-        t.insert(x, k);
+        t.insert(g.next(), g.peek());
       }
       (t, KeyGen::new().next())
     });
@@ -186,6 +187,83 @@ fn bench_insert<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize) {
           }
           t.insert(g.next(), 0);
           k = k + 1;
+          n = n - 1;
+          if n == 0 { break 'done; }
+        }
+      }
+    }
+  });
+}
+
+#[divan::bench(
+  args = ARGS,
+  sample_count = SAMPLE_COUNT,
+  types = [
+    foldhash::HashMap<NonZeroU64, NonZeroU64>,
+    tangerine::map::HashMap<NonZeroU64, NonZeroU64>,
+    tangerine::old_map::HashMap<NonZeroU64, NonZeroU64>,
+    tangerine::two::HashMap<NonZeroU64>,
+  ])]
+#[inline(never)]
+fn bench_remove_insert_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: usize) {
+  let sizes = sizes_from_working_set(working_set);
+  let mut ts: [_; 10] =
+    sizes.map(|m| {
+      let mut t = T::new();
+      let mut g = KeyGen::new();
+      for _ in 0 .. m {
+        t.insert(g.next(), g.peek());
+      }
+      (t, KeyGen::new().next(), g)
+    });
+  bencher.bench_local(|| {
+    let mut n = N;
+    'done: loop {
+      for &mut (ref mut t, ref mut a, ref mut b) in ts.iter_mut() {
+        for _ in 0 .. 250 {
+          *a = t.remove(*a).unwrap();
+          n = n - 1;
+          if n == 0 { break 'done; }
+          // TODO: make insert depend on removed item??
+          let _ = t.insert(b.next(), b.peek());
+          n = n - 1;
+          if n == 0 { break 'done; }
+        }
+      }
+    }
+  });
+}
+
+#[divan::bench(
+  args = ARGS,
+  sample_count = SAMPLE_COUNT,
+  types = [
+    foldhash::HashMap<NonZeroU64, u64>,
+    tangerine::map::HashMap<NonZeroU64, u64>,
+    tangerine::old_map::HashMap<NonZeroU64, u64>,
+    tangerine::two::HashMap<u64>,
+  ])]
+#[inline(never)]
+fn bench_remove_insert_unchained<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize) {
+  let sizes = sizes_from_working_set(working_set);
+  let mut ts: [_; 10] =
+    sizes.map(|m| {
+      let mut t = T::new();
+      let mut g = KeyGen::new();
+      for i in 0 .. m {
+        t.insert(g.next(), i as u64);
+      }
+      (t, KeyGen::new(), g)
+    });
+  bencher.bench_local(|| {
+    let mut n = N;
+    'done: loop {
+      for &mut (ref mut t, ref mut a, ref mut b) in ts.iter_mut() {
+        for i in 0 .. 250 {
+          let _ = t.remove(a.next());
+          n = n - 1;
+          if n == 0 { break 'done; }
+          let _ = t.insert(b.next(), i);
           n = n - 1;
           if n == 0 { break 'done; }
         }
