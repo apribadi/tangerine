@@ -16,6 +16,8 @@ unused_lifetimes = "warn"
 unused_qualifications = "warn"
 unused_results = "warn"
 
+[features]
+
 [dependencies]
 dandelion-random = { git = "https://github.com/apribadi/dandelion.git", branch = "devel", features = ["rand_core", "thread_local"] }
 plain-old-pointer = { git = "https://github.com/apribadi/pop.git" }

@@ -4,7 +4,15 @@ use divan::Bencher;
 use divan::black_box;
 use crate::util::Map;
 
-const ARGS: [usize; 4] = [1_000, 10_000, 100_000, 1_000_000];
+const ARGS: [usize; 6] = [
+  1_000,
+  3_000,
+  10_000,
+  30_000,
+  100_000,
+  300_000,
+];
+
 const N: usize = 1_000_000;
 const SAMPLE_COUNT: u32 = 9;
 
@@ -73,7 +81,7 @@ impl KeyGen {
 #[inline(never)]
 fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
-  let mut t: [_; 10] =
+  let mut ts: [_; 10] =
     sizes.map(|m| {
       let mut t = T::new();
       let mut g = KeyGen::new();
@@ -81,23 +89,21 @@ fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: 
       for _ in 0 .. m {
         let x = k;
         k = g.next();
-        let y = k;
-        t.insert(x, y);
+        t.insert(x, k);
       }
-      t
+      (t, KeyGen::new().next())
     });
   bencher.bench_local(|| {
     let mut n = N;
-    let mut k = KeyGen::new().next();
     'done: loop {
-      for t in t.iter_mut() {
+      for &mut (ref mut t, ref mut k) in ts.iter_mut() {
         for _ in 0 .. 500 {
-          match t.get(k) {
+          match t.get(*k) {
             None => {
-              k = KeyGen::new().next();
+              *k = KeyGen::new().next();
             }
             Some(&y) => {
-              k = y;
+              *k = y;
             }
           };
           n = n - 1;
@@ -105,7 +111,6 @@ fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: 
         }
       }
     }
-    black_box(k)
   });
 }
 
