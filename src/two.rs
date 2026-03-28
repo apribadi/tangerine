@@ -1,6 +1,11 @@
 //! This module provides a fast hash map keyed by types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
+// TODO: IntoIterator
+// TODO: drain
+// TODO: try_insert
+// TODO: shrink_to_fit
+
 extern crate alloc;
 
 use alloc::alloc::Layout;
@@ -49,7 +54,7 @@ const fn ctz(n: usize) -> usize {
 
 #[inline(always)]
 const fn max(x: usize, y: usize) -> usize {
-  if y < x { x } else { y }
+  if x > y { x } else { y }
 }
 
 #[inline(always)]

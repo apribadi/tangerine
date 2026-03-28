@@ -66,7 +66,7 @@ const fn empty_table<K: Key, V>() -> *const Slot<K, V> {
 }
 
 #[inline(always)]
-fn ctz(n: usize) -> usize {
+const fn ctz(n: usize) -> usize {
   n.trailing_zeros() as usize
 }
 
@@ -81,14 +81,14 @@ const fn allocation_size<K: Key, V>(num_slots: usize) -> usize {
 }
 
 #[inline(always)]
-unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
+const unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
   let s = allocation_size::<K, V>(num_slots);
   let a = align_of::<Slot<K, V>>();
   unsafe { Layout::from_size_align_unchecked(s, a) }
 }
 
 #[inline(always)]
-fn capacity<K: Key>(s: usize) -> usize {
+const fn capacity<K: Key>(s: usize) -> usize {
   1 << K::BITS - s - 1
 }
 
