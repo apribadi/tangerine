@@ -37,50 +37,55 @@ unsafe impl<K: Key + Sync, V: Sync> Sync for HashMap<K, V> {
 }
 
 #[inline(always)]
-fn prefetch_read_l1<T>(#[allow(unused)] p: *const T) {
+fn prefetch_read_l1<T>(#[allow(unused_variables)] p: *const T) {
   #[cfg(feature = "nightly")]
   core::hint::prefetch_read(p, core::hint::Locality::L1)
 }
 
 #[inline(always)]
-fn ctz(n: usize) -> usize {
+const fn ctz(n: usize) -> usize {
   n.trailing_zeros() as usize
 }
 
 #[inline(always)]
-fn allocation_slot_size<K: Key, V>() -> usize {
+const fn max(x: usize, y: usize) -> usize {
+  if y < x { x } else { y }
+}
+
+#[inline(always)]
+const fn allocation_slot_size<K: Key, V>() -> usize {
   size_of::<K::Hash>() + size_of::<V>()
 }
 
 #[inline(always)]
-fn allocation_max_num_slots<K: Key, V>() -> usize {
+const fn allocation_max_num_slots<K: Key, V>() -> usize {
   isize::MAX as usize / allocation_slot_size::<K, V>()
 }
 
 #[inline(always)]
-fn allocation_size<K: Key, V>(num_slots: usize) -> usize {
+const fn allocation_size<K: Key, V>(num_slots: usize) -> usize {
   num_slots * allocation_slot_size::<K, V>()
 }
 
 #[inline(always)]
-fn allocation_align<K: Key, V>() -> usize {
-  usize::max(align_of::<K::Hash>(), align_of::<V>())
+const fn allocation_align<K: Key, V>() -> usize {
+  max(align_of::<K::Hash>(), align_of::<V>())
 }
 
 #[inline(always)]
-fn allocation_chunk<K: Key, V>() -> usize {
-  1 << usize::max(3, ctz(align_of::<V>()).saturating_sub(ctz(size_of::<K::Hash>())))
+const fn allocation_chunk<K: Key, V>() -> usize {
+  1 << max(3, ctz(align_of::<V>()).saturating_sub(ctz(size_of::<K::Hash>())))
 }
 
 #[inline(always)]
-unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
+const unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
   let s = allocation_size::<K, V>(num_slots);
   let a = allocation_align::<K, V>();
   unsafe { Layout::from_size_align_unchecked(s, a) }
 }
 
 #[inline(always)]
-fn capacity<K: Key>(s: usize) -> usize {
+const fn capacity<K: Key>(s: usize) -> usize {
   1 << K::BITS - s - 1
 }
 
@@ -360,14 +365,14 @@ impl<K: Key, V> HashMap<K, V> {
       let value = unsafe { u.wrapping_add(i).read() };
       let mut i = i;
       loop {
-        let x = unsafe { t.wrapping_add(i + 1).read() };
-        if ! (K::slot(x, s) <= i && /* likely */ x != K::ZERO) { break }
-        let y = unsafe { u.wrapping_add(i + 1).read() };
-        unsafe { t.wrapping_add(i).write(x) };
-        unsafe { u.wrapping_add(i).write(y) };
         i = i + 1;
+        let x = unsafe { t.wrapping_add(i).read() };
+        if ! (K::slot(x, s) <= i - 1 && /* likely */ x != K::ZERO) { break }
+        let y = unsafe { u.wrapping_add(i).read() };
+        unsafe { t.wrapping_add(i - 1).write(x) };
+        unsafe { u.wrapping_add(i - 1).write(y) };
       }
-      unsafe { t.wrapping_add(i).write(K::ZERO) };
+      unsafe { t.wrapping_add(i - 1).write(K::ZERO) };
       Some(value)
     }
   }

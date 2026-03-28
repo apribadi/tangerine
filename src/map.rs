@@ -35,15 +35,15 @@ pub struct HashMap<K: Key, V> {
   slack: usize,
 }
 
-struct Slot<K: Key, V> {
-  hash: K::Hash,
-  data: MaybeUninit<V>,
-}
-
 unsafe impl<K: Key + Send, V: Send> Send for HashMap<K, V> {
 }
 
 unsafe impl<K: Key + Sync, V: Sync> Sync for HashMap<K, V> {
+}
+
+struct Slot<K: Key, V> {
+  hash: K::Hash,
+  data: MaybeUninit<V>,
 }
 
 #[inline(always)]
@@ -355,14 +355,14 @@ impl<K: Key, V> HashMap<K, V> {
       let value = unsafe { slot_data(t.wrapping_add(i)).read() };
       let mut i = i;
       loop {
-        let x = unsafe { slot_hash(t.wrapping_add(i + 1)).read() };
-        if ! (K::slot(x, s) <= i && /* likely */ x != K::ZERO) { break }
-        let y = unsafe { slot_data(t.wrapping_add(i + 1)).read() };
-        unsafe { slot_hash(t.wrapping_add(i)).write(x) };
-        unsafe { slot_data(t.wrapping_add(i)).write(y) };
         i = i + 1;
+        let x = unsafe { slot_hash(t.wrapping_add(i)).read() };
+        if ! (K::slot(x, s) <= i - 1 && /* likely */ x != K::ZERO) { break }
+        let y = unsafe { slot_data(t.wrapping_add(i)).read() };
+        unsafe { slot_hash(t.wrapping_add(i - 1)).write(x) };
+        unsafe { slot_data(t.wrapping_add(i - 1)).write(y) };
       }
-      unsafe { slot_hash(t.wrapping_add(i)).write(K::ZERO) };
+      unsafe { slot_hash(t.wrapping_add(i - 1)).write(K::ZERO) };
       Some(value)
     }
   }
