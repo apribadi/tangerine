@@ -48,6 +48,12 @@ fn prefetch_read_l1<T>(#[allow(unused_variables)] p: *const T) {
 }
 
 #[inline(always)]
+fn prefetch_write_l1<T>(#[allow(unused_variables)] p: *mut T) {
+  #[cfg(feature = "nightly")]
+  core::hint::prefetch_write(p, core::hint::Locality::L1)
+}
+
+#[inline(always)]
 const fn ctz(n: usize) -> usize {
   n.trailing_zeros() as usize
 }
@@ -191,7 +197,7 @@ impl<K: Key, V> HashMap<K, V> {
     let u = self.data.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
-    prefetch_read_l1(u.wrapping_add(k));
+    prefetch_write_l1(u.wrapping_add(k));
     let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
@@ -275,11 +281,11 @@ impl<K: Key, V> HashMap<K, V> {
     let mut j = 0;
     loop {
       let x = unsafe { old_t.wrapping_add(i).read() };
-      let y = unsafe { old_u.wrapping_add(i).cast::<MaybeUninit<V>>().read() };
+      let v = unsafe { old_u.wrapping_add(i).cast::<MaybeUninit<V>>().read() };
       let k = K::slot(x, new_s);
       let k = select_unpredictable(j > k, j, k);
       unsafe { new_t.wrapping_add(k).write(x) };
-      unsafe { new_u.wrapping_add(k).cast::<MaybeUninit<V>>().write(y) };
+      unsafe { new_u.wrapping_add(k).cast::<MaybeUninit<V>>().write(v) };
       i = i + 1;
       j = select_unpredictable(x != K::ZERO, k + 1, j);
       if i == old_d { break }
@@ -305,7 +311,7 @@ impl<K: Key, V> HashMap<K, V> {
     let u = self.data.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
-    prefetch_read_l1(u.wrapping_add(k));
+    prefetch_write_l1(u.wrapping_add(k));
     let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
@@ -325,14 +331,14 @@ impl<K: Key, V> HashMap<K, V> {
         self.slack = r.wrapping_sub(1);
         let mut i = i;
         let mut x = x;
-        let mut y = MaybeUninit::new(value);
+        let mut v = value;
         unsafe { t.wrapping_add(i).write(h) };
         while x != K::ZERO {
-          y = unsafe { u.wrapping_add(i).cast::<MaybeUninit<V>>().replace(y) };
+          v = unsafe { u.wrapping_add(i).replace(v) };
           i = i + 1;
           x = unsafe { t.wrapping_add(i).replace(x) };
         }
-        unsafe { u.wrapping_add(i).cast::<MaybeUninit<V>>().write(y) };
+        unsafe { u.wrapping_add(i).write(v) };
         if r == 0 || addr_eq(t.wrapping_add(i + 1), u) {
           self.insert_grow(i);
         }
@@ -352,7 +358,7 @@ impl<K: Key, V> HashMap<K, V> {
     let u = self.data.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
-    prefetch_read_l1(u.wrapping_add(k));
+    prefetch_write_l1(u.wrapping_add(k));
     let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
@@ -373,9 +379,9 @@ impl<K: Key, V> HashMap<K, V> {
         i = i + 1;
         let x = unsafe { t.wrapping_add(i).read() };
         if ! (K::slot(x, s) <= i - 1 && /* likely */ x != K::ZERO) { break }
-        let y = unsafe { u.wrapping_add(i).cast::<MaybeUninit<V>>().read() };
+        let v = unsafe { u.wrapping_add(i).read() };
         unsafe { t.wrapping_add(i - 1).write(x) };
-        unsafe { u.wrapping_add(i - 1).cast::<MaybeUninit<V>>().write(y) };
+        unsafe { u.wrapping_add(i - 1).write(v) };
         // NOTE: We could do the loop exit test here instead.
       }
       unsafe { t.wrapping_add(i - 1).write(K::ZERO) };
@@ -690,6 +696,28 @@ impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
     let mut t = Self::new();
     iter.into_iter().for_each(|(x, y)| { let _ = t.insert(x, y); });
     t
+  }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, K: Key, V> IntoIterator for &'a HashMap<K, V> {
+  type Item = (K, &'a V);
+  type IntoIter = impl ExactSizeIterator<Item = Self::Item>;
+
+  #[inline(always)]
+  fn into_iter(self) -> Self::IntoIter {
+    self.iter()
+  }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, K: Key, V> IntoIterator for &'a mut HashMap<K, V> {
+  type Item = (K, &'a mut V);
+  type IntoIter = impl ExactSizeIterator<Item = Self::Item>;
+
+  #[inline(always)]
+  fn into_iter(self) -> Self::IntoIter {
+    self.iter_mut()
   }
 }
 

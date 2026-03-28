@@ -262,11 +262,11 @@ impl<K: Key, V> HashMap<K, V> {
     let mut j = 0;
     loop {
       let x = unsafe { slot_hash(a).read() };
-      let y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
+      let v = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
       let k = K::slot(x, new_s);
       let k = select_unpredictable(j > k, j, k);
       unsafe { slot_hash(new_t.wrapping_add(k)).write(x) };
-      unsafe { slot_data(new_t.wrapping_add(k)).cast::<MaybeUninit<V>>().write(y) };
+      unsafe { slot_data(new_t.wrapping_add(k)).cast::<MaybeUninit<V>>().write(v) };
       a = a.wrapping_add(1);
       j = select_unpredictable(x != K::ZERO, k + 1, j);
       if a == old_u { break }
@@ -312,14 +312,14 @@ impl<K: Key, V> HashMap<K, V> {
         self.slack = r.wrapping_sub(1);
         let mut a = a;
         let mut x = x;
-        let mut y = MaybeUninit::new(value);
+        let mut v = value;
         unsafe { slot_hash(a).write(h) };
         while x != K::ZERO {
-          y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().replace(y) };
+          v = unsafe { slot_data(a).replace(v) };
           a = a.wrapping_add(1);
           x = unsafe { slot_hash(a).replace(x) };
         }
-        unsafe { slot_data(a).cast::<MaybeUninit<V>>().write(y) };
+        unsafe { slot_data(a).write(v) };
         if r == 0 || a.wrapping_add(1) == u {
           self.insert_grow(a);
         }
@@ -358,9 +358,9 @@ impl<K: Key, V> HashMap<K, V> {
         i = i + 1;
         let x = unsafe { slot_hash(t.wrapping_add(i)).read() };
         if ! (K::slot(x, s) <= i - 1 && /* likely */ x != K::ZERO) { break }
-        let y = unsafe { slot_data(t.wrapping_add(i)).cast::<MaybeUninit<V>>().read() };
+        let v = unsafe { slot_data(t.wrapping_add(i)).read() };
         unsafe { slot_hash(t.wrapping_add(i - 1)).write(x) };
-        unsafe { slot_data(t.wrapping_add(i - 1)).cast::<MaybeUninit<V>>().write(y) };
+        unsafe { slot_data(t.wrapping_add(i - 1)).write(v) };
         // NOTE: We could do the loop exit test here instead.
       }
       unsafe { slot_hash(t.wrapping_add(i - 1)).write(K::ZERO) };
@@ -636,6 +636,28 @@ impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
     let mut t = Self::new();
     iter.into_iter().for_each(|(x, y)| { let _ = t.insert(x, y); });
     t
+  }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, K: Key, V> IntoIterator for &'a HashMap<K, V> {
+  type Item = (K, &'a V);
+  type IntoIter = impl ExactSizeIterator<Item = Self::Item>;
+
+  #[inline(always)]
+  fn into_iter(self) -> Self::IntoIter {
+    self.iter()
+  }
+}
+
+#[cfg(feature = "nightly")]
+impl<'a, K: Key, V> IntoIterator for &'a mut HashMap<K, V> {
+  type Item = (K, &'a mut V);
+  type IntoIter = impl ExactSizeIterator<Item = Self::Item>;
+
+  #[inline(always)]
+  fn into_iter(self) -> Self::IntoIter {
+    self.iter_mut()
   }
 }
 
