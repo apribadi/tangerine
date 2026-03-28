@@ -33,6 +33,12 @@ pub struct HashMap<K: Key, V> {
   slack: usize,
 }
 
+unsafe impl<K: Key + Send, V: Send> Send for HashMap<K, V> {
+}
+
+unsafe impl<K: Key + Sync, V: Sync> Sync for HashMap<K, V> {
+}
+
 #[inline(always)]
 fn ctz(n: usize) -> usize {
   n.trailing_zeros() as usize
