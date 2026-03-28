@@ -17,6 +17,7 @@ unused_qualifications = "warn"
 unused_results = "warn"
 
 [features]
+default = ["nightly"]
 nightly = []
 
 [dependencies]
