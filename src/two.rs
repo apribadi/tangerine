@@ -689,37 +689,32 @@ pub mod internal {
   }
 }
 
-/// ??
-pub fn get(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) -> Option<&u32> {
+#[allow(missing_docs)]
+pub fn get(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> Option<&u32> {
   t.get(key)
 }
 
-/// ??
-pub fn get_value(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) -> Option<u32> {
+#[allow(missing_docs)]
+pub fn get_value(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> Option<u32> {
   match t.get(key) { None => None, Some(&y) => Some(y) }
 }
 
-/// ??
-pub fn contains_key(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) -> bool {
+#[allow(missing_docs)]
+pub fn contains_key(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> bool {
   t.contains_key(key)
 }
 
-/// ??
-pub fn insert(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64, value: u32) {
+#[allow(missing_docs)]
+pub fn insert(t: &mut HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64, value: u32) {
   let _ = t.insert(key, value);
 }
 
-/// ??
-pub fn remove(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) {
+#[allow(missing_docs)]
+pub fn remove(t: &mut HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) {
   let _ = t.remove(key);
 }
 
-/// ??
-pub fn clear(t: &mut HashMap<core::num::NonZeroU64, u32>) {
+#[allow(missing_docs)]
+pub fn clear(t: &mut HashMap<std::num::NonZeroU64, u32>) {
   t.clear();
-}
-
-/// ??
-pub fn reset(t: &mut HashMap<core::num::NonZeroU64, u32>) {
-  t.reset();
 }
