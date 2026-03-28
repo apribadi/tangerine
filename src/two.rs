@@ -29,10 +29,10 @@ use crate::key::Key;
 pub struct HashMap<K: Key, V> {
   seed_inverted: K::Seed,
   seed: K::Seed,
+  slack: usize,
   shift: usize,
   hash: *const K::Hash,
   data: *const V,
-  slack: usize,
 }
 
 unsafe impl<K: Key + Send, V: Send> Send for HashMap<K, V> {
@@ -100,10 +100,10 @@ impl<K: Key, V> HashMap<K, V> {
     Self {
       seed_inverted: K::invert_seed(m),
       seed: m,
+      slack: capacity::<K>(K::BITS - 1),
       shift: K::BITS - 1,
       hash: K::INIT,
       data: null(),
-      slack: capacity::<K>(K::BITS - 1),
     }
   }
 
@@ -122,8 +122,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns the number of items.
   #[inline(always)]
   pub fn len(&self) -> usize {
-    let s = self.shift;
     let r = self.slack;
+    let s = self.shift;
     capacity::<K>(s) - r
   }
 
@@ -225,19 +225,19 @@ impl<K: Key, V> HashMap<K, V> {
     let k = K::slot(h, s);
     unsafe { t.wrapping_add(k).write(h) };
     unsafe { u.wrapping_add(k).write(value) };
+    self.slack = capacity::<K>(s) - 1;
     self.shift = s;
     self.hash = t;
     self.data = u;
-    self.slack = capacity::<K>(s) - 1;
   }
 
   #[inline(never)]
   #[cold]
   fn insert_grow(&mut self, last_write: usize) {
+    let old_r = self.slack.wrapping_add(1);
     let old_s = self.shift;
     let old_t = self.hash.cast_mut();
     let old_u = self.data.cast_mut();
-    let old_r = self.slack.wrapping_add(1);
     let old_d = unsafe { (old_u as *mut K::Hash).offset_from_unsigned(old_t) };
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
@@ -259,10 +259,10 @@ impl<K: Key, V> HashMap<K, V> {
     // table. We re-add the last write.
     unsafe { old_t.wrapping_add(last_write).write(h) };
     // Update struct fields.
+    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.shift = new_s;
     self.hash = new_t;
     self.data = new_u;
-    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     // Initialize new table.
     let mut i = new_d;
     loop {
@@ -299,10 +299,10 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let m = self.seed;
+    let r = self.slack;
     let s = self.shift;
     let t = self.hash.cast_mut();
     let u = self.data.cast_mut();
-    let r = self.slack;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_read_l1(u.wrapping_add(k));
@@ -346,10 +346,10 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn remove(&mut self, key: K) -> Option<V> {
     let m = self.seed;
+    let r = self.slack;
     let s = self.shift;
     let t = self.hash.cast_mut();
     let u = self.data.cast_mut();
-    let r = self.slack;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_read_l1(u.wrapping_add(k));
@@ -389,10 +389,10 @@ impl<K: Key, V> HashMap<K, V> {
   /// Panics if [`drop`]ping a value panics. If that happens, the map will be in
   /// a valid but otherwise unspecified state.
   pub fn clear(&mut self) {
+    let r = self.slack;
     let s = self.shift;
     let t = self.hash.cast_mut();
     let u = self.data.cast_mut();
-    let r = self.slack;
     if u.is_null() { return }
     let c = capacity::<K>(s);
     let n = c - r;
@@ -443,17 +443,17 @@ impl<K: Key, V> HashMap<K, V> {
   /// Panics if [`drop`]ping a value or deallocating memory panics. If that
   /// happens, the map will be in a valid but otherwise unspecified state.
   pub fn reset(&mut self) {
+    let r = self.slack;
     let s = self.shift;
     let t = self.hash.cast_mut();
     let u = self.data.cast_mut();
-    let r = self.slack;
     if u.is_null() { return }
     let n = capacity::<K>(s) - r;
     let d = unsafe { (u as *mut K::Hash).offset_from_unsigned(t) };
+    self.slack = capacity::<K>(K::BITS - 1);
     self.shift = K::BITS - 1;
     self.hash = K::INIT;
     self.data = null();
-    self.slack = capacity::<K>(K::BITS - 1);
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;
@@ -476,10 +476,10 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
     let m = self.seed_inverted;
+    let r = self.slack;
     let s = self.shift;
     let t = self.hash;
     let u = self.data;
-    let r = self.slack;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -495,10 +495,10 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V> {
     let m = self.seed_inverted;
+    let r = self.slack;
     let s = self.shift;
     let t = self.hash;
     let u = self.data;
-    let r = self.slack;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -513,10 +513,10 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V> {
     let m = self.seed_inverted;
+    let r = self.slack;
     let s = self.shift;
     let t = self.hash;
     let u = self.data;
-    let r = self.slack;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -531,10 +531,10 @@ impl<K: Key, V> HashMap<K, V> {
   /// type is `&V`.
   #[inline(always)]
   pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, K, V> {
+    let r = self.slack;
     let s = self.shift;
     let t = self.hash;
     let u = self.data;
-    let r = self.slack;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -549,10 +549,10 @@ impl<K: Key, V> HashMap<K, V> {
   /// iterator item type is `&mut V`.
   #[inline(always)]
   pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V> {
+    let r = self.slack;
     let s = self.shift;
     let t = self.hash;
     let u = self.data;
-    let r = self.slack;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
