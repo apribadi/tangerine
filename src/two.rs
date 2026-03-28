@@ -7,10 +7,7 @@ use alloc::alloc::Layout;
 use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
-use core::cmp::max;
 use core::fmt::Debug;
-use core::hint::Locality;
-use core::hint::prefetch_read;
 use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
@@ -40,6 +37,12 @@ unsafe impl<K: Key + Sync, V: Sync> Sync for HashMap<K, V> {
 }
 
 #[inline(always)]
+fn prefetch_read_l1<T>(#[allow(unused)] p: *const T) {
+  #[cfg(feature = "nightly")]
+  core::hint::prefetch_read(p, core::hint::Locality::L1)
+}
+
+#[inline(always)]
 fn ctz(n: usize) -> usize {
   n.trailing_zeros() as usize
 }
@@ -61,12 +64,12 @@ fn allocation_size<K: Key, V>(num_slots: usize) -> usize {
 
 #[inline(always)]
 fn allocation_align<K: Key, V>() -> usize {
-  max(align_of::<K::Hash>(), align_of::<V>())
+  usize::max(align_of::<K::Hash>(), align_of::<V>())
 }
 
 #[inline(always)]
 fn allocation_chunk<K: Key, V>() -> usize {
-  1 << max(3, ctz(align_of::<V>()).saturating_sub(ctz(size_of::<K::Hash>())))
+  1 << usize::max(3, ctz(align_of::<V>()).saturating_sub(ctz(size_of::<K::Hash>())))
 }
 
 #[inline(always)]
@@ -150,7 +153,7 @@ impl<K: Key, V> HashMap<K, V> {
     let u = self.data;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
-    prefetch_read(u.wrapping_add(k), Locality::L1);
+    prefetch_read_l1(u.wrapping_add(k));
     let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
@@ -175,10 +178,10 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed;
     let s = self.shift;
     let t = self.hash;
-    let u = self.data as *mut V;
+    let u = self.data.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
-    prefetch_read(u.wrapping_add(k), Locality::L1);
+    prefetch_read_l1(u.wrapping_add(k));
     let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
@@ -207,7 +210,7 @@ impl<K: Key, V> HashMap<K, V> {
     let l = unsafe { allocation_layout::<K, V>(d) };
     let t = unsafe { alloc(l) } as *mut K::Hash;
     if t.is_null() { match handle_alloc_error(l) { } }
-    unsafe { write_bytes(t, 0x00, d) };
+    unsafe { write_bytes(t, 0x00u8, d) };
     let u = t.wrapping_add(d) as *mut V;
     let k = K::slot(h, s);
     unsafe { t.wrapping_add(k).write(h) };
@@ -222,11 +225,11 @@ impl<K: Key, V> HashMap<K, V> {
   #[cold]
   fn insert_grow(&mut self, last_write: usize) {
     let old_s = self.shift;
-    let old_t = self.hash as *mut K::Hash;
-    let old_u = self.data as *mut V;
+    let old_t = self.hash.cast_mut();
+    let old_u = self.data.cast_mut();
     let old_r = self.slack.wrapping_add(1);
-    let old_w = 1 << K::BITS - old_s;
     let old_d = unsafe { (old_u as *mut K::Hash).offset_from_unsigned(old_t) };
+    let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
     // Temporarily place the table in a valid state in case we panic.
     self.slack = old_r;
@@ -254,7 +257,7 @@ impl<K: Key, V> HashMap<K, V> {
     let mut i = new_d;
     loop {
       i = i - 8;
-      unsafe { write_bytes(new_t.wrapping_add(i), 0x00, 8) };
+      unsafe { write_bytes(new_t.wrapping_add(i), 0x00u8, 8) };
       if i == 0 { break }
     }
     // Copy slots.
@@ -287,12 +290,12 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let m = self.seed;
     let s = self.shift;
-    let t = self.hash as *mut K::Hash;
-    let u = self.data as *mut V;
+    let t = self.hash.cast_mut();
+    let u = self.data.cast_mut();
     let r = self.slack;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
-    prefetch_read(u.wrapping_add(k), Locality::L1);
+    prefetch_read_l1(u.wrapping_add(k));
     let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
@@ -334,12 +337,12 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn remove(&mut self, key: K) -> Option<V> {
     let m = self.seed;
     let s = self.shift;
-    let t = self.hash as *mut K::Hash;
-    let u = self.data as *mut V;
+    let t = self.hash.cast_mut();
+    let u = self.data.cast_mut();
     let r = self.slack;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
-    prefetch_read(u.wrapping_add(k), Locality::L1);
+    prefetch_read_l1(u.wrapping_add(k));
     let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
@@ -377,8 +380,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// a valid but otherwise unspecified state.
   pub fn clear(&mut self) {
     let s = self.shift;
-    let t = self.hash as *mut K::Hash;
-    let u = self.data as *mut V;
+    let t = self.hash.cast_mut();
+    let u = self.data.cast_mut();
     let r = self.slack;
     if u.is_null() { return }
     let c = capacity::<K>(s);
@@ -416,7 +419,7 @@ impl<K: Key, V> HashMap<K, V> {
         let mut i = d;
         loop {
           i = i - 8;
-          unsafe { write_bytes(t.wrapping_add(i), 0x00, 8) };
+          unsafe { write_bytes(t.wrapping_add(i), 0x00u8, 8) };
           if i == 0 { break }
         }
       }
@@ -431,8 +434,8 @@ impl<K: Key, V> HashMap<K, V> {
   /// happens, the map will be in a valid but otherwise unspecified state.
   pub fn reset(&mut self) {
     let s = self.shift;
-    let t = self.hash as *mut K::Hash;
-    let u = self.data as *mut V;
+    let t = self.hash.cast_mut();
+    let u = self.data.cast_mut();
     let r = self.slack;
     if u.is_null() { return }
     let n = capacity::<K>(s) - r;
@@ -465,13 +468,13 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
     let m = self.seed_inverted;
     let s = self.shift;
-    let t = self.hash as *mut K::Hash;
+    let t = self.hash;
     let u = self.data;
     let r = self.slack;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        idx: unsafe { (u as *mut K::Hash).offset_from_unsigned(t) },
+        idx: unsafe { (u as *const K::Hash).offset_from_unsigned(t) },
         ptr: t,
         fun: move |x, i| unsafe { (K::invert_hash(x, m), &*u.wrapping_add(i)) }
       };
@@ -654,7 +657,7 @@ impl<K: Key, V: Clone> Clone for HashMap<K, V> {
 
 impl <K: Key + Debug, V: Debug> Debug for HashMap<K, V> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    let mut a = self.iter().collect::<Box<[_]>>();
+    let mut a = self.iter().collect::<Box<[(K, &V)]>>();
     a.sort_by_key(|&(x, _)| x);
     f.debug_map().entries(a).finish()
   }
@@ -663,6 +666,12 @@ impl <K: Key + Debug, V: Debug> Debug for HashMap<K, V> {
 impl<K: Key, V> Default for HashMap<K, V> {
   fn default() -> Self {
     Self::new()
+  }
+}
+
+impl<K: Key, V> Extend<(K, V)> for HashMap<K, V> {
+  fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
+    iter.into_iter().for_each(|(k, v)| { let _ = self.insert(k, v); });
   }
 }
 

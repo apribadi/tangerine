@@ -1,4 +1,4 @@
-#![feature(hint_prefetch)]
+#![cfg_attr(feature = "nightly", feature(hint_prefetch))]
 #![doc = include_str!("../README.md")]
 
 pub mod key;

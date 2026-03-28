@@ -236,15 +236,15 @@ impl<K: Key, V> HashMap<K, V> {
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
     // Temporarily place the table in a valid state in case we panic.
-    let h = unsafe { slot_hash(last_write).replace(K::ZERO) };
     self.slack = old_r;
+    let h = unsafe { slot_hash(last_write).replace(K::ZERO) };
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
     let new_e = if last_write.wrapping_add(1) == old_u { 2 * old_e } else { old_e };
     let new_d = new_w + new_e;
     // Panic if the layout would overflow.
     assert!(new_d <= allocation_max_num_slots::<K, V>());
-    // Alloc.
+    // Allocate.
     let new_l = unsafe { allocation_layout::<K, V>(new_d) };
     let new_t = unsafe { alloc_zeroed(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
@@ -412,8 +412,8 @@ impl<K: Key, V> HashMap<K, V> {
         self.slack = c;
         let mut a = u;
         loop {
-          a = a.wrapping_sub(1);
-          unsafe { write_bytes(a, 0, 1) };
+          a = a.wrapping_sub(8);
+          unsafe { write_bytes(a, 0x00u8, 8) };
           if a == t { break }
         }
       }
