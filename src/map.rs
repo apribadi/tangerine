@@ -312,14 +312,14 @@ impl<K: Key, V> HashMap<K, V> {
         self.slack = r.wrapping_sub(1);
         let mut a = a;
         let mut x = x;
-        let mut y = value;
+        let mut y = MaybeUninit::new(value);
         unsafe { slot_hash(a).write(h) };
         while x != K::ZERO {
-          y = unsafe { slot_data(a).replace(y) };
+          y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().replace(y) };
           a = a.wrapping_add(1);
           x = unsafe { slot_hash(a).replace(x) };
         }
-        unsafe { slot_data(a).write(y) };
+        unsafe { slot_data(a).cast::<MaybeUninit<V>>().write(y) };
         if r == 0 || a.wrapping_add(1) == u {
           self.insert_grow(a);
         }
@@ -358,9 +358,10 @@ impl<K: Key, V> HashMap<K, V> {
         i = i + 1;
         let x = unsafe { slot_hash(t.wrapping_add(i)).read() };
         if ! (K::slot(x, s) <= i - 1 && /* likely */ x != K::ZERO) { break }
-        let y = unsafe { slot_data(t.wrapping_add(i)).read() };
+        let y = unsafe { slot_data(t.wrapping_add(i)).cast::<MaybeUninit<V>>().read() };
         unsafe { slot_hash(t.wrapping_add(i - 1)).write(x) };
-        unsafe { slot_data(t.wrapping_add(i - 1)).write(y) };
+        unsafe { slot_data(t.wrapping_add(i - 1)).cast::<MaybeUninit<V>>().write(y) };
+        // NOTE: We could do the loop exit test here instead.
       }
       unsafe { slot_hash(t.wrapping_add(i - 1)).write(K::ZERO) };
       Some(value)

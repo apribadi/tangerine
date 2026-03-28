@@ -4,6 +4,8 @@ use divan::Bencher;
 use divan::black_box;
 use crate::util::Map;
 
+// TODO: keyed by NonZeroU32
+
 const ARGS: [usize; 7] = [
   1_000,
   3_000,
