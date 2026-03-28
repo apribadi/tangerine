@@ -4,13 +4,14 @@ use divan::Bencher;
 use divan::black_box;
 use crate::util::Map;
 
-const ARGS: [usize; 6] = [
+const ARGS: [usize; 7] = [
   1_000,
   3_000,
   10_000,
   30_000,
   100_000,
   300_000,
+  1_000_000,
 ];
 
 const N: usize = 1_000_000;

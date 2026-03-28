@@ -48,7 +48,6 @@ static EMPTY_TABLE: u64 = 0;
 #[inline(always)]
 fn capacity(w: usize) -> usize {
   (w >> 1) - (w >> 3) // ~ 0.375
-  // w >> 1
 }
 
 #[inline(always)]
@@ -834,34 +833,32 @@ pub mod internal {
   }
 }
 
-/*
 #[allow(missing_docs)]
-pub fn get(t: &HashMap<std::num::NonZeroU64, u64>, key: std::num::NonZeroU64) -> Option<&u64> {
+pub fn get(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> Option<&u32> {
   t.get(key)
 }
 
 #[allow(missing_docs)]
-pub fn get_value(t: &HashMap<std::num::NonZeroU64, u64>, key: std::num::NonZeroU64) -> Option<u64> {
+pub fn get_value(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> Option<u32> {
   match t.get(key) { None => None, Some(&y) => Some(y) }
 }
 
 #[allow(missing_docs)]
-pub fn contains_key(t: &HashMap<std::num::NonZeroU64, u64>, key: std::num::NonZeroU64) -> bool {
+pub fn contains_key(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> bool {
   t.contains_key(key)
 }
 
 #[allow(missing_docs)]
-pub fn insert(t: &mut HashMap<std::num::NonZeroU64, u64>, key: std::num::NonZeroU64, value: u64) {
+pub fn insert(t: &mut HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64, value: u32) {
   let _ = t.get_and_insert(key, value);
 }
 
 #[allow(missing_docs)]
-pub fn remove(t: &mut HashMap<std::num::NonZeroU64, u64>, key: std::num::NonZeroU64) {
+pub fn remove(t: &mut HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) {
   let _ = t.get_and_remove(key);
 }
 
 #[allow(missing_docs)]
-pub fn clear(t: &mut HashMap<std::num::NonZeroU64, u64>) {
+pub fn clear(t: &mut HashMap<std::num::NonZeroU64, u32>) {
   t.clear();
 }
-*/

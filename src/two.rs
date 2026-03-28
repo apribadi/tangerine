@@ -471,7 +471,6 @@ impl<K: Key, V> HashMap<K, V> {
     unsafe { dealloc(t as *mut u8, allocation_layout::<K, V>(d)) };
   }
 
-
   /// Returns an iterator yielding each key and a reference to its associated
   /// value. The iterator item type is `(K, &V)`.
   #[inline(always)]

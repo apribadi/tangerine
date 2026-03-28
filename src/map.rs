@@ -98,8 +98,8 @@ impl<K: Key, V> HashMap<K, V> {
     Self {
       seed_inverted: K::invert_seed(m),
       seed: m,
-      table: empty_table::<K, V>(),
       shift: K::BITS - 1,
+      table: empty_table::<K, V>(),
       limit: null(),
       slack: capacity::<K>(K::BITS - 1),
     }
@@ -134,9 +134,9 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns whether the map contains the given key.
   #[inline(always)]
   pub fn contains_key(&self, key: K) -> bool {
-    let t = self.table as *mut Slot<K, V>;
     let m = self.seed;
     let s = self.shift;
+    let t = self.table as *mut Slot<K, V>;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -156,9 +156,9 @@ impl<K: Key, V> HashMap<K, V> {
   /// present.
   #[inline(always)]
   pub fn get(&self, key: K) -> Option<&V> {
-    let t = self.table as *mut Slot<K, V>;
     let m = self.seed;
     let s = self.shift;
+    let t = self.table as *mut Slot<K, V>;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -183,9 +183,9 @@ impl<K: Key, V> HashMap<K, V> {
   /// if present.
   #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
-    let t = self.table as *mut Slot<K, V>;
     let m = self.seed;
     let s = self.shift;
+    let t = self.table as *mut Slot<K, V>;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -219,8 +219,8 @@ impl<K: Key, V> HashMap<K, V> {
     let k = K::slot(h, s);
     unsafe { slot_hash(t.wrapping_add(k)).write(h) };
     unsafe { slot_data(t.wrapping_add(k)).write(value) };
-    self.table = t;
     self.shift = s;
+    self.table = t;
     self.limit = t.wrapping_add(d);
     self.slack = capacity::<K>(s) - 1;
   }
@@ -228,8 +228,8 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(never)]
   #[cold]
   fn insert_grow(&mut self, last_write: *mut Slot<K, V>) {
-    let old_t = self.table as *mut Slot<K, V>;
     let old_s = self.shift;
+    let old_t = self.table as *mut Slot<K, V>;
     let old_u = self.limit as *mut Slot<K, V>;
     let old_r = self.slack.wrapping_add(1);
     let old_d = unsafe { old_u.offset_from_unsigned(old_t) };
@@ -253,8 +253,8 @@ impl<K: Key, V> HashMap<K, V> {
     // table. We re-add the last write.
     unsafe { slot_hash(last_write).write(h) };
     // Update struct fields.
-    self.table = new_t;
     self.shift = new_s;
+    self.table = new_t;
     self.limit = new_u;
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     // Copy slots.
@@ -285,9 +285,9 @@ impl<K: Key, V> HashMap<K, V> {
   /// state.
   #[inline(always)]
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-    let t = self.table as *mut Slot<K, V>;
     let m = self.seed;
     let s = self.shift;
+    let t = self.table as *mut Slot<K, V>;
     let r = self.slack;
     let u = self.limit as *mut Slot<K, V>;
     let h = K::hash(key, m);
