@@ -33,8 +33,6 @@ pub struct HashMap<K: Key, V> {
   slack: usize,
 }
 
-static EMPTY: [u64; 3] = [0u64; 3];
-
 #[inline(always)]
 fn ctz(n: usize) -> usize {
   n.trailing_zeros() as usize
@@ -84,7 +82,7 @@ impl<K: Key, V> HashMap<K, V> {
       seed_inverted: K::invert_seed(m),
       seed: m,
       shift: K::BITS - 1,
-      hash: &raw const EMPTY as *const K::Hash,
+      hash: K::INIT,
       data: null(),
       slack: capacity::<K>(K::BITS - 1),
     }
@@ -221,26 +219,25 @@ impl<K: Key, V> HashMap<K, V> {
     let old_t = self.hash as *mut K::Hash;
     let old_u = self.data as *mut V;
     let old_r = self.slack.wrapping_add(1);
-    let old_d = unsafe { (old_u as *mut K::Hash).offset_from_unsigned(old_t) };
     let old_w = 1 << K::BITS - old_s;
+    let old_d = unsafe { (old_u as *mut K::Hash).offset_from_unsigned(old_t) };
     let old_e = old_d - old_w;
     // Temporarily place the table in a valid state in case we panic.
-    let h = unsafe { old_t.wrapping_add(last_write).replace(K::ZERO) };
     self.slack = old_r;
+    let h = unsafe { old_t.wrapping_add(last_write).replace(K::ZERO) };
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
     let new_e = if last_write + 1 == old_d { 2 * old_e } else { old_e };
     let new_d = new_w + new_e;
     // Panic if the layout would overflow.
     assert!(new_d <= allocation_max_num_slots::<K, V>());
-    // Alloc.
+    // Allocate.
     let new_l = unsafe { allocation_layout::<K, V>(new_d) };
     let new_t = unsafe { alloc(new_l) } as *mut K::Hash;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
     let new_u = new_t.wrapping_add(new_d) as *mut V;
     // At this point, we're guaranteed to successfully finish growing the
     // table. We re-add the last write.
-    // We re-add the last write and compute some values that include that slot.
     unsafe { old_t.wrapping_add(last_write).write(h) };
     // Update struct fields.
     self.shift = new_s;
@@ -435,7 +432,7 @@ impl<K: Key, V> HashMap<K, V> {
     let n = capacity::<K>(s) - r;
     let d = unsafe { (u as *mut K::Hash).offset_from_unsigned(t) };
     self.shift = K::BITS - 1;
-    self.hash = &raw const EMPTY as *const K::Hash;
+    self.hash = K::INIT;
     self.data = null();
     self.slack = capacity::<K>(K::BITS - 1);
     if needs_drop::<V>() {

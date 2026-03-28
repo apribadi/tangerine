@@ -74,6 +74,10 @@ fn invert_u64(a: u64) -> u64 {
   x
 }
 
+static INIT_U32: [u32; 3] = [0u32; 3];
+
+static INIT_U64: [u64; 3] = [0u64; 3];
+
 unsafe impl private::Key for NonZeroU32 {
   type Seed = (u32, u32);
 
@@ -82,6 +86,8 @@ unsafe impl private::Key for NonZeroU32 {
   const BITS: usize = 32;
 
   const ZERO: Self::Hash = 0;
+
+  const INIT: *const Self::Hash = &raw const INIT_U32 as *const Self::Hash;
 
   #[inline(always)]
   fn seed_nondet() -> Self::Seed {
@@ -139,6 +145,8 @@ unsafe impl private::Key for NonZeroU64 {
 
   const ZERO: Self::Hash = 0;
 
+  const INIT: *const Self::Hash = &raw const INIT_U64 as *const Self::Hash;
+
   #[inline(always)]
   fn seed_nondet() -> Self::Seed {
     let n = dandelion::thread_local::u128();
@@ -194,6 +202,8 @@ unsafe impl<T: IntoKey> private::Key for T {
 
   const ZERO: Self::Hash = <T::Key as private::Key>::ZERO;
 
+  const INIT: *const Self::Hash = <T::Key as private::Key>::INIT;
+
   #[inline(always)]
   fn seed_nondet() -> Self::Seed {
     <T::Key as private::Key>::seed_nondet()
@@ -236,6 +246,8 @@ pub(crate) mod private {
     const BITS: usize;
 
     const ZERO: Self::Hash;
+
+    const INIT: *const Self::Hash;
 
     fn seed_nondet() -> Self::Seed;
 
