@@ -259,16 +259,16 @@ impl<K: Key, V> HashMap<K, V> {
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     // Copy slots.
     let mut a = old_t;
-    let mut i = 0;
+    let mut j = 0;
     loop {
       let x = unsafe { slot_hash(a).read() };
       let y = unsafe { slot_data(a).cast::<MaybeUninit<V>>().read() };
       let k = K::slot(x, new_s);
-      let k = select_unpredictable(i > k, i, k);
+      let k = select_unpredictable(j > k, j, k);
       unsafe { slot_hash(new_t.wrapping_add(k)).write(x) };
       unsafe { slot_data(new_t.wrapping_add(k)).cast::<MaybeUninit<V>>().write(y) };
       a = a.wrapping_add(1);
-      i = select_unpredictable(x != K::ZERO, k + 1, i);
+      j = select_unpredictable(x != K::ZERO, k + 1, j);
       if a == old_u { break }
     }
     // The map is now in a valid state, even if deallocating panics.
