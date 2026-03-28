@@ -62,7 +62,7 @@ static EMPTY_TABLE: [u64; 12] = [0u64; 12];
 const fn empty_table<K: Key, V>() -> *const Slot<K, V> {
   // TODO:
   const { assert!(size_of::<Slot<K, V>>() <= 32) };
-  &EMPTY_TABLE as *const u64 as *const Slot<K, V>
+  &raw const EMPTY_TABLE as *const Slot<K, V>
 }
 
 #[inline(always)]
@@ -136,7 +136,7 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn contains_key(&self, key: K) -> bool {
     let m = self.seed;
     let s = self.shift;
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -158,7 +158,7 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn get(&self, key: K) -> Option<&V> {
     let m = self.seed;
     let s = self.shift;
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -185,7 +185,7 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let m = self.seed;
     let s = self.shift;
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -230,8 +230,8 @@ impl<K: Key, V> HashMap<K, V> {
   fn insert_grow(&mut self, last_write: *mut Slot<K, V>) {
     let old_r = self.slack.wrapping_add(1);
     let old_s = self.shift;
-    let old_t = self.table as *mut Slot<K, V>;
-    let old_u = self.limit as *mut Slot<K, V>;
+    let old_t = self.table.cast_mut();
+    let old_u = self.limit.cast_mut();
     let old_d = unsafe { old_u.offset_from_unsigned(old_t) };
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
@@ -253,10 +253,10 @@ impl<K: Key, V> HashMap<K, V> {
     // table. We re-add the last write.
     unsafe { slot_hash(last_write).write(h) };
     // Update struct fields.
+    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.shift = new_s;
     self.table = new_t;
     self.limit = new_u;
-    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     // Copy slots.
     let mut a = old_t;
     let mut j = 0;
@@ -288,8 +288,8 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed;
     let r = self.slack;
     let s = self.shift;
-    let t = self.table as *mut Slot<K, V>;
-    let u = self.limit as *mut Slot<K, V>;
+    let t = self.table.cast_mut();
+    let u = self.limit.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let b = t.wrapping_add(k);
@@ -335,7 +335,7 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed;
     let r = self.slack;
     let s = self.shift;
-    let t = self.table as *mut Slot<K, V>;
+    let t = self.table.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     let y = unsafe { slot_hash(t.wrapping_add(k)).read() };
@@ -376,8 +376,8 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn clear(&mut self) {
     let r = self.slack;
     let s = self.shift;
-    let t = self.table as *mut Slot<K, V>;
-    let u = self.limit as *mut Slot<K, V>;
+    let t = self.table.cast_mut();
+    let u = self.limit.cast_mut();
     if u.is_null() { return }
     let c = capacity::<K>(s);
     let n = c - r;
@@ -429,8 +429,8 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn reset(&mut self) {
     let r = self.slack;
     let s = self.shift;
-    let t = self.table as *mut Slot<K, V>;
-    let u = self.limit as *mut Slot<K, V>;
+    let t = self.table.cast_mut();
+    let u = self.limit.cast_mut();
     if u.is_null() { return }
     let n = capacity::<K>(s) - r;
     let d = unsafe { u.offset_from_unsigned(t) };
@@ -462,7 +462,7 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed_inverted;
     Iter {
       len: capacity::<K>(self.shift) - self.slack,
-      ptr: self.limit as *mut Slot<K, V>,
+      ptr: self.limit.cast_mut(),
       fun: move |x, a| unsafe { (K::invert_hash(x, m), &*slot_data(a)) }
     }
   }
@@ -474,7 +474,7 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed_inverted;
     Iter {
       len: capacity::<K>(self.shift) - self.slack,
-      ptr: self.limit as *mut Slot<K, V>,
+      ptr: self.limit.cast_mut(),
       fun: move |x, a| unsafe { (K::invert_hash(x, m), &mut *slot_data(a)) }
     }
   }
@@ -485,7 +485,7 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed_inverted;
     Iter {
       len: capacity::<K>(self.shift) - self.slack,
-      ptr: self.limit as *mut Slot<K, V>,
+      ptr: self.limit.cast_mut(),
       fun: move |x, _| unsafe { K::invert_hash(x, m) }
     }
   }
@@ -496,7 +496,7 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, K, V> {
     Iter {
       len: capacity::<K>(self.shift) - self.slack,
-      ptr: self.limit as *mut Slot<K, V>,
+      ptr: self.limit.cast_mut(),
       fun: move |_, a| unsafe { &*slot_data(a) }
     }
   }
@@ -507,7 +507,7 @@ impl<K: Key, V> HashMap<K, V> {
   pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V> {
     Iter {
       len: capacity::<K>(self.shift) - self.slack,
-      ptr: self.limit as *mut Slot<K, V>,
+      ptr: self.limit.cast_mut(),
       fun: move |_, a| unsafe { &mut *slot_data(a) }
     }
   }

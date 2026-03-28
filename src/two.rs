@@ -141,7 +141,7 @@ impl<K: Key, V> HashMap<K, V> {
     let t = self.hash;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
-    let z = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
     loop {
@@ -149,7 +149,7 @@ impl<K: Key, V> HashMap<K, V> {
       x = unsafe { t.wrapping_add(i).read() };
       if ! (x > h) { break }
     }
-    let x = select_unpredictable(z > h, x, z);
+    let x = select_unpredictable(y > h, x, y);
     x == h
   }
 
@@ -164,7 +164,7 @@ impl<K: Key, V> HashMap<K, V> {
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_read_l1(u.wrapping_add(k));
-    let z = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
     loop {
@@ -172,8 +172,8 @@ impl<K: Key, V> HashMap<K, V> {
       x = unsafe { t.wrapping_add(i).read() };
       if ! (x > h) { break }
     }
-    let i = select_unpredictable(z > h, i, k);
-    let x = select_unpredictable(z > h, x, z);
+    let i = select_unpredictable(y > h, i, k);
+    let x = select_unpredictable(y > h, x, y);
     if x != h {
       None
     } else {
@@ -192,7 +192,7 @@ impl<K: Key, V> HashMap<K, V> {
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_read_l1(u.wrapping_add(k));
-    let z = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
     loop {
@@ -200,8 +200,8 @@ impl<K: Key, V> HashMap<K, V> {
       x = unsafe { t.wrapping_add(i).read() };
       if ! (x > h) { break }
     }
-    let i = select_unpredictable(z > h, i, k);
-    let x = select_unpredictable(z > h, x, z);
+    let i = select_unpredictable(y > h, i, k);
+    let x = select_unpredictable(y > h, x, y);
     if x != h {
       None
     } else {
@@ -306,7 +306,7 @@ impl<K: Key, V> HashMap<K, V> {
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_read_l1(u.wrapping_add(k));
-    let z = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
     loop {
@@ -314,8 +314,8 @@ impl<K: Key, V> HashMap<K, V> {
       x = unsafe { t.wrapping_add(i).read() };
       if ! (x > h) { break }
     }
-    let i = select_unpredictable(z > h, i, k);
-    let x = select_unpredictable(z > h, x, z);
+    let i = select_unpredictable(y > h, i, k);
+    let x = select_unpredictable(y > h, x, y);
     if x == h {
       Some(unsafe { u.wrapping_add(i).replace(value) })
     } else {
@@ -353,7 +353,7 @@ impl<K: Key, V> HashMap<K, V> {
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_read_l1(u.wrapping_add(k));
-    let z = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.wrapping_add(k).read() };
     let mut i = k;
     let mut x;
     loop {
@@ -361,8 +361,8 @@ impl<K: Key, V> HashMap<K, V> {
       x = unsafe { t.wrapping_add(i).read() };
       if ! (x > h) { break }
     }
-    let i = select_unpredictable(z > h, i, k);
-    let x = select_unpredictable(z > h, x, z);
+    let i = select_unpredictable(y > h, i, k);
+    let x = select_unpredictable(y > h, x, y);
     if x != h {
       None
     } else {
@@ -567,7 +567,7 @@ impl<K: Key, V> HashMap<K, V> {
     let t = self.hash;
     let u = self.data;
     if u.is_null() { return 0 }
-    unsafe { (u as *mut K::Hash).offset_from_unsigned(t) }
+    unsafe { (u as *const K::Hash).offset_from_unsigned(t) }
   }
 
   fn internal_allocation_size(&self) -> usize {
