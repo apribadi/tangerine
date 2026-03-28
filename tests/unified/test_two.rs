@@ -78,7 +78,7 @@ fn test_basic() {
 #[test]
 fn test_empty() {
   let mut s = String::new();
-  let t = HashMap::<u64>::new();
+  let t = HashMap::<NonZeroU64, u64>::new();
 
   write!(s, "num_slots = {}\n", tangerine::two::internal::num_slots(&t)).unwrap();
   write!(s, "load = {}\n", tangerine::two::internal::load_factor(&t)).unwrap();
@@ -132,7 +132,7 @@ fn test_iter() -> Result<(), std::fmt::Error> {
 fn test_1() -> Result<(), std::fmt::Error> {
   let mut g = Rng::from_u64(0);
   let mut s = String::new();
-  let mut t = HashMap::<u64>::new_seeded(&mut g);
+  let mut t = HashMap::<NonZeroU64, u64>::new_seeded(&mut g);
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();

@@ -152,34 +152,6 @@ impl<K: Key, V> HashMap<K, V> {
     x == h
   }
 
-  /*
-  /// Returns a reference to the value associated with the given key, if
-  /// present.
-  #[inline(always)]
-  pub fn get(&self, key: K) -> Option<&V> {
-    let t = self.table as *mut Slot<K, V>;
-    let m = self.seed;
-    let s = self.shift;
-    let h = K::hash(key, m);
-    let k = K::slot(h, s);
-    let a = t.wrapping_add(k);
-    let b = t.wrapping_add(k + 1);
-    let x = unsafe { slot_hash(a).read() };
-    let y = unsafe { slot_hash(b).read() };
-    let mut a = select_unpredictable(x > h, b, a);
-    let mut x = select_unpredictable(x > h, y, x);
-    while x > h {
-      a = a.wrapping_add(1);
-      x = unsafe { slot_hash(a).read() };
-    }
-    if x != h {
-      None
-    } else {
-      Some(unsafe { &*slot_data(a) })
-    }
-  }
-  */
-
   /// Returns a reference to the value associated with the given key, if
   /// present.
   #[inline(always)]

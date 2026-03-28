@@ -80,7 +80,7 @@ impl KeyGen {
     foldhash::HashMap<NonZeroU64, NonZeroU64>,
     tangerine::map::HashMap<NonZeroU64, NonZeroU64>,
     tangerine::old_map::HashMap<NonZeroU64, NonZeroU64>,
-    tangerine::two::HashMap<NonZeroU64>,
+    tangerine::two::HashMap<NonZeroU64, NonZeroU64>,
   ])]
 #[inline(never)]
 fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -122,7 +122,7 @@ fn bench_get_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: 
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
     tangerine::old_map::HashMap<NonZeroU64, u64>,
-    tangerine::two::HashMap<u64>,
+    tangerine::two::HashMap<NonZeroU64, u64>,
   ])]
 #[inline(never)]
 fn bench_get_unchained<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -167,7 +167,7 @@ fn bench_get_unchained<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
     tangerine::old_map::HashMap<NonZeroU64, u64>,
-    tangerine::two::HashMap<u64>,
+    tangerine::two::HashMap<NonZeroU64, u64>,
   ])]
 #[inline(never)]
 fn bench_insert<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -202,7 +202,7 @@ fn bench_insert<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize) {
     foldhash::HashMap<NonZeroU64, NonZeroU64>,
     tangerine::map::HashMap<NonZeroU64, NonZeroU64>,
     tangerine::old_map::HashMap<NonZeroU64, NonZeroU64>,
-    tangerine::two::HashMap<NonZeroU64>,
+    tangerine::two::HashMap<NonZeroU64, NonZeroU64>,
   ])]
 #[inline(never)]
 fn bench_remove_insert_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -241,7 +241,7 @@ fn bench_remove_insert_chained<T: Map<NonZeroU64>>(bencher: Bencher<'_, '_>, wor
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
     tangerine::old_map::HashMap<NonZeroU64, u64>,
-    tangerine::two::HashMap<u64>,
+    tangerine::two::HashMap<NonZeroU64, u64>,
   ])]
 #[inline(never)]
 fn bench_remove_insert_unchained<T: Map<u64>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -286,7 +286,7 @@ const _: () = assert!(K * N * C * 2 == 1_000_000); // number of operations
     foldhash::HashMap<NonZeroU64, u64>,
     tangerine::map::HashMap<NonZeroU64, u64>,
     tangerine::new::HashMap<u64>,
-    tangerine::two::HashMap<u64>,
+    tangerine::two::HashMap<NonZeroU64, u64>,
   ])]
 #[inline(never)]
 fn bench_insert_remove<T: Map<u64>>(bencher: Bencher<'_, '_>) {

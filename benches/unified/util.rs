@@ -46,7 +46,7 @@ impl<T> Map<T> for tangerine::old_map::HashMap<NonZeroU64, T> {
   fn remove(&mut self, k: NonZeroU64) -> Option<T> { self.get_and_remove(k) }
 }
 
-impl<T> Map<T> for tangerine::two::HashMap<T> {
+impl<T> Map<T> for tangerine::two::HashMap<NonZeroU64, T> {
   #[inline(always)]
   fn new() -> Self { tangerine::two::HashMap::new() }
 
