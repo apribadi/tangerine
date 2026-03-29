@@ -32,7 +32,7 @@ pub struct HashMap<K: Key, V> {
   slack: usize,
   shift: usize,
   table: *const K::Hash,
-  data: *const V,
+  value: *const V,
 }
 
 unsafe impl<K: Key + Send, V: Send> Send for HashMap<K, V> {
@@ -100,6 +100,11 @@ const fn capacity<K: Key>(s: usize) -> usize {
   1 << K::BITS - s - 1
 }
 
+#[inline(always)]
+fn ptr_diff<T>(x: *const T, y: *const T) -> usize {
+  x.addr().wrapping_sub(y.addr()) / size_of::<T>()
+}
+
 impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   fn from_seed(m: K::Seed) -> Self {
@@ -109,7 +114,7 @@ impl<K: Key, V> HashMap<K, V> {
       slack: capacity::<K>(K::BITS - 1),
       shift: K::BITS - 1,
       table: K::INIT,
-      data: null(),
+      value: null(),
     }
   }
 
@@ -166,7 +171,7 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed;
     let s = self.shift;
     let t = self.table;
-    let u = self.data;
+    let u = self.value;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_read_l1(u.wrapping_add(k));
@@ -194,7 +199,7 @@ impl<K: Key, V> HashMap<K, V> {
     let m = self.seed;
     let s = self.shift;
     let t = self.table;
-    let u = self.data.cast_mut();
+    let u = self.value.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_write_l1(u.wrapping_add(k));
@@ -226,15 +231,15 @@ impl<K: Key, V> HashMap<K, V> {
     let l = unsafe { allocation_layout::<K, V>(d) };
     let t = unsafe { alloc(l) } as *mut K::Hash;
     if t.is_null() { match handle_alloc_error(l) { } }
-    unsafe { write_bytes(t, 0x00u8, d) };
     let u = t.wrapping_add(d) as *mut V;
+    unsafe { write_bytes(t, 0x00u8, d) };
     let k = K::slot(h, s);
     unsafe { t.wrapping_add(k).write(h) };
     unsafe { u.wrapping_add(k).write(value) };
     self.slack = capacity::<K>(s) - 1;
     self.shift = s;
     self.table = t;
-    self.data = u;
+    self.value = u;
   }
 
   #[inline(never)]
@@ -243,8 +248,8 @@ impl<K: Key, V> HashMap<K, V> {
     let old_r = self.slack.wrapping_add(1);
     let old_s = self.shift;
     let old_t = self.table.cast_mut();
-    let old_u = self.data.cast_mut();
-    let old_d = unsafe { (old_u as *mut K::Hash).offset_from_unsigned(old_t) };
+    let old_u = self.value.cast_mut();
+    let old_d = ptr_diff(old_u.cast(), old_t);
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
     // Temporarily place the table in a valid state in case we panic.
@@ -269,7 +274,7 @@ impl<K: Key, V> HashMap<K, V> {
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.shift = new_s;
     self.table = new_t;
-    self.data = new_u;
+    self.value = new_u;
     // Initialize new table.
     let mut i = new_d;
     loop {
@@ -309,7 +314,7 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.data.cast_mut();
+    let u = self.value.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_write_l1(u.wrapping_add(k));
@@ -356,7 +361,7 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.data.cast_mut();
+    let u = self.value.cast_mut();
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_write_l1(u.wrapping_add(k));
@@ -400,11 +405,11 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.data.cast_mut();
+    let u = self.value.cast_mut();
     if u.is_null() { return }
     let c = capacity::<K>(s);
     let n = c - r;
-    let d = unsafe { (u as *mut K::Hash).offset_from_unsigned(t) };
+    let d = ptr_diff(u.cast(), t);
     if needs_drop::<V>() {
       if n != 0 {
         // WARNING!
@@ -454,14 +459,14 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.data.cast_mut();
+    let u = self.value.cast_mut();
     if u.is_null() { return }
     let n = capacity::<K>(s) - r;
-    let d = unsafe { (u as *mut K::Hash).offset_from_unsigned(t) };
+    let d = ptr_diff(u.cast(), t);
     self.slack = capacity::<K>(K::BITS - 1);
     self.shift = K::BITS - 1;
     self.table = K::INIT;
-    self.data = null();
+    self.value = null();
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;
@@ -487,11 +492,11 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.data;
+    let u = self.value;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        idx: unsafe { (u as *const K::Hash).offset_from_unsigned(t) },
+        idx: ptr_diff(u.cast(), t),
         ptr: t,
         fun: move |x, i| unsafe { (K::invert_hash(x, m), &*u.wrapping_add(i)) }
       };
@@ -506,11 +511,11 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.data;
+    let u = self.value;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        idx: unsafe { (u as *const K::Hash).offset_from_unsigned(t) },
+        idx: ptr_diff(u.cast(), t),
         ptr: t,
         fun: move |x, i| unsafe { (K::invert_hash(x, m), &mut *u.wrapping_add(i).cast_mut()) }
       };
@@ -524,11 +529,11 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.data;
+    let u = self.value;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        idx: unsafe { (u as *const K::Hash).offset_from_unsigned(t) },
+        idx: ptr_diff(u.cast(), t),
         ptr: t,
         fun: move |x, _| unsafe { K::invert_hash(x, m) }
       };
@@ -542,11 +547,11 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.data;
+    let u = self.value;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        idx: unsafe { (u as *const K::Hash).offset_from_unsigned(t) },
+        idx: ptr_diff(u.cast(), t),
         ptr: t,
         fun: move |_, i| unsafe { &*u.wrapping_add(i) }
       };
@@ -560,11 +565,11 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.data;
+    let u = self.value;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        idx: unsafe { (u as *const K::Hash).offset_from_unsigned(t) },
+        idx: ptr_diff(u.cast(), t),
         ptr: t,
         fun: move |_, i| unsafe { &mut *u.wrapping_add(i).cast_mut() }
       };
@@ -573,9 +578,9 @@ impl<K: Key, V> HashMap<K, V> {
 
   fn internal_num_slots(&self) -> usize {
     let t = self.table;
-    let u = self.data;
+    let u = self.value;
     if u.is_null() { return 0 }
-    unsafe { (u as *const K::Hash).offset_from_unsigned(t) }
+    ptr_diff(u.cast(), t)
   }
 
   fn internal_allocation_size(&self) -> usize {
