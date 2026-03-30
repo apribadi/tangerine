@@ -768,6 +768,12 @@ impl<K: Key, V> Extend<(K, V)> for HashMap<K, V> {
   }
 }
 
+impl<const N: usize, K: Key, V> From<[(K, V); N]> for HashMap<K, V> {
+  fn from(value: [(K, V); N]) -> Self {
+    Self::from_iter(value)
+  }
+}
+
 impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
   fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
     let mut t = Self::new();
