@@ -1,11 +1,6 @@
 //! This module provides a fast hash map keyed by types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
-// TODO: IntoIterator
-// TODO: drain
-// TODO: try_insert
-// TODO: shrink_to_fit
-
 extern crate alloc;
 
 use alloc::alloc::Layout;
@@ -261,12 +256,11 @@ impl<K: Key, V> HashMap<K, V> {
     let h = unsafe { old_t.wrapping_add(last_write).replace(K::ZERO) };
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
-    // We maintain e >= log(w).
     let new_e =
       if last_write + 1 == old_d {
-        old_e * 2
+        old_e * 2 // if we filled the final slot
       } else if old_e < ctz(new_w) {
-        old_e + allocation_chunk::<K, V>()
+        old_e + allocation_chunk::<K, V>() // we maintain e >= log(w)
       } else {
         old_e
       };

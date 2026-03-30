@@ -1,11 +1,6 @@
 //! This module provides a fast hash map keyed by types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
-// TODO: IntoIterator
-// TODO: drain
-// TODO: try_insert
-// TODO: shrink_to_fit
-
 extern crate alloc;
 
 use alloc::alloc::Layout;
