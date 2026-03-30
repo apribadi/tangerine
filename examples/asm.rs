@@ -3,7 +3,6 @@
 use std::num::NonZeroU64;
 use std::hint::black_box;
 use tangerine::two::HashMap;
-use tangerine::two::OccupiedError;
 
 fn drop(_: HashMap<NonZeroU64, u64>) {
 }
@@ -36,7 +35,7 @@ fn insert(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64, v: u64) -> Option<u64
   t.insert(k, v)
 }
 
-fn try_insert(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64, v: u64) -> Result<&mut u64, OccupiedError<'_, u64>> {
+fn try_insert(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64, v: u64) -> Result<&mut u64, (&mut u64, u64)> {
   t.try_insert(k, v)
 }
 

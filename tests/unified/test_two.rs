@@ -1,9 +1,12 @@
+#![allow(unused_must_use)]
+
+use dandelion::Rng;
 use expect_test::expect;
 use std::fmt::Write;
 use std::num::NonZeroU64;
 use std::write;
 use tangerine::two::HashMap;
-use dandelion::Rng;
+use tangerine::two::internal;
 
 /*
 #[test]
@@ -20,7 +23,7 @@ fn test_lifetime() {
 */
 
 #[test]
-fn test_basic() {
+fn test_api() {
   let mut s = String::new();
   let mut g = Rng::from_u64(0);
   let mut t = HashMap::new_seeded(&mut g);
@@ -30,23 +33,30 @@ fn test_basic() {
 
   let key = NonZeroU64::new(13).unwrap();
 
-  write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
-  write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
-  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
-  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
-  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
-  write!(s, "{:?} <- t.insert({:?}, {:?})\n", t.insert(key, 42), key, 42).unwrap();
-  write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
-  write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
-  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
-  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
-  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
-  write!(s, "{:?} <- t.remove({:?})\n", t.remove(key), key).unwrap();
-  write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
-  write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
-  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
-  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
-  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
+  write!(s, "{:?} <- t.len()\n", t.len());
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
+  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key);
+  write!(s, "{:?} <- internal::num_slots(t))\n", internal::num_slots(&t));
+  write!(s, "{:?} <- internal::load_factor(t))\n", internal::load_factor(&t));
+  write!(s, "{:?} <- internal::allocation_size(t))\n", internal::allocation_size(&t));
+  write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.try_insert(key, 40), key, 40);
+  write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.try_insert(key, 41), key, 41);
+  write!(s, "{:?} <- t.insert({:?}, {:?})\n", t.insert(key, 42), key, 42);
+  write!(s, "{:?} <- t.len()\n", t.len());
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
+  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key);
+  write!(s, "{:?} <- t.remove({:?})\n", t.remove(key), key);
+  write!(s, "{:?} <- t.len()\n", t.len());
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
+  write!(s, "{:?} <- internal::num_slots(t))\n", internal::num_slots(&t));
+  write!(s, "{:?} <- internal::load_factor(t))\n", internal::load_factor(&t));
+  write!(s, "{:?} <- internal::allocation_size(t))\n", internal::allocation_size(&t));
 
   let _ = t.insert(key, 0);
   t.clear();
@@ -59,7 +69,12 @@ fn test_basic() {
       false <- t.contains_key(13)
       None <- t.get(13)
       None <- t.get_mut(13)
-      None <- t.insert(13, 42)
+      0 <- internal::num_slots(t))
+      NaN <- internal::load_factor(t))
+      0 <- internal::allocation_size(t))
+      Ok(40) <- t.try_insert(13, 40)
+      Err((40, 41)) <- t.try_insert(13, 41)
+      Some(40) <- t.insert(13, 42)
       1 <- t.len()
       false <- t.is_empty()
       true <- t.contains_key(13)
@@ -70,47 +85,33 @@ fn test_basic() {
       true <- t.is_empty()
       false <- t.contains_key(13)
       None <- t.get(13)
-      None <- t.get_mut(13)
-  "#]].assert_eq(s.drain(..).as_str());
-}
-
-
-#[test]
-fn test_empty() {
-  let mut s = String::new();
-  let t = HashMap::<NonZeroU64, u64>::new();
-
-  write!(s, "num_slots = {}\n", tangerine::two::internal::num_slots(&t)).unwrap();
-  write!(s, "load = {}\n", tangerine::two::internal::load_factor(&t)).unwrap();
-  write!(s, "allocation_size = {}\n", tangerine::two::internal::allocation_size(&t)).unwrap();
-
-  expect![[r#"
-      num_slots = 0
-      load = NaN
-      allocation_size = 0
+      20 <- internal::num_slots(t))
+      0.0 <- internal::load_factor(t))
+      240 <- internal::allocation_size(t))
   "#]].assert_eq(s.drain(..).as_str());
 }
 
 #[test]
-fn test_iter() -> Result<(), std::fmt::Error> {
+fn test_iter() {
   let mut s = String::new();
-  let mut t = HashMap::new();
+  let mut g = Rng::from_u64(0);
+  let mut t = HashMap::new_seeded(&mut g);
 
   for i in 1 ..= 10 {
     let k = NonZeroU64::new(i).unwrap();
     let _ = t.insert(k, 10 * i);
   }
 
-  write!(s, "num_slots = {}\n", tangerine::two::internal::num_slots(&t))?;
-  write!(s, "load = {}\n", tangerine::two::internal::load_factor(&t))?;
-  write!(s, "allocation_size = {}\n", tangerine::two::internal::allocation_size(&t))?;
+  write!(s, "num_slots = {}\n", internal::num_slots(&t));
+  write!(s, "load = {}\n", internal::load_factor(&t));
+  write!(s, "allocation_size = {}\n", internal::allocation_size(&t));
 
   let values = t.values();
   let _ = t.get(NonZeroU64::new(1).unwrap());
   let mut values = values.collect::<Box<[_]>>();
   values.sort();
 
-  write!(s, "{:?}\n", values)?;
+  write!(s, "{:?}\n", values);
 
   expect![[r#"
       num_slots = 40
@@ -119,20 +120,18 @@ fn test_iter() -> Result<(), std::fmt::Error> {
       [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
   "#]].assert_eq(&s.drain(..).as_str());
 
-  write!(s, "{:?}\n", t)?;
+  write!(s, "{:?}\n", t);
 
   expect![[r#"
       {1: 10, 2: 20, 3: 30, 4: 40, 5: 50, 6: 60, 7: 70, 8: 80, 9: 90, 10: 100}
   "#]].assert_eq(&s.drain(..).as_str());
-
-  Ok(())
 }
 
 #[test]
-fn test_1() -> Result<(), std::fmt::Error> {
-  let mut g = Rng::from_u64(0);
+fn test_1() {
   let mut s = String::new();
-  let mut t = HashMap::<NonZeroU64, u64>::new_seeded(&mut g);
+  let mut g = Rng::from_u64(0);
+  let mut t = HashMap::new_seeded(&mut g);
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
@@ -141,10 +140,10 @@ fn test_1() -> Result<(), std::fmt::Error> {
 
   assert!(t.len() == 100);
 
-  write!(s, "len = {}\n", t.len())?;
-  write!(s, "num_slots = {}\n", tangerine::two::internal::num_slots(&t))?;
-  write!(s, "load = {}\n", tangerine::two::internal::load_factor(&t))?;
-  write!(s, "allocation_size = {}\n", tangerine::two::internal::allocation_size(&t))?;
+  write!(s, "len = {}\n", t.len());
+  write!(s, "num_slots = {}\n", internal::num_slots(&t));
+  write!(s, "load = {}\n", internal::load_factor(&t));
+  write!(s, "allocation_size = {}\n", internal::allocation_size(&t));
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
@@ -158,14 +157,14 @@ fn test_1() -> Result<(), std::fmt::Error> {
     }
   }
 
-  write!(s, "len = {}\n", t.len())?;
-  write!(s, "num_slots = {}\n", tangerine::two::internal::num_slots(&t))?;
-  write!(s, "load = {}\n", tangerine::two::internal::load_factor(&t))?;
-  write!(s, "allocation_size = {}\n", tangerine::two::internal::allocation_size(&t))?;
+  write!(s, "len = {}\n", t.len());
+  write!(s, "num_slots = {}\n", internal::num_slots(&t));
+  write!(s, "load = {}\n", internal::load_factor(&t));
+  write!(s, "allocation_size = {}\n", internal::allocation_size(&t));
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
-    write!(s, "{}: {:?}\n", k, t.get(k))?;
+    write!(s, "{}: {:?}\n", k, t.get(k));
   }
 
   expect![[r#"
@@ -278,6 +277,4 @@ fn test_1() -> Result<(), std::fmt::Error> {
       99: Some(990)
       100: None
   "#]].assert_eq(&s);
-
-  Ok(())
 }

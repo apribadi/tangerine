@@ -219,10 +219,6 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(never)]
   #[cold]
   fn insert_init(&mut self, h: K::Hash, value: V) -> *mut V {
-    // If there aren't any alignment issues:
-    // - w = 16
-    // - e = 4
-    // - d = 20
     let w = 4 * allocation_chunk::<K, V>();
     let e = allocation_chunk::<K, V>();
     let d = w + e;
