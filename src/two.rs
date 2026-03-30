@@ -8,6 +8,7 @@ use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use core::fmt::Debug;
+use core::fmt::Formatter;
 use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
@@ -38,7 +39,7 @@ pub struct HashMap<K: Key, V> {
 pub struct OccupiedError<'a, V> {
   /// A mutable reference to the already occupied entry.
   pub entry: &'a mut V,
-  /// The value which was not inserted because the entry was already occupied.
+  /// The value which was not inserted.
   pub value: V,
 }
 
@@ -316,7 +317,7 @@ impl<K: Key, V> HashMap<K, V> {
     }
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
-    // Find the newly-inserted value.
+    // Find the newly-inserted value. Note, not necessarily last_write.
     let mut i = K::slot(h, new_s);
     while unsafe { new_t.wrapping_add(i).read() } != h {
       i = i + 1;
@@ -760,7 +761,7 @@ impl<K: Key, V: Clone> Clone for HashMap<K, V> {
 }
 
 impl <K: Key + Debug, V: Debug> Debug for HashMap<K, V> {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
     let mut a = self.iter().collect::<Box<[(K, &V)]>>();
     a.sort_by_key(|&(x, _)| x);
     f.debug_map().entries(a).finish()
@@ -787,6 +788,15 @@ impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
   }
 }
 
+impl<'a, V: Debug> Debug for OccupiedError<'a, V> {
+  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+    f.debug_struct("OccupiedError")
+      .field("entry", self.entry)
+      .field("value", &self.value)
+      .finish_non_exhaustive()
+  }
+}
+
 pub mod internal {
   //! Unstable API exposing implementation details for benchmarks and tests.
 
@@ -809,31 +819,31 @@ pub mod internal {
 }
 
 #[allow(missing_docs)]
-pub fn get(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> Option<&u32> {
+pub fn get(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) -> Option<&u32> {
   t.get(key)
 }
 
 #[allow(missing_docs)]
-pub fn get_value(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> Option<u32> {
+pub fn get_value(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) -> Option<u32> {
   match t.get(key) { None => None, Some(&y) => Some(y) }
 }
 
 #[allow(missing_docs)]
-pub fn contains_key(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> bool {
+pub fn contains_key(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) -> bool {
   t.contains_key(key)
 }
 
 #[allow(missing_docs)]
-pub fn insert(t: &mut HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64, value: u32) {
+pub fn insert(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64, value: u32) {
   let _ = t.insert(key, value);
 }
 
 #[allow(missing_docs)]
-pub fn remove(t: &mut HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) {
+pub fn remove(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) {
   let _ = t.remove(key);
 }
 
 #[allow(missing_docs)]
-pub fn clear(t: &mut HashMap<std::num::NonZeroU64, u32>) {
+pub fn clear(t: &mut HashMap<core::num::NonZeroU64, u32>) {
   t.clear();
 }
