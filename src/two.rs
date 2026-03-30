@@ -31,18 +31,6 @@ pub struct HashMap<K: Key, V> {
   value: *const V,
 }
 
-/// The error returned by [`try_insert`](HashMap::try_insert) when the key
-/// already has an associated value.
-///
-/// Contains a mutable reference to the occupied entry and the value that was
-/// not inserted.
-pub struct OccupiedError<'a, V> {
-  /// A mutable reference to the already occupied entry.
-  pub entry: &'a mut V,
-  /// The value which was not inserted.
-  pub value: V,
-}
-
 unsafe impl<K: Key + Send, V: Send> Send for HashMap<K, V> {
 }
 
@@ -391,7 +379,7 @@ impl<K: Key, V> HashMap<K, V> {
   /// to leak an arbitrary set of items, but the map will remain in a valid
   /// state.
   #[inline(always)]
-  pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, OccupiedError<'_, V>> {
+  pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, (&mut V, V)> {
     let m = self.seed;
     let r = self.slack;
     let s = self.shift;
@@ -412,7 +400,7 @@ impl<K: Key, V> HashMap<K, V> {
     let x = select_unpredictable(y > h, x, y);
     let mut p = u.wrapping_add(i);
     if x == h {
-      Err(OccupiedError { entry: unsafe { &mut *p }, value })
+      Err((unsafe { &mut *p }, value))
     } else {
       if u.is_null() {
         p = self.insert_init(h, value)
@@ -788,15 +776,6 @@ impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
   }
 }
 
-impl<'a, V: Debug> Debug for OccupiedError<'a, V> {
-  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-    f.debug_struct("OccupiedError")
-      .field("entry", self.entry)
-      .field("value", &self.value)
-      .finish_non_exhaustive()
-  }
-}
-
 pub mod internal {
   //! Unstable API exposing implementation details for benchmarks and tests.
 
@@ -846,4 +825,9 @@ pub fn remove(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZe
 #[allow(missing_docs)]
 pub fn clear(t: &mut HashMap<core::num::NonZeroU64, u32>) {
   t.clear();
+}
+
+#[allow(missing_docs)]
+pub fn reset(t: &mut HashMap<core::num::NonZeroU64, u32>) {
+  t.reset();
 }

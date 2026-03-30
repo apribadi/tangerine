@@ -32,16 +32,16 @@ fn get_value(t: &HashMap<NonZeroU64, u64>, k: NonZeroU64) -> Option<u64> {
   match t.get(k) { None => None, Some(&y) => Some(y) }
 }
 
-fn insert(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64, v: u64) {
-  let _ = t.insert(k, v);
+fn insert(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64, v: u64) -> Option<u64> {
+  t.insert(k, v)
 }
 
 fn try_insert(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64, v: u64) -> Result<&mut u64, OccupiedError<'_, u64>> {
   t.try_insert(k, v)
 }
 
-fn remove(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64) {
-  let _ = t.remove(k);
+fn remove(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64) -> Option<u64> {
+  t.remove(k)
 }
 
 fn clear(t: &mut HashMap<NonZeroU64, u64>) {
