@@ -6,14 +6,14 @@ use crate::util::Map;
 
 // TODO: keyed by NonZeroU32
 
-const ARGS: [usize; 7] = [
+const ARGS: &'static [usize] = &[
   1_000,
   3_000,
   10_000,
   30_000,
   100_000,
   300_000,
-  1_000_000,
+  // 1_000_000,
 ];
 
 const N: usize = 1_000_000;

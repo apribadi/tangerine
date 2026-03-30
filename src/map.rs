@@ -634,28 +634,6 @@ impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
   }
 }
 
-#[cfg(feature = "nightly")]
-impl<'a, K: Key, V> IntoIterator for &'a HashMap<K, V> {
-  type Item = (K, &'a V);
-  type IntoIter = impl ExactSizeIterator<Item = Self::Item>;
-
-  #[inline(always)]
-  fn into_iter(self) -> Self::IntoIter {
-    self.iter()
-  }
-}
-
-#[cfg(feature = "nightly")]
-impl<'a, K: Key, V> IntoIterator for &'a mut HashMap<K, V> {
-  type Item = (K, &'a mut V);
-  type IntoIter = impl ExactSizeIterator<Item = Self::Item>;
-
-  #[inline(always)]
-  fn into_iter(self) -> Self::IntoIter {
-    self.iter_mut()
-  }
-}
-
 pub mod internal {
   //! Unstable API exposing implementation details for benchmarks and tests.
 

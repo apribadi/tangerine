@@ -30,6 +30,18 @@ pub struct HashMap<K: Key, V> {
   value: *const V,
 }
 
+/// The error returned by [`try_insert`](HashMap::try_insert) when the key
+/// already has an associated value.
+///
+/// Contains a mutable reference to the occupied entry and the value that was
+/// not inserted.
+pub struct OccupiedError<'a, V> {
+  /// A mutable reference to the already occupied entry.
+  pub entry: &'a mut V,
+  /// The value which was not inserted because the entry was already occupied.
+  pub value: V,
+}
+
 unsafe impl<K: Key + Send, V: Send> Send for HashMap<K, V> {
 }
 
@@ -217,7 +229,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn insert_init(&mut self, h: K::Hash, value: V) {
+  fn insert_init(&mut self, h: K::Hash, value: V) -> *mut V {
     // If there aren't any alignment issues:
     // - w = 16
     // - e = 4
@@ -239,11 +251,12 @@ impl<K: Key, V> HashMap<K, V> {
     self.shift = s;
     self.table = t;
     self.value = u;
+    u.wrapping_add(k)
   }
 
   #[inline(never)]
   #[cold]
-  fn insert_grow(&mut self, last_write: usize) {
+  fn insert_grow(&mut self, h: K::Hash, last_write: usize) -> *mut V {
     let old_r = self.slack.wrapping_add(1);
     let old_s = self.shift;
     let old_t = self.table.cast_mut();
@@ -253,12 +266,12 @@ impl<K: Key, V> HashMap<K, V> {
     let old_e = old_d - old_w;
     // Temporarily place the table in a valid state in case we panic.
     self.slack = old_r;
-    let h = unsafe { old_t.wrapping_add(last_write).replace(K::ZERO) };
+    let last_write_hash = unsafe { old_t.wrapping_add(last_write).replace(K::ZERO) };
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
     let new_e =
       if last_write + 1 == old_d {
-        old_e * 2 // if we filled the final slot
+        old_e * 2 // if we wrote in the final slot
       } else if old_e < ctz(new_w) {
         old_e + allocation_chunk::<K, V>() // we maintain e >= log(w)
       } else {
@@ -274,7 +287,7 @@ impl<K: Key, V> HashMap<K, V> {
     let new_u = new_t.wrapping_add(new_d) as *mut V;
     // At this point, we're guaranteed to successfully finish growing the
     // table. We re-add the last write.
-    unsafe { old_t.wrapping_add(last_write).write(h) };
+    unsafe { old_t.wrapping_add(last_write).write(last_write_hash) };
     // Update struct fields.
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.shift = new_s;
@@ -302,7 +315,13 @@ impl<K: Key, V> HashMap<K, V> {
       if i == old_d { break }
     }
     // The map is now in a valid state, even if deallocating panics.
-    unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) }
+    unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
+    // Find the newly-inserted value.
+    let mut i = K::slot(h, new_s);
+    while unsafe { new_t.wrapping_add(i).read() } != h {
+      i = i + 1;
+    }
+    new_u.wrapping_add(i)
   }
 
   /// Inserts the given key and value into the map. Returns the previous value
@@ -337,7 +356,7 @@ impl<K: Key, V> HashMap<K, V> {
       Some(unsafe { u.wrapping_add(i).replace(value) })
     } else {
       if u.is_null() {
-        self.insert_init(h, value);
+        let _: *mut V = self.insert_init(h, value);
       } else {
         self.slack = r.wrapping_sub(1);
         let mut i = i;
@@ -351,10 +370,68 @@ impl<K: Key, V> HashMap<K, V> {
         }
         unsafe { u.wrapping_add(i).write(v) };
         if r == 0 || addr_eq(t.wrapping_add(i + 1), u) {
-          self.insert_grow(i);
+          let _: *mut V = self.insert_grow(h, i);
         }
       }
       None
+    }
+  }
+
+  /// Tries to insert the given key and value into the map. Returns a mutable
+  /// reference to the inserted value.
+  ///
+  /// If the map already contains a value associated with the given key, then
+  /// nothing is updated. Instead an error is returned that contains both a
+  /// mutable reference to occupied entry and the value that was not inserted.
+  ///
+  /// # Panics
+  ///
+  /// Panics if allocation fails. If that happens, it is possible for the map
+  /// to leak an arbitrary set of items, but the map will remain in a valid
+  /// state.
+  #[inline(always)]
+  pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, OccupiedError<'_, V>> {
+    let m = self.seed;
+    let r = self.slack;
+    let s = self.shift;
+    let t = self.table.cast_mut();
+    let u = self.value.cast_mut();
+    let h = K::hash(key, m);
+    let k = K::slot(h, s);
+    prefetch_write_l1(u.wrapping_add(k));
+    let y = unsafe { t.wrapping_add(k).read() };
+    let mut i = k;
+    let mut x;
+    loop {
+      i = i + 1;
+      x = unsafe { t.wrapping_add(i).read() };
+      if ! (x > h) { break }
+    }
+    let i = select_unpredictable(y > h, i, k);
+    let x = select_unpredictable(y > h, x, y);
+    let mut p = u.wrapping_add(i);
+    if x == h {
+      Err(OccupiedError { entry: unsafe { &mut *p }, value })
+    } else {
+      if u.is_null() {
+        p = self.insert_init(h, value)
+      } else {
+        self.slack = r.wrapping_sub(1);
+        let mut i = i;
+        let mut x = x;
+        let mut v = value;
+        unsafe { t.wrapping_add(i).write(h) };
+        while x != K::ZERO {
+          v = unsafe { u.wrapping_add(i).replace(v) };
+          i = i + 1;
+          x = unsafe { t.wrapping_add(i).replace(x) };
+        }
+        unsafe { u.wrapping_add(i).write(v) };
+        if r == 0 || addr_eq(t.wrapping_add(i + 1), u) {
+          p = self.insert_grow(h, i);
+        }
+      }
+      Ok(unsafe { &mut *p })
     }
   }
 
@@ -707,28 +784,6 @@ impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
     let mut t = Self::new();
     iter.into_iter().for_each(|(x, y)| { let _ = t.insert(x, y); });
     t
-  }
-}
-
-#[cfg(feature = "nightly")]
-impl<'a, K: Key, V> IntoIterator for &'a HashMap<K, V> {
-  type Item = (K, &'a V);
-  type IntoIter = impl ExactSizeIterator<Item = Self::Item>;
-
-  #[inline(always)]
-  fn into_iter(self) -> Self::IntoIter {
-    self.iter()
-  }
-}
-
-#[cfg(feature = "nightly")]
-impl<'a, K: Key, V> IntoIterator for &'a mut HashMap<K, V> {
-  type Item = (K, &'a mut V);
-  type IntoIter = impl ExactSizeIterator<Item = Self::Item>;
-
-  #[inline(always)]
-  fn into_iter(self) -> Self::IntoIter {
-    self.iter_mut()
   }
 }
 

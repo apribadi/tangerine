@@ -23,21 +23,18 @@ impl<T: Key> HashSet<T> {
 
   /// Creates an empty set, seeding the hash function from the given random
   /// number generator.
-  #[must_use]
   pub fn new_seeded(rng: &mut impl RngCore) -> Self {
     Self { map: HashMap::new_seeded(rng) }
   }
 
   /// Returns the number of values.
   #[inline(always)]
-  #[must_use]
   pub fn len(&self) -> usize {
     self.map.len()
   }
 
   /// Returns whether the set contains zero values.
   #[inline(always)]
-  #[must_use]
   pub fn is_empty(&self) -> bool {
     self.map.is_empty()
   }
@@ -116,17 +113,14 @@ pub mod internal {
   use super::HashSet;
   use super::Key;
 
-  #[must_use]
   pub fn num_slots<T: Key>(t: &HashSet<T>) -> usize {
     crate::map::internal::num_slots(&t.map)
   }
 
-  #[must_use]
   pub fn allocation_size<T: Key>(t: &HashSet<T>) -> usize {
     crate::map::internal::allocation_size(&t.map)
   }
 
-  #[must_use]
   pub fn load_factor<T: Key>(t: &HashSet<T>) -> f64 {
     crate::map::internal::load_factor(&t.map)
   }

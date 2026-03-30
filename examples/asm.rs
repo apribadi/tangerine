@@ -1,8 +1,9 @@
-//!?
+#![allow(missing_docs)]
 
 use std::num::NonZeroU64;
 use std::hint::black_box;
-use tangerine::map::HashMap;
+use tangerine::two::HashMap;
+use tangerine::two::OccupiedError;
 
 fn drop(_: HashMap<NonZeroU64, u64>) {
 }
@@ -35,6 +36,10 @@ fn insert(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64, v: u64) {
   let _ = t.insert(k, v);
 }
 
+fn try_insert(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64, v: u64) -> Result<&mut u64, OccupiedError<'_, u64>> {
+  t.try_insert(k, v)
+}
+
 fn remove(t: &mut HashMap<NonZeroU64, u64>, k: NonZeroU64) {
   let _ = t.remove(k);
 }
@@ -65,8 +70,6 @@ fn std_clear(t: &mut std::collections::HashMap<NonZeroU64, u64>) {
   t.clear();
 }
 
-/// ?
-
 pub fn main() {
   let _ =
     black_box([
@@ -78,6 +81,7 @@ pub fn main() {
       get as *mut u8,
       get_value as *mut u8,
       insert as *mut u8,
+      try_insert as *mut u8,
       remove as *mut u8,
       clear as *mut u8,
       reset as *mut u8,
