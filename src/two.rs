@@ -251,7 +251,7 @@ impl<K: Key, V> HashMap<K, V> {
     let old_e = old_d - old_w;
     // Temporarily place the table in a valid state in case we panic.
     self.slack = old_r;
-    let last_write_hash = unsafe { old_t.wrapping_add(last_write).replace(K::ZERO) };
+    let z = unsafe { old_t.wrapping_add(last_write).replace(K::ZERO) };
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
     let new_e =
@@ -272,7 +272,7 @@ impl<K: Key, V> HashMap<K, V> {
     let new_u = new_t.wrapping_add(new_d) as *mut V;
     // At this point, we're guaranteed to successfully finish growing the
     // table. We re-add the last write.
-    unsafe { old_t.wrapping_add(last_write).write(last_write_hash) };
+    unsafe { old_t.wrapping_add(last_write).write(z) };
     // Update struct fields.
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.shift = new_s;
@@ -301,7 +301,7 @@ impl<K: Key, V> HashMap<K, V> {
     }
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
-    // Find the newly-inserted value. Note, not necessarily last_write.
+    // Find the newly-inserted value. Note, this was not necessarily at last_write.
     let mut i = K::slot(h, new_s);
     while unsafe { new_t.wrapping_add(i).read() } != h {
       i = i + 1;

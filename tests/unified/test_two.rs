@@ -38,9 +38,9 @@ fn test_api() {
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key);
-  write!(s, "{:?} <- internal::num_slots(t))\n", internal::num_slots(&t));
-  write!(s, "{:?} <- internal::load_factor(t))\n", internal::load_factor(&t));
-  write!(s, "{:?} <- internal::allocation_size(t))\n", internal::allocation_size(&t));
+  write!(s, "{:?} <- internal::num_slots(&t))\n", internal::num_slots(&t));
+  write!(s, "{:?} <- internal::load_factor(&t))\n", internal::load_factor(&t));
+  write!(s, "{:?} <- internal::allocation_size(&t))\n", internal::allocation_size(&t));
   write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.try_insert(key, 40), key, 40);
   write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.try_insert(key, 41), key, 41);
   write!(s, "{:?} <- t.insert({:?}, {:?})\n", t.insert(key, 42), key, 42);
@@ -54,9 +54,9 @@ fn test_api() {
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
-  write!(s, "{:?} <- internal::num_slots(t))\n", internal::num_slots(&t));
-  write!(s, "{:?} <- internal::load_factor(t))\n", internal::load_factor(&t));
-  write!(s, "{:?} <- internal::allocation_size(t))\n", internal::allocation_size(&t));
+  write!(s, "{:?} <- internal::num_slots(&t))\n", internal::num_slots(&t));
+  write!(s, "{:?} <- internal::load_factor(&t))\n", internal::load_factor(&t));
+  write!(s, "{:?} <- internal::allocation_size(&t))\n", internal::allocation_size(&t));
 
   let _ = t.insert(key, 0);
   t.clear();
@@ -69,9 +69,9 @@ fn test_api() {
       false <- t.contains_key(13)
       None <- t.get(13)
       None <- t.get_mut(13)
-      0 <- internal::num_slots(t))
-      NaN <- internal::load_factor(t))
-      0 <- internal::allocation_size(t))
+      0 <- internal::num_slots(&t))
+      NaN <- internal::load_factor(&t))
+      0 <- internal::allocation_size(&t))
       Ok(40) <- t.try_insert(13, 40)
       Err((40, 41)) <- t.try_insert(13, 41)
       Some(40) <- t.insert(13, 42)
@@ -85,9 +85,9 @@ fn test_api() {
       true <- t.is_empty()
       false <- t.contains_key(13)
       None <- t.get(13)
-      20 <- internal::num_slots(t))
-      0.0 <- internal::load_factor(t))
-      240 <- internal::allocation_size(t))
+      20 <- internal::num_slots(&t))
+      0.0 <- internal::load_factor(&t))
+      240 <- internal::allocation_size(&t))
   "#]].assert_eq(s.drain(..).as_str());
 }
 
