@@ -85,7 +85,7 @@ const fn allocation_align<K: Key, V>() -> usize {
 
 #[inline(always)]
 const fn allocation_chunk<K: Key, V>() -> usize {
-  1 << max(3, ctz(align_of::<V>()).saturating_sub(ctz(size_of::<K::Hash>())))
+  1 << max(2, ctz(align_of::<V>()).saturating_sub(ctz(size_of::<K::Hash>())))
 }
 
 #[inline(always)]
@@ -223,6 +223,10 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(never)]
   #[cold]
   fn insert_init(&mut self, h: K::Hash, value: V) {
+    // If there aren't any alignment issues:
+    // - w = 16
+    // - e = 4
+    // - d = 20
     let w = 4 * allocation_chunk::<K, V>();
     let e = allocation_chunk::<K, V>();
     let d = w + e;
@@ -257,8 +261,15 @@ impl<K: Key, V> HashMap<K, V> {
     let h = unsafe { old_t.wrapping_add(last_write).replace(K::ZERO) };
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
-    // TODO: logic to slowly grow `e`. Then, shrink allocation_chunk to 4.
-    let new_e = if last_write + 1 == old_d { 2 * old_e } else { old_e };
+    // We maintain e >= log(w).
+    let new_e =
+      if last_write + 1 == old_d {
+        old_e * 2
+      } else if old_e < ctz(new_w) {
+        old_e + allocation_chunk::<K, V>()
+      } else {
+        old_e
+      };
     let new_d = new_w + new_e;
     // Panic if the layout would overflow.
     assert!(new_d <= allocation_max_num_slots::<K, V>());
