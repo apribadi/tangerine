@@ -92,6 +92,31 @@ fn test_api() {
 }
 
 #[test]
+fn test_empty() {
+  let mut s = String::new();
+  let mut g = Rng::from_u64(0);
+  let mut t = HashMap::<NonZeroU64, u64>::new_seeded(&mut g);
+
+  let key = NonZeroU64::new(13).unwrap();
+
+  write!(s, "{:?} <- t.len()\n", t.len());
+  write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
+  write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
+  write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
+  write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key);
+  write!(s, "{:?} <- internal::num_slots(&t))\n", internal::num_slots(&t));
+  write!(s, "{:?} <- internal::load_factor(&t))\n", internal::load_factor(&t));
+  write!(s, "{:?} <- internal::allocation_size(&t))\n", internal::allocation_size(&t));
+
+  for _ in t.iter() { panic!() }
+  for _ in t.keys() { panic!() }
+  for _ in t.values() { panic!() }
+
+  t.clear();
+  t.reset();
+}
+
+#[test]
 fn test_iter() {
   let mut s = String::new();
   let mut g = Rng::from_u64(0);

@@ -655,6 +655,7 @@ pub mod internal {
   }
 }
 
+/*
 #[allow(missing_docs)]
 pub fn get(t: &HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZeroU64) -> Option<&u32> {
   t.get(key)
@@ -684,3 +685,4 @@ pub fn remove(t: &mut HashMap<std::num::NonZeroU64, u32>, key: std::num::NonZero
 pub fn clear(t: &mut HashMap<std::num::NonZeroU64, u32>) {
   t.clear();
 }
+*/

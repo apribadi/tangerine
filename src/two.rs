@@ -9,12 +9,13 @@ use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use core::fmt::Debug;
 use core::fmt::Formatter;
+use core::hint::assert_unchecked;
 use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
+use core::mem::replace;
 use core::ops::Index;
 use core::ptr::addr_eq;
-use core::ptr::null;
 use core::ptr::write_bytes;
 use rand_core::RngCore;
 
@@ -23,12 +24,12 @@ use crate::key::Key;
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
 /// or [`NonZeroU64`](core::num::NonZeroU64).
 pub struct HashMap<K: Key, V> {
-  seed_inverted: K::Seed,
-  seed: K::Seed,
   slack: usize,
   shift: usize,
   table: *const K::Hash,
   value: *const V,
+  seed: K::Seed,
+  seed_inverted: K::Seed,
 }
 
 unsafe impl<K: Key + Send, V: Send> Send for HashMap<K, V> {
@@ -38,15 +39,15 @@ unsafe impl<K: Key + Sync, V: Sync> Sync for HashMap<K, V> {
 }
 
 #[inline(always)]
-fn prefetch_read_l1<T>(#[allow(unused_variables)] p: *const T) {
+fn prefetch_read_l1<T>(_p: *const T) {
   #[cfg(feature = "nightly")]
-  core::hint::prefetch_read(p, core::hint::Locality::L1)
+  core::hint::prefetch_read(_p, core::hint::Locality::L1)
 }
 
 #[inline(always)]
-fn prefetch_write_l1<T>(#[allow(unused_variables)] p: *mut T) {
+fn prefetch_write_l1<T>(_p: *mut T) {
   #[cfg(feature = "nightly")]
-  core::hint::prefetch_write(p, core::hint::Locality::L1)
+  core::hint::prefetch_write(_p, core::hint::Locality::L1)
 }
 
 #[inline(always)]
@@ -97,6 +98,11 @@ const fn capacity<K: Key>(s: usize) -> usize {
 }
 
 #[inline(always)]
+const fn is_dummy_table<K: Key>(s: usize) -> bool {
+  s == K::BITS - 1
+}
+
+#[inline(always)]
 fn ptr_diff<T>(x: *const T, y: *const T) -> usize {
   x.addr().wrapping_sub(y.addr()) / size_of::<T>()
 }
@@ -105,12 +111,12 @@ impl<K: Key, V> HashMap<K, V> {
   #[inline(always)]
   fn from_seed(m: K::Seed) -> Self {
     Self {
-      seed_inverted: K::invert_seed(m),
-      seed: m,
       slack: capacity::<K>(K::BITS - 1),
       shift: K::BITS - 1,
       table: K::INIT,
-      value: null(),
+      value: K::INIT.wrapping_add(3).cast(),
+      seed: m,
+      seed_inverted: K::invert_seed(m),
     }
   }
 
@@ -143,17 +149,17 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns whether the map contains the given key.
   #[inline(always)]
   pub fn contains_key(&self, key: K) -> bool {
-    let m = self.seed;
     let s = self.shift;
     let t = self.table;
+    let m = self.seed;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
-    let y = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
     loop {
       i = i + 1;
-      x = unsafe { t.wrapping_add(i).read() };
+      x = unsafe { t.add(i).read() };
       if ! (x > h) { break }
     }
     let x = select_unpredictable(y > h, x, y);
@@ -164,19 +170,20 @@ impl<K: Key, V> HashMap<K, V> {
   /// present.
   #[inline(always)]
   pub fn get(&self, key: K) -> Option<&V> {
-    let m = self.seed;
     let s = self.shift;
     let t = self.table;
     let u = self.value;
+    let m = self.seed;
+    unsafe { assert_unchecked(u.addr() != 0) };
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_read_l1(u.wrapping_add(k));
-    let y = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
     loop {
       i = i + 1;
-      x = unsafe { t.wrapping_add(i).read() };
+      x = unsafe { t.add(i).read() };
       if ! (x > h) { break }
     }
     let i = select_unpredictable(y > h, i, k);
@@ -184,7 +191,7 @@ impl<K: Key, V> HashMap<K, V> {
     if x != h {
       None
     } else {
-      Some(unsafe { &*u.wrapping_add(i) })
+      Some(unsafe { &*u.add(i) })
     }
   }
 
@@ -192,19 +199,20 @@ impl<K: Key, V> HashMap<K, V> {
   /// if present.
   #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
-    let m = self.seed;
     let s = self.shift;
     let t = self.table;
     let u = self.value.cast_mut();
+    let m = self.seed;
+    unsafe { assert_unchecked(u.addr() != 0) };
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_write_l1(u.wrapping_add(k));
-    let y = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
     loop {
       i = i + 1;
-      x = unsafe { t.wrapping_add(i).read() };
+      x = unsafe { t.add(i).read() };
       if ! (x > h) { break }
     }
     let i = select_unpredictable(y > h, i, k);
@@ -212,7 +220,7 @@ impl<K: Key, V> HashMap<K, V> {
     if x != h {
       None
     } else {
-      Some(unsafe { &mut *u.wrapping_add(i) })
+      Some(unsafe { &mut *u.add(i) })
     }
   }
 
@@ -227,16 +235,16 @@ impl<K: Key, V> HashMap<K, V> {
     let l = unsafe { allocation_layout::<K, V>(d) };
     let t = unsafe { alloc(l) } as *mut K::Hash;
     if t.is_null() { match handle_alloc_error(l) { } }
-    let u = t.wrapping_add(d) as *mut V;
-    unsafe { write_bytes(t, 0x00u8, d) };
+    let u = unsafe { t.add(d) } as *mut V;
+    unsafe { write_bytes(t, 0u8, d) };
     let k = K::slot(h, s);
-    unsafe { t.wrapping_add(k).write(h) };
-    unsafe { u.wrapping_add(k).write(value) };
+    unsafe { t.add(k).write(h) };
+    unsafe { u.add(k).write(value) };
     self.slack = capacity::<K>(s) - 1;
     self.shift = s;
     self.table = t;
     self.value = u;
-    u.wrapping_add(k)
+    unsafe { u.add(k) }
   }
 
   #[inline(never)]
@@ -251,14 +259,15 @@ impl<K: Key, V> HashMap<K, V> {
     let old_e = old_d - old_w;
     // Temporarily place the table in a valid state in case we panic.
     self.slack = old_r;
-    let z = unsafe { old_t.wrapping_add(last_write).replace(K::ZERO) };
+    let z = unsafe { old_t.add(last_write).replace(K::ZERO) };
+    // Compute new sizes.
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
     let new_e =
       if last_write + 1 == old_d {
         old_e * 2 // if we wrote in the final slot
       } else if old_e < ctz(new_w) {
-        old_e + allocation_chunk::<K, V>() // we maintain e >= log(w)
+        old_e + allocation_chunk::<K, V>() // we maintain e >= log2(w)
       } else {
         old_e
       };
@@ -269,10 +278,10 @@ impl<K: Key, V> HashMap<K, V> {
     let new_l = unsafe { allocation_layout::<K, V>(new_d) };
     let new_t = unsafe { alloc(new_l) } as *mut K::Hash;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
-    let new_u = new_t.wrapping_add(new_d) as *mut V;
+    let new_u = unsafe { new_t.add(new_d) } as *mut V;
     // At this point, we're guaranteed to successfully finish growing the
     // table. We re-add the last write.
-    unsafe { old_t.wrapping_add(last_write).write(z) };
+    unsafe { old_t.add(last_write).write(z) };
     // Update struct fields.
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.shift = new_s;
@@ -282,19 +291,19 @@ impl<K: Key, V> HashMap<K, V> {
     let mut i = new_d;
     loop {
       i = i - allocation_chunk::<K, V>();
-      unsafe { write_bytes(new_t.wrapping_add(i), 0x00u8, allocation_chunk::<K, V>()) };
+      unsafe { write_bytes(new_t.add(i), 0u8, allocation_chunk::<K, V>()) };
       if i == 0 { break }
     }
     // Copy slots.
     let mut i = 0;
     let mut j = 0;
     loop {
-      let x = unsafe { old_t.wrapping_add(i).read() };
-      let v = unsafe { old_u.wrapping_add(i).cast::<MaybeUninit<V>>().read() };
+      let x = unsafe { old_t.add(i).read() };
+      let v = unsafe { old_u.add(i).cast::<MaybeUninit<V>>().read() };
       let k = K::slot(x, new_s);
       let k = select_unpredictable(j > k, j, k);
-      unsafe { new_t.wrapping_add(k).write(x) };
-      unsafe { new_u.wrapping_add(k).cast::<MaybeUninit<V>>().write(v) };
+      unsafe { new_t.add(k).write(x) };
+      unsafe { new_u.add(k).cast::<MaybeUninit<V>>().write(v) };
       i = i + 1;
       j = select_unpredictable(x != K::ZERO, k + 1, j);
       if i == old_d { break }
@@ -303,63 +312,10 @@ impl<K: Key, V> HashMap<K, V> {
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
     // Find the newly-inserted value. Note, this was not necessarily at last_write.
     let mut i = K::slot(h, new_s);
-    while unsafe { new_t.wrapping_add(i).read() } != h {
+    while unsafe { new_t.add(i).read() } != h {
       i = i + 1;
     }
-    new_u.wrapping_add(i)
-  }
-
-  /// Inserts the given key and value into the map. Returns the previous value
-  /// associated with given key, if one was present.
-  ///
-  /// # Panics
-  ///
-  /// Panics if allocation fails. If that happens, it is possible for the map
-  /// to leak an arbitrary set of items, but the map will remain in a valid
-  /// state.
-  #[inline(always)]
-  pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-    let m = self.seed;
-    let r = self.slack;
-    let s = self.shift;
-    let t = self.table.cast_mut();
-    let u = self.value.cast_mut();
-    let h = K::hash(key, m);
-    let k = K::slot(h, s);
-    prefetch_write_l1(u.wrapping_add(k));
-    let y = unsafe { t.wrapping_add(k).read() };
-    let mut i = k;
-    let mut x;
-    loop {
-      i = i + 1;
-      x = unsafe { t.wrapping_add(i).read() };
-      if ! (x > h) { break }
-    }
-    let i = select_unpredictable(y > h, i, k);
-    let x = select_unpredictable(y > h, x, y);
-    if x == h {
-      Some(unsafe { u.wrapping_add(i).replace(value) })
-    } else {
-      if u.is_null() {
-        let _: *mut V = self.insert_init(h, value);
-      } else {
-        self.slack = r.wrapping_sub(1);
-        let mut i = i;
-        let mut x = x;
-        let mut v = value;
-        unsafe { t.wrapping_add(i).write(h) };
-        while x != K::ZERO {
-          v = unsafe { u.wrapping_add(i).replace(v) };
-          i = i + 1;
-          x = unsafe { t.wrapping_add(i).replace(x) };
-        }
-        unsafe { u.wrapping_add(i).write(v) };
-        if r == 0 || addr_eq(t.wrapping_add(i + 1), u) {
-          let _: *mut V = self.insert_grow(h, i);
-        }
-      }
-      None
-    }
+    unsafe { new_u.add(i) }
   }
 
   /// Tries to insert the given key and value into the map. Returns a mutable
@@ -375,48 +331,68 @@ impl<K: Key, V> HashMap<K, V> {
   /// to leak an arbitrary set of items, but the map will remain in a valid
   /// state.
   #[inline(always)]
-  pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, (&mut V, V)> {
-    let m = self.seed;
+  fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, (&mut V, V)> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
     let u = self.value.cast_mut();
+    let m = self.seed;
+    unsafe { assert_unchecked(u.addr() != 0) };
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_write_l1(u.wrapping_add(k));
-    let y = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
     loop {
       i = i + 1;
-      x = unsafe { t.wrapping_add(i).read() };
+      x = unsafe { t.add(i).read() };
       if ! (x > h) { break }
     }
     let i = select_unpredictable(y > h, i, k);
     let x = select_unpredictable(y > h, x, y);
-    let mut p = u.wrapping_add(i);
     if x == h {
-      Err((unsafe { &mut *p }, value))
+      Err((unsafe { &mut *u.add(i) }, value))
     } else {
-      if u.is_null() {
-        p = self.insert_init(h, value)
-      } else {
-        self.slack = r.wrapping_sub(1);
-        let mut i = i;
-        let mut x = x;
-        let mut v = value;
-        unsafe { t.wrapping_add(i).write(h) };
-        while x != K::ZERO {
-          v = unsafe { u.wrapping_add(i).replace(v) };
-          i = i + 1;
-          x = unsafe { t.wrapping_add(i).replace(x) };
-        }
-        unsafe { u.wrapping_add(i).write(v) };
-        if r == 0 || addr_eq(t.wrapping_add(i + 1), u) {
-          p = self.insert_grow(h, i);
-        }
-      }
+      let p =
+        if is_dummy_table::<K>(s) {
+          self.insert_init(h, value)
+        } else {
+          self.slack = r.wrapping_sub(1);
+          let j = i;
+          let mut i = i;
+          let mut x = x;
+          let mut v = value;
+          unsafe { t.add(i).write(h) };
+          while x != K::ZERO {
+            v = unsafe { u.add(i).replace(v) };
+            i = i + 1;
+            x = unsafe { t.add(i).replace(x) };
+          }
+          unsafe { u.add(i).write(v) };
+          if r == 0 || addr_eq(t.wrapping_add(i + 1), u) {
+            self.insert_grow(h, i)
+          } else {
+            unsafe { u.add(j) }
+          }
+        };
       Ok(unsafe { &mut *p })
+    }
+  }
+
+  /// Inserts the given key and value into the map. Returns the previous value
+  /// associated with given key, if one was present.
+  ///
+  /// # Panics
+  ///
+  /// Panics if allocation fails. If that happens, it is possible for the map
+  /// to leak an arbitrary set of items, but the map will remain in a valid
+  /// state.
+  #[inline(always)]
+  pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+    match self.try_insert(key, value) {
+      Ok(_) => None,
+      Err((p, v)) => Some(replace(p, v)),
     }
   }
 
@@ -424,20 +400,20 @@ impl<K: Key, V> HashMap<K, V> {
   /// with the given key, if one was present.
   #[inline(always)]
   pub fn remove(&mut self, key: K) -> Option<V> {
-    let m = self.seed;
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
     let u = self.value.cast_mut();
+    let m = self.seed;
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_write_l1(u.wrapping_add(k));
-    let y = unsafe { t.wrapping_add(k).read() };
+    let y = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
     loop {
       i = i + 1;
-      x = unsafe { t.wrapping_add(i).read() };
+      x = unsafe { t.add(i).read() };
       if ! (x > h) { break }
     }
     let i = select_unpredictable(y > h, i, k);
@@ -446,18 +422,18 @@ impl<K: Key, V> HashMap<K, V> {
       None
     } else {
       self.slack = r + 1;
-      let value = unsafe { u.wrapping_add(i).read() };
+      let value = unsafe { u.add(i).read() };
       let mut i = i;
       loop {
         i = i + 1;
-        let x = unsafe { t.wrapping_add(i).read() };
+        let x = unsafe { t.add(i).read() };
         if ! (K::slot(x, s) <= i - 1 && /* likely */ x != K::ZERO) { break }
-        let v = unsafe { u.wrapping_add(i).read() };
-        unsafe { t.wrapping_add(i - 1).write(x) };
-        unsafe { u.wrapping_add(i - 1).write(v) };
+        let v = unsafe { u.add(i).read() };
+        unsafe { t.add(i - 1).write(x) };
+        unsafe { u.add(i - 1).write(v) };
         // NOTE: We could do the loop exit test here instead.
       }
-      unsafe { t.wrapping_add(i - 1).write(K::ZERO) };
+      unsafe { t.add(i - 1).write(K::ZERO) };
       Some(value)
     }
   }
@@ -473,7 +449,7 @@ impl<K: Key, V> HashMap<K, V> {
     let s = self.shift;
     let t = self.table.cast_mut();
     let u = self.value.cast_mut();
-    if u.is_null() { return }
+    if is_dummy_table::<K>(s) { return }
     let c = capacity::<K>(s);
     let n = c - r;
     let d = ptr_diff(u.cast(), t);
@@ -493,11 +469,11 @@ impl<K: Key, V> HashMap<K, V> {
         let mut i = d;
         loop {
           i = i - 1;
-          if unsafe { t.wrapping_add(i).read() } != K::ZERO {
-            unsafe { t.wrapping_add(i).write(K::ZERO) };
+          if unsafe { t.add(i).read() } != K::ZERO {
+            unsafe { t.add(i).write(K::ZERO) };
             r = r + 1;
             self.slack = r;
-            unsafe { u.wrapping_add(i).drop_in_place() };
+            unsafe { u.add(i).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
           }
@@ -509,7 +485,7 @@ impl<K: Key, V> HashMap<K, V> {
         let mut i = d;
         loop {
           i = i - allocation_chunk::<K, V>();
-          unsafe { write_bytes(t.wrapping_add(i), 0x00u8, allocation_chunk::<K, V>()) };
+          unsafe { write_bytes(t.add(i), 0u8, allocation_chunk::<K, V>()) };
           if i == 0 { break }
         }
       }
@@ -527,21 +503,21 @@ impl<K: Key, V> HashMap<K, V> {
     let s = self.shift;
     let t = self.table.cast_mut();
     let u = self.value.cast_mut();
-    if u.is_null() { return }
+    if is_dummy_table::<K>(s) { return }
     let n = capacity::<K>(s) - r;
     let d = ptr_diff(u.cast(), t);
     self.slack = capacity::<K>(K::BITS - 1);
     self.shift = K::BITS - 1;
     self.table = K::INIT;
-    self.value = null();
+    self.value = K::INIT.wrapping_add(3).cast();
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;
         let mut i = d;
         loop {
           i = i - 1;
-          if unsafe { t.wrapping_add(i).read() } != K::ZERO {
-            unsafe { u.wrapping_add(i).drop_in_place() };
+          if unsafe { t.add(i).read() } != K::ZERO {
+            unsafe { u.add(i).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
           }
@@ -555,17 +531,17 @@ impl<K: Key, V> HashMap<K, V> {
   /// value. The iterator item type is `(K, &V)`.
   #[inline(always)]
   pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
-    let m = self.seed_inverted;
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
     let u = self.value;
+    let m = self.seed_inverted;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
         idx: ptr_diff(u.cast(), t),
         ptr: t,
-        fun: move |x, i| unsafe { (K::invert_hash(x, m), &*u.wrapping_add(i)) }
+        fun: move |x, i| unsafe { (K::invert_hash(x, m), &*u.add(i)) }
       };
     i
   }
@@ -574,17 +550,17 @@ impl<K: Key, V> HashMap<K, V> {
   /// associated value. The iterator item type is `(K, &mut V)`.
   #[inline(always)]
   pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V> {
-    let m = self.seed_inverted;
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.value;
+    let u = self.value.cast_mut();
+    let m = self.seed_inverted;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
         idx: ptr_diff(u.cast(), t),
         ptr: t,
-        fun: move |x, i| unsafe { (K::invert_hash(x, m), &mut *u.wrapping_add(i).cast_mut()) }
+        fun: move |x, i| unsafe { (K::invert_hash(x, m), &mut *u.add(i)) }
       };
     i
   }
@@ -592,11 +568,11 @@ impl<K: Key, V> HashMap<K, V> {
   /// Returns an iterator yielding each key. The iterator item type is `K`.
   #[inline(always)]
   pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V> {
-    let m = self.seed_inverted;
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
     let u = self.value;
+    let m = self.seed_inverted;
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -620,7 +596,7 @@ impl<K: Key, V> HashMap<K, V> {
         len: capacity::<K>(s) - r,
         idx: ptr_diff(u.cast(), t),
         ptr: t,
-        fun: move |_, i| unsafe { &*u.wrapping_add(i) }
+        fun: move |_, i| unsafe { &*u.add(i) }
       };
     i
   }
@@ -632,30 +608,31 @@ impl<K: Key, V> HashMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.value;
+    let u = self.value.cast_mut();
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
         idx: ptr_diff(u.cast(), t),
         ptr: t,
-        fun: move |_, i| unsafe { &mut *u.wrapping_add(i).cast_mut() }
+        fun: move |_, i| unsafe { &mut *u.add(i) }
       };
     i
   }
 
-  fn internal_num_slots(&self) -> usize {
+  fn num_slots(&self) -> usize {
+    let s = self.shift;
     let t = self.table;
     let u = self.value;
-    if u.is_null() { return 0 }
+    if is_dummy_table::<K>(s) { return 0 }
     ptr_diff(u.cast(), t)
   }
 
-  fn internal_allocation_size(&self) -> usize {
-    allocation_size::<K, V>(self.internal_num_slots())
+  fn allocation_size(&self) -> usize {
+    allocation_size::<K, V>(self.num_slots())
   }
 
-  fn internal_load_factor(&self) -> f64 {
-    self.len() as f64 / self.internal_num_slots() as f64
+  fn load_factor(&self) -> f64 {
+    self.len() as f64 / self.num_slots() as f64
   }
 }
 
@@ -693,7 +670,7 @@ impl<K: Key, T, F: FnMut(K::Hash, usize) -> T> Iterator for Iter<K, T, F> {
     let mut x;
     loop {
       i = i - 1;
-      x = unsafe { t.wrapping_add(i).read() };
+      x = unsafe { t.add(i).read() };
       if x != K::ZERO { break }
     }
     self.len = n - 1;
@@ -717,7 +694,7 @@ impl<K: Key, T, F: FnMut(K::Hash, usize) -> T> Iterator for Iter<K, T, F> {
     if n != 0 {
       loop {
         i = i - 1;
-        let x = unsafe { t.wrapping_add(i).read() };
+        let x = unsafe { t.add(i).read() };
         if x != K::ZERO {
           u = g(u, f(x, i));
           n = n - 1;
@@ -787,15 +764,15 @@ pub mod internal {
   use super::Key;
 
   pub fn num_slots<K: Key, V>(t: &HashMap<K, V>) -> usize {
-    t.internal_num_slots()
+    t.num_slots()
   }
 
   pub fn allocation_size<K: Key, V>(t: &HashMap<K, V>) -> usize {
-    t.internal_allocation_size()
+    t.allocation_size()
   }
 
   pub fn load_factor<K: Key, V>(t: &HashMap<K, V>) -> f64 {
-    t.internal_load_factor()
+    t.load_factor()
   }
 }
 
@@ -817,6 +794,11 @@ pub fn contains_key(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::Non
 #[allow(missing_docs)]
 pub fn insert(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64, value: u32) {
   let _ = t.insert(key, value);
+}
+
+#[allow(missing_docs)]
+pub fn try_insert(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64, value: u32) -> Result<&mut u32, (&mut u32, u32)> {
+  t.try_insert(key, value)
 }
 
 #[allow(missing_docs)]
