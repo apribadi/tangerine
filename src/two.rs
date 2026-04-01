@@ -375,7 +375,7 @@ impl<K: Key, V> HashMap<K, V> {
             x = unsafe { t.add(i).replace(x) };
           }
           unsafe { u.add(i).write(v) };
-          if r == 0 || addr_eq(t.wrapping_add(i + 1), u) {
+          if addr_eq(t.wrapping_add(i + 1), u) || r == 0 {
             self.insert_grow(h, i)
           } else {
             unsafe { u.add(inserted_at) }
@@ -782,41 +782,41 @@ pub mod internal {
 }
 
 #[allow(missing_docs)]
-pub fn get(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) -> Option<&u32> {
+pub fn get(t: &HashMap<core::num::NonZeroU32, usize>, key: core::num::NonZeroU32) -> Option<&usize> {
   t.get(key)
 }
 
 #[allow(missing_docs)]
-pub fn get_value(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) -> Option<u32> {
+pub fn get_value(t: &HashMap<core::num::NonZeroU32, usize>, key: core::num::NonZeroU32) -> Option<usize> {
   match t.get(key) { None => None, Some(&y) => Some(y) }
 }
 
 #[allow(missing_docs)]
-pub fn contains_key(t: &HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) -> bool {
+pub fn contains_key(t: &HashMap<core::num::NonZeroU32, usize>, key: core::num::NonZeroU32) -> bool {
   t.contains_key(key)
 }
 
 #[allow(missing_docs)]
-pub fn insert(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64, value: u32) {
+pub fn insert(t: &mut HashMap<core::num::NonZeroU32, usize>, key: core::num::NonZeroU32, value: usize) {
   let _ = t.insert(key, value);
 }
 
 #[allow(missing_docs)]
-pub fn try_insert(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64, value: u32) -> Result<&mut u32, (&mut u32, u32)> {
+pub fn try_insert(t: &mut HashMap<core::num::NonZeroU32, usize>, key: core::num::NonZeroU32, value: usize) -> Result<&mut usize, (&mut usize, usize)> {
   t.try_insert(key, value)
 }
 
 #[allow(missing_docs)]
-pub fn remove(t: &mut HashMap<core::num::NonZeroU64, u32>, key: core::num::NonZeroU64) {
+pub fn remove(t: &mut HashMap<core::num::NonZeroU32, usize>, key: core::num::NonZeroU32) {
   let _ = t.remove(key);
 }
 
 #[allow(missing_docs)]
-pub fn clear(t: &mut HashMap<core::num::NonZeroU64, u32>) {
+pub fn clear(t: &mut HashMap<core::num::NonZeroU32, usize>) {
   t.clear();
 }
 
 #[allow(missing_docs)]
-pub fn reset(t: &mut HashMap<core::num::NonZeroU64, u32>) {
+pub fn reset(t: &mut HashMap<core::num::NonZeroU32, usize>) {
   t.reset();
 }
