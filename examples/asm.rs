@@ -69,7 +69,7 @@ fn std_clear(t: &mut std::collections::HashMap<NonZeroU64, u64>) {
   t.clear();
 }
 
-pub fn main() {
+fn main() {
   let _ =
     black_box([
       drop as *mut u8,
