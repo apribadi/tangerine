@@ -303,3 +303,37 @@ fn test_1() {
       100: None
   "#]].assert_eq(&s);
 }
+
+fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
+  let n: [usize; 10] = [
+    50,
+    54,
+    57,
+    62,
+    66,
+    71,
+    76,
+    81,
+    87,
+    93,
+  ];
+  let mut a = 0;
+  for &n in &n { a += n; }
+  let mut r = [0; 10];
+  let mut b = 0;
+  for i in 0 .. 9 { r[i] = n[i] * working_set / a; b += r[i]; }
+  r[9] = working_set - b;
+  r
+}
+
+
+#[test]
+fn test_working_set() {
+  let mut s = String::new();
+  write!(s, "{:?}\n", sizes_from_working_set(10_000));
+  write!(s, "{:?}\n", sizes_from_working_set(10_000).iter().sum::<usize>());
+  expect![[r#"
+      [717, 774, 817, 889, 946, 1018, 1090, 1162, 1248, 1339]
+      10000
+  "#]].assert_eq(&s.drain(..).as_str());
+}
