@@ -105,8 +105,6 @@ impl KeyGen {
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::map::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::old_map::HashMap<NonZeroU32, NonZeroU32>,
     tangerine::two::HashMap<NonZeroU32, NonZeroU32>,
   ])]
 #[inline(never)]
@@ -138,8 +136,6 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, usize>,
-    tangerine::map::HashMap<NonZeroU32, usize>,
-    tangerine::old_map::HashMap<NonZeroU32, usize>,
     tangerine::two::HashMap<NonZeroU32, usize>,
   ])]
 #[inline(never)]
@@ -173,8 +169,6 @@ fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
   args = [1_000, 10_000, 100_000, 1_000_000, 10_000_000],
   types = [
     foldhash::HashMap<NonZeroU32, usize>,
-    tangerine::map::HashMap<NonZeroU32, usize>,
-    tangerine::old_map::HashMap<NonZeroU32, usize>,
     tangerine::two::HashMap<NonZeroU32, usize>,
   ])]
 #[inline(never)]
@@ -201,8 +195,6 @@ fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, usize>,
-    tangerine::map::HashMap<NonZeroU32, usize>,
-    tangerine::old_map::HashMap<NonZeroU32, usize>,
     tangerine::two::HashMap<NonZeroU32, usize>,
   ])]
 #[inline(never)]
