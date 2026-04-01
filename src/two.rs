@@ -39,6 +39,11 @@ unsafe impl<K: Key + Sync, V: Sync> Sync for HashMap<K, V> {
 }
 
 #[inline(always)]
+unsafe fn assume_nonnull<T>(p: *const T) {
+  unsafe { assert_unchecked(p.addr() != 0) }
+}
+
+#[inline(always)]
 fn prefetch_read_l1<T>(_p: *const T) {
   #[cfg(feature = "nightly")]
   core::hint::prefetch_read(_p, core::hint::Locality::L1)
@@ -98,7 +103,7 @@ const fn capacity<K: Key>(s: usize) -> usize {
 }
 
 #[inline(always)]
-const fn is_dummy_table<K: Key>(s: usize) -> bool {
+const fn is_dummy<K: Key>(s: usize) -> bool {
   s == K::BITS - 1
 }
 
@@ -174,7 +179,7 @@ impl<K: Key, V> HashMap<K, V> {
     let t = self.table;
     let u = self.value;
     let m = self.seed;
-    unsafe { assert_unchecked(u.addr() != 0) };
+    unsafe { assume_nonnull(u) };
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_read_l1(u.wrapping_add(k));
@@ -203,7 +208,7 @@ impl<K: Key, V> HashMap<K, V> {
     let t = self.table;
     let u = self.value.cast_mut();
     let m = self.seed;
-    unsafe { assert_unchecked(u.addr() != 0) };
+    unsafe { assume_nonnull(u) };
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_write_l1(u.wrapping_add(k));
@@ -331,13 +336,13 @@ impl<K: Key, V> HashMap<K, V> {
   /// to leak an arbitrary set of items, but the map will remain in a valid
   /// state.
   #[inline(always)]
-  fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, (&mut V, V)> {
+  pub fn try_insert(&mut self, key: K, value: V) -> Result<&mut V, (&mut V, V)> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
     let u = self.value.cast_mut();
     let m = self.seed;
-    unsafe { assert_unchecked(u.addr() != 0) };
+    unsafe { assume_nonnull(u) };
     let h = K::hash(key, m);
     let k = K::slot(h, s);
     prefetch_write_l1(u.wrapping_add(k));
@@ -355,11 +360,11 @@ impl<K: Key, V> HashMap<K, V> {
       Err((unsafe { &mut *u.add(i) }, value))
     } else {
       let p =
-        if is_dummy_table::<K>(s) {
+        if is_dummy::<K>(s) {
           self.insert_init(h, value)
         } else {
           self.slack = r.wrapping_sub(1);
-          let j = i;
+          let inserted_at = i;
           let mut i = i;
           let mut x = x;
           let mut v = value;
@@ -373,7 +378,7 @@ impl<K: Key, V> HashMap<K, V> {
           if r == 0 || addr_eq(t.wrapping_add(i + 1), u) {
             self.insert_grow(h, i)
           } else {
-            unsafe { u.add(j) }
+            unsafe { u.add(inserted_at) }
           }
         };
       Ok(unsafe { &mut *p })
@@ -449,7 +454,7 @@ impl<K: Key, V> HashMap<K, V> {
     let s = self.shift;
     let t = self.table.cast_mut();
     let u = self.value.cast_mut();
-    if is_dummy_table::<K>(s) { return }
+    if is_dummy::<K>(s) { return }
     let c = capacity::<K>(s);
     let n = c - r;
     let d = ptr_diff(u.cast(), t);
@@ -503,7 +508,7 @@ impl<K: Key, V> HashMap<K, V> {
     let s = self.shift;
     let t = self.table.cast_mut();
     let u = self.value.cast_mut();
-    if is_dummy_table::<K>(s) { return }
+    if is_dummy::<K>(s) { return }
     let n = capacity::<K>(s) - r;
     let d = ptr_diff(u.cast(), t);
     self.slack = capacity::<K>(K::BITS - 1);
@@ -623,7 +628,7 @@ impl<K: Key, V> HashMap<K, V> {
     let s = self.shift;
     let t = self.table;
     let u = self.value;
-    if is_dummy_table::<K>(s) { return 0 }
+    if is_dummy::<K>(s) { return 0 }
     ptr_diff(u.cast(), t)
   }
 
