@@ -2,7 +2,7 @@
 
 use std::num::NonZeroU32;
 use std::hint::black_box;
-use tangerine::two::HashMap;
+use tangerine::map::HashMap;
 
 fn drop(_: HashMap<NonZeroU32, usize>) {
 }

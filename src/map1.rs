@@ -20,7 +20,7 @@ use pop::global;
 use pop::ptr;
 use rand_core::RngCore;
 
-use crate::old_key::Key;
+use crate::key1::Key;
 
 /// A fast hash map keyed by types representable as `NonZeroU32` or
 /// `NonZeroU64`.

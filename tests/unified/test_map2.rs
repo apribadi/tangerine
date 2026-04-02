@@ -1,25 +1,9 @@
-#![allow(unused)]
-
+use dandelion::Rng;
 use expect_test::expect;
 use std::fmt::Write;
 use std::num::NonZeroU64;
 use std::write;
-use tangerine::old_map::HashMap;
-use dandelion::Rng;
-
-/*
-#[test]
-fn test_lifetime() {
-  let mut g = Rng::from_u64(0);
-  let mut t = HashMap::new_seeded(&mut g);
-  let key = NonZeroU64::new(13).unwrap();
-  t.insert(key, 1u64);
-  let mut i = t.keys();
-  let _ = i.next();
-  t.reset();
-  let _ = i.next();
-}
-*/
+use tangerine::map2::HashMap;
 
 #[test]
 fn test_basic() {
@@ -37,22 +21,22 @@ fn test_basic() {
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
-  write!(s, "{:?} <- t.get_and_insert({:?}, {:?})\n", t.get_and_insert(key, 42), key, 42).unwrap();
+  write!(s, "{:?} <- t.insert({:?}, {:?})\n", t.insert(key, 42), key, 42).unwrap();
   write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
-  write!(s, "{:?} <- t.get_and_remove({:?})\n", t.get_and_remove(key), key).unwrap();
+  write!(s, "{:?} <- t.remove({:?})\n", t.remove(key), key).unwrap();
   write!(s, "{:?} <- t.len()\n", t.len()).unwrap();
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty()).unwrap();
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key).unwrap();
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key).unwrap();
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key).unwrap();
 
-  t.insert(key, 0);
+  let _ = t.insert(key, 0);
   t.clear();
-  t.insert(key, 0);
+  let _ = t.insert(key, 0);
   t.reset();
 
   expect![[r#"
@@ -61,13 +45,13 @@ fn test_basic() {
       false <- t.contains_key(13)
       None <- t.get(13)
       None <- t.get_mut(13)
-      None <- t.get_and_insert(13, 42)
+      None <- t.insert(13, 42)
       1 <- t.len()
       false <- t.is_empty()
       true <- t.contains_key(13)
       Some(42) <- t.get(13)
       Some(42) <- t.get_mut(13)
-      Some(42) <- t.get_and_remove(13)
+      Some(42) <- t.remove(13)
       0 <- t.len()
       true <- t.is_empty()
       false <- t.contains_key(13)
@@ -76,15 +60,14 @@ fn test_basic() {
   "#]].assert_eq(s.drain(..).as_str());
 }
 
-
 #[test]
 fn test_empty() {
   let mut s = String::new();
   let t = HashMap::<NonZeroU64, u64>::new();
 
-  write!(s, "num_slots = {}\n", tangerine::old_map::internal::num_slots(&t)).unwrap();
-  write!(s, "load = {}\n", tangerine::old_map::internal::load_factor(&t)).unwrap();
-  write!(s, "allocation_size = {}\n", tangerine::old_map::internal::allocation_size(&t)).unwrap();
+  write!(s, "num_slots = {}\n", tangerine::map2::internal::num_slots(&t)).unwrap();
+  write!(s, "load = {}\n", tangerine::map2::internal::load_factor(&t)).unwrap();
+  write!(s, "allocation_size = {}\n", tangerine::map2::internal::allocation_size(&t)).unwrap();
 
   expect![[r#"
       num_slots = 0
@@ -103,9 +86,9 @@ fn test_iter() -> Result<(), std::fmt::Error> {
     let _ = t.insert(k, 10 * i);
   }
 
-  write!(s, "num_slots = {}\n", tangerine::old_map::internal::num_slots(&t))?;
-  write!(s, "load = {}\n", tangerine::old_map::internal::load_factor(&t))?;
-  write!(s, "allocation_size = {}\n", tangerine::old_map::internal::allocation_size(&t))?;
+  write!(s, "num_slots = {}\n", tangerine::map2::internal::num_slots(&t))?;
+  write!(s, "load = {}\n", tangerine::map2::internal::load_factor(&t))?;
+  write!(s, "allocation_size = {}\n", tangerine::map2::internal::allocation_size(&t))?;
 
   let values = t.values();
   let _ = t.get(NonZeroU64::new(1).unwrap());
@@ -115,9 +98,9 @@ fn test_iter() -> Result<(), std::fmt::Error> {
   write!(s, "{:?}\n", values)?;
 
   expect![[r#"
-      num_slots = 32
-      load = 0.3125
-      allocation_size = 512
+      num_slots = 40
+      load = 0.25
+      allocation_size = 640
       [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
   "#]].assert_eq(&s.drain(..).as_str());
 
@@ -141,10 +124,12 @@ fn test_1() -> Result<(), std::fmt::Error> {
     let _ = t.insert(k, 10 * i);
   }
 
+  assert!(t.len() == 100);
+
   write!(s, "len = {}\n", t.len())?;
-  write!(s, "num_slots = {}\n", tangerine::old_map::internal::num_slots(&t))?;
-  write!(s, "load = {}\n", tangerine::old_map::internal::load_factor(&t))?;
-  write!(s, "allocation_size = {}\n", tangerine::old_map::internal::allocation_size(&t))?;
+  write!(s, "num_slots = {}\n", tangerine::map2::internal::num_slots(&t))?;
+  write!(s, "load = {}\n", tangerine::map2::internal::load_factor(&t))?;
+  write!(s, "allocation_size = {}\n", tangerine::map2::internal::allocation_size(&t))?;
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
@@ -154,14 +139,14 @@ fn test_1() -> Result<(), std::fmt::Error> {
   for i in 1 ..= 100 {
     if i & 1 == 0 {
       let k = NonZeroU64::new(i).unwrap();
-      assert!(t.get_and_remove(k).is_some());
+      assert!(t.remove(k).is_some());
     }
   }
 
   write!(s, "len = {}\n", t.len())?;
-  write!(s, "num_slots = {}\n", tangerine::old_map::internal::num_slots(&t))?;
-  write!(s, "load = {}\n", tangerine::old_map::internal::load_factor(&t))?;
-  write!(s, "allocation_size = {}\n", tangerine::old_map::internal::allocation_size(&t))?;
+  write!(s, "num_slots = {}\n", tangerine::map2::internal::num_slots(&t))?;
+  write!(s, "load = {}\n", tangerine::map2::internal::load_factor(&t))?;
+  write!(s, "allocation_size = {}\n", tangerine::map2::internal::allocation_size(&t))?;
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
@@ -170,13 +155,13 @@ fn test_1() -> Result<(), std::fmt::Error> {
 
   expect![[r#"
       len = 100
-      num_slots = 384
-      load = 0.2604166666666667
-      allocation_size = 6144
+      num_slots = 264
+      load = 0.3787878787878788
+      allocation_size = 4224
       len = 50
-      num_slots = 384
-      load = 0.13020833333333334
-      allocation_size = 6144
+      num_slots = 264
+      load = 0.1893939393939394
+      allocation_size = 4224
       1: Some(10)
       2: None
       3: Some(30)
@@ -280,35 +265,4 @@ fn test_1() -> Result<(), std::fmt::Error> {
   "#]].assert_eq(&s);
 
   Ok(())
-}
-
-fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
-  let n: [usize; 10] = [
-    50,
-    54,
-    57,
-    62,
-    66,
-    71,
-    76,
-    81,
-    87,
-    93,
-  ];
-  let s = n.iter().sum::<usize>();
-  let mut r = [0; 10];
-  for i in 0 .. 9 { r[i] = n[i] * working_set / s; }
-  r[9] = working_set - r[0 .. 9].iter().sum::<usize>();
-  r
-}
-
-#[test]
-fn test_working_set() {
-  let mut s = String::new();
-  write!(s, "{:?}\n", sizes_from_working_set(10_000));
-  write!(s, "{:?}\n", sizes_from_working_set(10_000).iter().sum::<usize>());
-  expect![[r#"
-      [717, 774, 817, 889, 946, 1018, 1090, 1162, 1248, 1339]
-      10000
-  "#]].assert_eq(&s.drain(..).as_str());
 }
