@@ -101,7 +101,7 @@ const unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
 }
 
 #[inline(always)]
-fn capacity<K: Key>(s: usize) -> usize {
+const fn capacity<K: Key>(s: usize) -> usize {
   1 << K::BITS - s - 1
 }
 

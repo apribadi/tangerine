@@ -10,7 +10,6 @@ const ARGS: &'static [usize] = &[
   30_000,
   100_000,
   300_000,
-  // 1_000_000,
 ];
 
 const SAMPLE_COUNT: u32 = 9;
@@ -57,27 +56,6 @@ impl KeyGen {
 }
 
 /*
-struct KeyGen(u32);
-
-impl KeyGen {
-  fn new() -> Self {
-    KeyGen(1)
-  }
-
-  fn next(&mut self) -> NonZeroU32 {
-    let x = self.0;
-    self.0 = x.wrapping_add(2);
-    unsafe { NonZeroU32::new_unchecked(core::arch::aarch64::__crc32cw(0, x)) }
-  }
-
-  fn peek(&mut self) -> NonZeroU32 {
-    let x = self.0;
-    unsafe { NonZeroU32::new_unchecked(core::arch::aarch64::__crc32cw(0, x)) }
-  }
-}
-*/
-
-/*
 struct KeyGen(NonZeroU64);
 
 impl KeyGen {
@@ -105,7 +83,7 @@ impl KeyGen {
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::two::HashMap<NonZeroU32, NonZeroU32>,
+    tangerine::map::HashMap<NonZeroU32, NonZeroU32>,
   ])]
 #[inline(never)]
 fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -136,7 +114,7 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, usize>,
-    tangerine::two::HashMap<NonZeroU32, usize>,
+    tangerine::map::HashMap<NonZeroU32, usize>,
   ])]
 #[inline(never)]
 fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -165,11 +143,11 @@ fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
 }
 
 #[divan::bench(
+  args = ARGS,
   sample_count = SAMPLE_COUNT,
-  args = [1_000, 10_000, 100_000, 1_000_000, 10_000_000],
   types = [
     foldhash::HashMap<NonZeroU32, usize>,
-    tangerine::two::HashMap<NonZeroU32, usize>,
+    tangerine::map::HashMap<NonZeroU32, usize>,
   ])]
 #[inline(never)]
 fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -195,7 +173,7 @@ fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, usize>,
-    tangerine::two::HashMap<NonZeroU32, usize>,
+    tangerine::map::HashMap<NonZeroU32, usize>,
   ])]
 #[inline(never)]
 fn bench_remove_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
