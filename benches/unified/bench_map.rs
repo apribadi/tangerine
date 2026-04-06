@@ -36,72 +36,36 @@ fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
   r
 }
 
-struct KeyGen(u32);
-
-impl KeyGen {
-  fn new() -> Self {
-    KeyGen(1)
-  }
-
-  fn next(&mut self) -> NonZeroU32 {
-    let x = self.0;
-    self.0 = x.wrapping_mul(5);
-    unsafe { NonZeroU32::new_unchecked(x ^ x >> 16) }
-  }
-
-  fn peek(&mut self) -> NonZeroU32 {
-    let x = self.0;
-    unsafe { NonZeroU32::new_unchecked(x ^ x >> 16) }
-  }
+fn key_seq(n: usize) -> NonZeroU32 {
+  let n = n as u32;
+  let n = n | 0x8000_0000;
+  let n = n.rotate_left(16);
+  unsafe { NonZeroU32::new_unchecked(n) }
 }
-
-/*
-struct KeyGen(NonZeroU64);
-
-impl KeyGen {
-  fn new() -> Self {
-    KeyGen(unsafe { NonZeroU64::new_unchecked(0xcafe_babe_cafe_babe) })
-  }
-
-  fn next(&mut self) -> NonZeroU64 {
-    let x = self.0;
-    let y = x.get();
-    let y = y ^ y << 9;
-    let y = y ^ y >> 7;
-    self.0 = unsafe { NonZeroU64::new_unchecked(y) };
-    x
-  }
-
-  fn peek(&mut self) -> NonZeroU64 {
-    self.0
-  }
-}
-*/
 
 #[divan::bench(
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::map::HashMap<NonZeroU32, NonZeroU32>,
+    foldhash::HashMap<NonZeroU32, usize>,
+    tangerine::map::HashMap<NonZeroU32, usize>,
   ])]
 #[inline(never)]
-fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
+fn bench_get_chained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
   let mut t: [_; 10] =
     sizes.map(|m| {
       let mut t = T::new();
-      let mut g = KeyGen::new();
-      for _ in 0 .. m { let _ = t.insert(g.next(), g.peek()); }
-      (t, KeyGen::new().peek())
+      for i in 0 .. m { let _ = t.insert(key_seq(i), i); }
+      (t, 0)
     });
   bencher.bench_local(|| {
     for _ in 0 .. 200 {
       for &mut (ref mut t, ref mut k) in &mut t {
         for _ in 0 .. 500 {
-          match t.get(*k) {
-            None => { *k = KeyGen::new().peek(); }
-            Some(&y) => { *k = y; }
+          match t.get(key_seq(*k)) {
+            None => { *k = 0; }
+            Some(&y) => { *k = y + 1; }
           }
         }
       }
@@ -122,18 +86,17 @@ fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
   let mut t: [_; 10] =
     sizes.map(|m| {
       let mut t = T::new();
-      let mut g = KeyGen::new();
-      for i in 0 .. m { let _ = t.insert(g.next(), i); }
-      (t, KeyGen::new())
+      for i in 0 .. m { let _ = t.insert(key_seq(i), i); }
+      (t, 0)
     });
   bencher.bench_local(|| {
-    let mut z = 0usize;
+    let mut z = 0;
     for _ in 0 .. 200 {
-      for &mut (ref mut t, ref mut g) in &mut t {
+      for &mut (ref mut t, ref mut k) in &mut t {
         for _ in 0 .. 500 {
-          match t.get(g.next()) {
-            None => { *g = KeyGen::new(); }
-            Some(&y) => { z = z.wrapping_add(y); }
+          match t.get(key_seq(*k)) {
+            None => { *k = 0; }
+            Some(&y) => { *k = *k + 1; z = y.wrapping_add(z); }
           }
         }
       }
@@ -152,15 +115,16 @@ fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
 #[inline(never)]
 fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
-  let mut t: [_; 10] = sizes.map(|n| (T::new(), n));
-  let mut g = KeyGen::new();
+  let mut t: [_; 10] = sizes.map(|m| (T::new(), m));
+  let mut k = 0;
   bencher.bench_local(|| {
     for _ in 0 .. 200 {
-      for &mut (ref mut t, n) in &mut t {
-        let mut k = t.len();
-        for i in 0 .. 500 {
-          if k == n { k = 0; *t = T::new(); }
-          let _ = t.insert(g.next(), i);
+      for &mut (ref mut t, m) in &mut t {
+        let mut n = t.len();
+        for _ in 0 .. 500 {
+          if n == m { n = 0; *t = T::new(); }
+          let _ = t.insert(key_seq(k), k);
+          n = n + 1;
           k = k + 1;
         }
       }
@@ -181,17 +145,18 @@ fn bench_remove_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
   let mut t: [_; 10] =
     sizes.map(|m| {
       let mut t = T::new();
-      let mut g = KeyGen::new();
-      for i in 0 .. m { let _ = t.insert(g.next(), i); }
-      (t, KeyGen::new(), g)
+      for i in 0 .. m { let _ = t.insert(key_seq(i), i); }
+      (t, 0, m)
     });
   bencher.bench_local(|| {
-    let mut z = 0usize;
+    let mut z = 0;
     for _ in 0 .. 200 {
       for &mut (ref mut t, ref mut a, ref mut b) in &mut t {
         for i in 0 .. 250 {
-          if let Some(y) = t.remove(a.next()) { z = z.wrapping_add(y); }
-          let _ = t.insert(b.next(), i);
+          if let Some(y) = t.remove(key_seq(*a)) { z = y.wrapping_add(z); }
+          let _ = t.insert(key_seq(*b), i);
+          *a = *a + 1;
+          *b = *b + 1;
         }
       }
     }
