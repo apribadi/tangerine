@@ -45,16 +45,24 @@ impl<T: Key> HashSet<T> {
     self.map.contains_key(value)
   }
 
-  /// Inserts the given value into the set.
+  /// Inserts the given value into the set. Returns whether the set already
+  /// contained the given value.
   #[inline(always)]
-  pub fn insert(&mut self, value: T) {
-    let _: Option<()> = self.map.insert(value, ());
+  pub fn insert(&mut self, value: T) -> bool {
+    match self.map.insert(value, ()) {
+      None => false,
+      Some(_) => true,
+    }
   }
 
-  /// Removes the given value from the set.
+  /// Removes the given value from the set. Returns whether the set previously
+  /// contained the given value.
   #[inline(always)]
-  pub fn remove(&mut self, value: T) {
-    let _: Option<()> = self.map.remove(value);
+  pub fn remove(&mut self, value: T) -> bool {
+    match self.map.remove(value) {
+      None => false,
+      Some(_) => true,
+    }
   }
 
   /// Removes every item from the set. Retains heap-allocated memory.
@@ -78,7 +86,7 @@ impl<T: Key> HashSet<T> {
 impl<T: Key> Clone for HashSet<T> {
   fn clone(&self) -> Self {
     let mut t = Self::new();
-    self.iter().for_each(|x| t.insert(x));
+    self.iter().for_each(|x| { let _ = t.insert(x); });
     t
   }
 }
@@ -97,10 +105,22 @@ impl<T: Key> Default for HashSet<T> {
   }
 }
 
+impl<T: Key> Extend<T> for HashSet<T> {
+  fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+    iter.into_iter().for_each(|x| { let _ = self.insert(x); });
+  }
+}
+
+impl<const N: usize, T: Key> From<[T; N]> for HashSet<T> {
+  fn from(value: [T; N]) -> Self {
+    Self::from_iter(value)
+  }
+}
+
 impl<T: Key> FromIterator<T> for HashSet<T> {
   fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
     let mut t = Self::new();
-    iter.into_iter().for_each(|x| t.insert(x));
+    iter.into_iter().for_each(|x| { let _ = t.insert(x); });
     t
   }
 }

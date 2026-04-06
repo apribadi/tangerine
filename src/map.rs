@@ -744,7 +744,7 @@ impl<K: Key, V> Default for HashMap<K, V> {
 }
 
 impl<K: Key, V> Extend<(K, V)> for HashMap<K, V> {
-  fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
+  fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
     iter.into_iter().for_each(|(k, v)| { let _ = self.insert(k, v); });
   }
 }
