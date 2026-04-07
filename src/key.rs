@@ -1,6 +1,7 @@
 //! This module provides traits for hashable keys representable as [`NonZeroU32`]
 //! or [`NonZeroU64`].
 
+use core::hint::assert_unchecked;
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 use rand_core::RngCore;
@@ -131,7 +132,8 @@ unsafe impl private::Key for NonZeroU32 {
   }
 
   #[inline(always)]
-  fn slot(h: Self::Hash, s: usize) -> usize {
+  unsafe fn slot(h: Self::Hash, s: usize) -> usize {
+    unsafe { assert_unchecked(s <= 31) };
     (! h >> s) as usize
   }
 }
@@ -188,7 +190,8 @@ unsafe impl private::Key for NonZeroU64 {
   }
 
   #[inline(always)]
-  fn slot(h: Self::Hash, s: usize) -> usize {
+  unsafe fn slot(h: Self::Hash, s: usize) -> usize {
+    unsafe { assert_unchecked(s <= 63) };
     (! h >> s) as usize
   }
 }
@@ -230,8 +233,8 @@ unsafe impl<T: IntoKey> private::Key for T {
   }
 
   #[inline(always)]
-  fn slot(h: Self::Hash, s: usize) -> usize {
-    <T::Key as private::Key>::slot(h, s)
+  unsafe fn slot(h: Self::Hash, s: usize) -> usize {
+    unsafe { <T::Key as private::Key>::slot(h, s) }
   }
 }
 
@@ -259,6 +262,6 @@ pub(crate) mod private {
 
     unsafe fn invert_hash(_: Self::Hash, _: Self::Seed) -> Self;
 
-    fn slot(_: Self::Hash, _: usize) -> usize;
+    unsafe fn slot(_: Self::Hash, _: usize) -> usize;
   }
 }
