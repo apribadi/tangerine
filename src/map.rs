@@ -45,13 +45,13 @@ pub enum Entry<'a, K: Key, V> {
 /// TODO:
 pub struct OccupiedEntry<'a, K: Key, V> {
   map: &'a mut HashMap<K, V>,
-  index: usize,
+  slot: usize,
 }
 
 /// TODO:
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut HashMap<K, V>,
-  index: usize,
+  slot: usize,
   curr: K::Hash,
   hash: K::Hash,
 }
@@ -250,7 +250,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn insert_init(&mut self, h: K::Hash, value: V) -> *mut V {
+  fn insert_init(&mut self, hash: K::Hash, value: V) -> *mut V {
     let w = 4 * allocation_chunk::<K, V>();
     let e = allocation_chunk::<K, V>();
     let d = w + e;
@@ -261,8 +261,8 @@ impl<K: Key, V> HashMap<K, V> {
     if t.is_null() { match handle_alloc_error(l) { } }
     let u = unsafe { t.add(d) } as *mut V;
     unsafe { write_bytes(t, 0u8, d) };
-    let k = unsafe { K::slot(h, s) };
-    unsafe { t.add(k).write(h) };
+    let k = unsafe { K::slot(hash, s) };
+    unsafe { t.add(k).write(hash) };
     unsafe { u.add(k).write(value) };
     self.slack = capacity::<K>(s) - 1;
     self.shift = s;
@@ -273,7 +273,7 @@ impl<K: Key, V> HashMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn insert_grow(&mut self, h: K::Hash, last_write: usize) -> *mut V {
+  fn insert_grow(&mut self, hash: K::Hash, last_write: usize) -> *mut V {
     let old_r = self.slack.wrapping_add(1);
     let old_s = self.shift;
     let old_t = self.table.cast_mut();
@@ -335,8 +335,8 @@ impl<K: Key, V> HashMap<K, V> {
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
     // Find the newly-inserted value. Note, this was not necessarily at last_write.
-    let mut i = unsafe { K::slot(h, new_s) };
-    while unsafe { new_t.add(i).read() } != h {
+    let mut i = unsafe { K::slot(hash, new_s) };
+    while unsafe { new_t.add(i).read() } != hash {
       i = i + 1;
     }
     unsafe { new_u.add(i) }
@@ -460,14 +460,14 @@ impl<K: Key, V> HashMap<K, V> {
     let i = select_unpredictable(a > h, i, k);
     let x = select_unpredictable(a > h, x, a);
     if x == h {
-      Entry::Occupied(OccupiedEntry { map: self, index: i })
+      Entry::Occupied(OccupiedEntry { map: self, slot: i })
     } else {
-      Entry::Vacant(VacantEntry { map: self, index: i, curr: x, hash: h })
+      Entry::Vacant(VacantEntry { map: self, slot: i, curr: x, hash: h })
     }
   }
 
   #[inline(always)]
-  unsafe fn insert_at(&mut self, index: usize, curr: K::Hash, hash: K::Hash, value: V) -> &mut V {
+  unsafe fn insert_at(&mut self, slot: usize, curr: K::Hash, hash: K::Hash, value: V) -> &mut V {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
@@ -477,7 +477,7 @@ impl<K: Key, V> HashMap<K, V> {
         self.insert_init(hash, value)
       } else {
         self.slack = r.wrapping_sub(1);
-        let mut i = index;
+        let mut i = slot;
         let mut x = curr;
         let mut y = value;
         unsafe { t.add(i).write(hash) };
@@ -490,21 +490,21 @@ impl<K: Key, V> HashMap<K, V> {
         if addr_eq(t.wrapping_add(i + 1), u) || r == 0 {
           self.insert_grow(hash, i)
         } else {
-          unsafe { u.add(index) }
+          unsafe { u.add(slot) }
         }
       };
     unsafe { &mut *p }
   }
 
   #[inline(always)]
-  unsafe fn remove_at(&mut self, index: usize) -> V {
+  unsafe fn remove_at(&mut self, slot: usize) -> V {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
     let u = self.value.cast_mut();
     self.slack = r + 1;
-    let value = unsafe { u.add(index).read() };
-    let mut i = index;
+    let value = unsafe { u.add(slot).read() };
+    let mut i = slot;
     loop {
       i = i + 1;
       let x = unsafe { t.add(i).read() };
@@ -539,6 +539,12 @@ impl<K: Key, V> HashMap<K, V> {
       Entry::Occupied(entry) => entry.into_mut_ref(),
       Entry::Vacant(entry) => entry.insert(V::default()),
     }
+  }
+
+  /// TODO:
+  pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
+    let _ = keys;
+    unimplemented!()
   }
 
   /// Removes every item from the map. Retains heap-allocated memory.
@@ -642,7 +648,7 @@ impl<K: Key, V> HashMap<K, V> {
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        index: ptr_diff(u.cast(), t),
+        slot: ptr_diff(u.cast(), t),
         table: t,
         f: move |x, i| unsafe { (K::invert_hash(x, m), &*u.add(i)) }
       };
@@ -661,7 +667,7 @@ impl<K: Key, V> HashMap<K, V> {
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        index: ptr_diff(u.cast(), t),
+        slot: ptr_diff(u.cast(), t),
         table: t,
         f: move |x, i| unsafe { (K::invert_hash(x, m), &mut *u.add(i)) }
       };
@@ -679,7 +685,7 @@ impl<K: Key, V> HashMap<K, V> {
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        index: ptr_diff(u.cast(), t),
+        slot: ptr_diff(u.cast(), t),
         table: t,
         f: move |x, _| unsafe { K::invert_hash(x, m) }
       };
@@ -697,7 +703,7 @@ impl<K: Key, V> HashMap<K, V> {
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        index: ptr_diff(u.cast(), t),
+        slot: ptr_diff(u.cast(), t),
         table: t,
         f: move |_, i| unsafe { &*u.add(i) }
       };
@@ -715,7 +721,7 @@ impl<K: Key, V> HashMap<K, V> {
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        index: ptr_diff(u.cast(), t),
+        slot: ptr_diff(u.cast(), t),
         table: t,
         f: move |_, i| unsafe { &mut *u.add(i) }
       };
@@ -749,46 +755,34 @@ impl<K: Key, V> Index<K> for HashMap<K, V> {
   type Output = V;
 
   #[inline(always)]
-  fn index(&self, index: K) -> &Self::Output {
-    self.get(index).unwrap()
+  fn index(&self, key: K) -> &Self::Output {
+    self.get(key).unwrap()
   }
 }
 
 impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
   /// TODO:
   #[inline(always)]
-  pub fn get(&self) -> &V {
-    unsafe { &*self.map.value.add(self.index) }
-  }
-
-  /// TODO:
-  #[inline(always)]
   pub fn get_mut(&mut self) -> &mut V {
-    unsafe { &mut *self.map.value.cast_mut().add(self.index) }
-  }
-
-  /// TODO:
-  #[inline(always)]
-  pub fn into_ref(self) -> &'a V {
-    unsafe { &*self.map.value.add(self.index) }
+    unsafe { &mut *self.map.value.cast_mut().add(self.slot) }
   }
 
   /// TODO:
   #[inline(always)]
   pub fn into_mut_ref(self) -> &'a mut V {
-    unsafe { &mut *self.map.value.cast_mut().add(self.index) }
+    unsafe { &mut *self.map.value.cast_mut().add(self.slot) }
   }
 
   /// TODO:
   #[inline(always)]
   pub fn insert(&mut self, value: V) -> V {
-    unsafe { self.map.value.cast_mut().add(self.index).replace(value) }
+    unsafe { self.map.value.cast_mut().add(self.slot).replace(value) }
   }
 
   /// TODO:
   #[inline(always)]
   pub fn remove(self) -> V {
-    unsafe { self.map.remove_at(self.index) }
+    unsafe { self.map.remove_at(self.slot) }
   }
 }
 
@@ -796,13 +790,13 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
   /// TODO:
   #[inline(always)]
   pub fn insert(self, value: V) -> &'a mut V {
-    unsafe { self.map.insert_at(self.index, self.curr, self.hash, value) }
+    unsafe { self.map.insert_at(self.slot, self.curr, self.hash, value) }
   }
 }
 
 struct Iter<K: Key, T, F: FnMut(K::Hash, usize) -> T> {
   len: usize,
-  index: usize,
+  slot: usize,
   table: *const K::Hash,
   f: F,
 }
@@ -815,7 +809,7 @@ impl<K: Key, T, F: FnMut(K::Hash, usize) -> T> Iterator for Iter<K, T, F> {
     let n = self.len;
     if n == 0 { return None }
     let t = self.table;
-    let mut i = self.index;
+    let mut i = self.slot;
     let mut x;
     loop {
       i = i - 1;
@@ -823,7 +817,7 @@ impl<K: Key, T, F: FnMut(K::Hash, usize) -> T> Iterator for Iter<K, T, F> {
       if x != K::ZERO { break }
     }
     self.len = n - 1;
-    self.index = i;
+    self.slot = i;
     Some((self.f)(x, i))
   }
 
@@ -836,7 +830,7 @@ impl<K: Key, T, F: FnMut(K::Hash, usize) -> T> Iterator for Iter<K, T, F> {
   fn fold<U, G: FnMut(U, T) -> U>(self, init: U, g: G) -> U {
     let t = self.table;
     let mut n = self.len;
-    let mut i = self.index;
+    let mut i = self.slot;
     let mut f = self.f;
     let mut u = init;
     let mut g = g;
@@ -1033,7 +1027,6 @@ pub fn entry_decr(
     Entry::Vacant(_) => { }
   }
 }
-
 
 #[allow(missing_docs)]
 #[inline(never)]
