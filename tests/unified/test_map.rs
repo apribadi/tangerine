@@ -41,8 +41,8 @@ fn test_api() {
   write!(s, "{:?} <- internal::num_slots(&t))\n", internal::num_slots(&t));
   write!(s, "{:?} <- internal::load_factor(&t))\n", internal::load_factor(&t));
   write!(s, "{:?} <- internal::allocation_size(&t))\n", internal::allocation_size(&t));
-  write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.try_insert(key, 40), key, 40);
-  write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.try_insert(key, 41), key, 41);
+  write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.insert(key, 40), key, 40);
+  write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.insert(key, 41), key, 41);
   write!(s, "{:?} <- t.insert({:?}, {:?})\n", t.insert(key, 42), key, 42);
   write!(s, "{:?} <- t.len()\n", t.len());
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
@@ -72,9 +72,9 @@ fn test_api() {
       0 <- internal::num_slots(&t))
       NaN <- internal::load_factor(&t))
       0 <- internal::allocation_size(&t))
-      Ok(40) <- t.try_insert(13, 40)
-      Err((40, 41)) <- t.try_insert(13, 41)
-      Some(40) <- t.insert(13, 42)
+      None <- t.try_insert(13, 40)
+      Some(40) <- t.try_insert(13, 41)
+      Some(41) <- t.insert(13, 42)
       1 <- t.len()
       false <- t.is_empty()
       true <- t.contains_key(13)

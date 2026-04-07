@@ -35,10 +35,6 @@ fn insert(t: &mut HashMap<NonZeroU32, usize>, k: NonZeroU32, v: usize) -> Option
   t.insert(k, v)
 }
 
-fn try_insert(t: &mut HashMap<NonZeroU32, usize>, k: NonZeroU32, v: usize) -> Result<&mut usize, (&mut usize, usize)> {
-  t.try_insert(k, v)
-}
-
 fn remove(t: &mut HashMap<NonZeroU32, usize>, k: NonZeroU32) -> Option<usize> {
   t.remove(k)
 }
@@ -80,7 +76,6 @@ fn main() {
       get as *mut u8,
       get_value as *mut u8,
       insert as *mut u8,
-      try_insert as *mut u8,
       remove as *mut u8,
       clear as *mut u8,
       reset as *mut u8,
