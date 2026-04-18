@@ -1,15 +1,20 @@
 #![allow(missing_docs)]
 
+use dandelion::Rng;
 use std::num::NonZeroU32;
 use std::num::NonZeroU64;
-use tangerine::map::HashMap;
 use tangerine::map::Entry;
+use tangerine::map::HashMap;
 
 pub fn drop(_: HashMap<NonZeroU32, NonZeroU64>) {
 }
 
 pub fn new() -> HashMap<NonZeroU32, NonZeroU64> {
   HashMap::new()
+}
+
+pub fn new_seeded(rng: &mut Rng) -> HashMap<NonZeroU32, NonZeroU64> {
+  HashMap::new_seeded(rng)
 }
 
 pub fn len(t: &HashMap<NonZeroU32, NonZeroU64>) -> usize {

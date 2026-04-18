@@ -701,6 +701,8 @@ impl<K: Key, V> HashMap<K, V> {
     let t = self.table;
     let u = self.value;
     let m = self.seed_inverted;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -720,6 +722,8 @@ impl<K: Key, V> HashMap<K, V> {
     let t = self.table;
     let u = self.value.cast_mut();
     let m = self.seed_inverted;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -738,6 +742,8 @@ impl<K: Key, V> HashMap<K, V> {
     let t = self.table;
     let u = self.value;
     let m = self.seed_inverted;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -756,6 +762,8 @@ impl<K: Key, V> HashMap<K, V> {
     let s = self.shift;
     let t = self.table;
     let u = self.value;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -774,6 +782,8 @@ impl<K: Key, V> HashMap<K, V> {
     let s = self.shift;
     let t = self.table;
     let u = self.value.cast_mut();
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
