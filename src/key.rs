@@ -1,7 +1,6 @@
 //! This module provides traits for hashable keys representable as [`NonZeroU32`]
 //! or [`NonZeroU64`].
 
-use core::hint::assert_unchecked;
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 use rand_core::RngCore;
@@ -19,7 +18,7 @@ impl Key for NonZeroU32 {
 impl Key for NonZeroU64 {
 }
 
-impl<T: IntoKey> Key for T {
+impl<T: IntoKey + Copy + Ord> Key for T {
 }
 
 /// A trait for representing keys as [`NonZeroU32`] or [`NonZeroU64`].
@@ -37,7 +36,7 @@ impl<T: IntoKey> Key for T {
 /// let _ = unsafe { project(y) };
 /// let _ = unsafe { project(y) };
 /// ```
-pub unsafe trait IntoKey: Copy + Ord {
+pub unsafe trait IntoKey {
   #![allow(missing_docs)]
 
   type Key: Key;
@@ -47,51 +46,25 @@ pub unsafe trait IntoKey: Copy + Ord {
   unsafe fn project(_: Self::Key) -> Self;
 }
 
-#[inline(always)]
-fn invert_u32(a: u32) -> u32 {
-  // https://jeffhurchalla.com/2022/04/25/a-faster-multiplicative-inverse-mod-a-power-of-2/
-  let x = a.wrapping_mul(3) ^ 2;
-  let y = 1u32.wrapping_sub(a.wrapping_mul(x));
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  x
-}
+static EMPTY_TABLE_U32: [u32; 3] = [0u32; 3];
 
-#[inline(always)]
-fn invert_u64(a: u64) -> u64 {
-  // https://arxiv.org/abs/2204.04342
-  let x = a.wrapping_mul(3) ^ 2;
-  let y = 1u64.wrapping_sub(a.wrapping_mul(x));
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  x
-}
-
-static INIT_U32: [u32; 3] = [0u32; 3];
-
-static INIT_U64: [u64; 3] = [0u64; 3];
+static EMPTY_TABLE_U64: [u64; 3] = [0u64; 3];
 
 unsafe impl private::Key for NonZeroU32 {
-  type Seed = (u32, u32);
-
-  type Hash = u32;
-
-  const BITS: usize = 32;
-
-  const ZERO: Self::Hash = 0;
-
-  const INIT: *const Self::Hash = &raw const INIT_U32 as *const Self::Hash;
+  type Word = u32;
 
   #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
+  fn into_word(x: Self) -> Self::Word {
+    x.get()
+  }
+
+  #[inline(always)]
+  unsafe fn from_word(x: Self::Word) -> Self {
+    unsafe { Self::new_unchecked(x) }
+  }
+
+  #[inline(always)]
+  fn seed_nondet() -> (Self::Word, Self::Word) {
     let n = dandelion::thread_local::u64();
     let a = n as u32;
     let b = (n >> 32) as u32;
@@ -99,58 +72,29 @@ unsafe impl private::Key for NonZeroU32 {
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> Self::Seed {
+  fn seed(g: &mut impl RngCore) -> (Self::Word, Self::Word) {
     let n = g.next_u64();
     let a = n as u32;
     let b = (n >> 32) as u32;
     (a | 1, b | 1)
   }
-
-  #[inline(always)]
-  fn invert_seed(m: Self::Seed) -> Self::Seed {
-    let a = m.0;
-    let b = m.1;
-    let c = invert_u32(a.wrapping_mul(b));
-    (c.wrapping_mul(a), c.wrapping_mul(b))
-  }
-
-  #[inline(always)]
-  fn hash(k: Self, (a, b): Self::Seed) -> Self::Hash {
-    let h = k.get();
-    let h = h.wrapping_mul(a);
-    let h = h.swap_bytes();
-    let h = h.wrapping_mul(b);
-    h
-  }
-
-  #[inline(always)]
-  unsafe fn invert_hash(h: Self::Hash, (a, b): Self::Seed) -> Self {
-    let h = h.wrapping_mul(a);
-    let h = h.swap_bytes();
-    let h = h.wrapping_mul(b);
-    unsafe { NonZeroU32::new_unchecked(h) }
-  }
-
-  #[inline(always)]
-  unsafe fn slot(h: Self::Hash, s: usize) -> usize {
-    unsafe { assert_unchecked(s <= 31) };
-    (! h >> s) as usize
-  }
 }
 
 unsafe impl private::Key for NonZeroU64 {
-  type Seed = (u64, u64);
-
-  type Hash = u64;
-
-  const BITS: usize = 64;
-
-  const ZERO: Self::Hash = 0;
-
-  const INIT: *const Self::Hash = &raw const INIT_U64 as *const Self::Hash;
+  type Word = u64;
 
   #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
+  fn into_word(x: Self) -> Self::Word {
+    x.get()
+  }
+
+  #[inline(always)]
+  unsafe fn from_word(x: Self::Word) -> Self {
+    unsafe { Self::new_unchecked(x) }
+  }
+
+  #[inline(always)]
+  fn seed_nondet() -> (Self::Word, Self::Word) {
     let n = dandelion::thread_local::u128();
     let a = n as u64;
     let b = (n >> 64) as u64;
@@ -158,110 +102,168 @@ unsafe impl private::Key for NonZeroU64 {
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> Self::Seed {
+  fn seed(g: &mut impl RngCore) -> (Self::Word, Self::Word) {
     let a = g.next_u64();
     let b = g.next_u64();
     (a | 1, b | 1)
   }
-
-  #[inline(always)]
-  fn invert_seed(m: Self::Seed) -> Self::Seed {
-    let a = m.0;
-    let b = m.1;
-    let c = invert_u64(a.wrapping_mul(b));
-    (c.wrapping_mul(a), c.wrapping_mul(b))
-  }
-
-  #[inline(always)]
-  fn hash(k: Self, (a, b): Self::Seed) -> Self::Hash {
-    let h = k.get();
-    let h = h.wrapping_mul(a);
-    let h = h.swap_bytes();
-    let h = h.wrapping_mul(b);
-    h
-  }
-
-  #[inline(always)]
-  unsafe fn invert_hash(h: Self::Hash, (a, b): Self::Seed) -> Self {
-    let h = h.wrapping_mul(a);
-    let h = h.swap_bytes();
-    let h = h.wrapping_mul(b);
-    unsafe { NonZeroU64::new_unchecked(h) }
-  }
-
-  #[inline(always)]
-  unsafe fn slot(h: Self::Hash, s: usize) -> usize {
-    unsafe { assert_unchecked(s <= 63) };
-    (! h >> s) as usize
-  }
 }
 
-unsafe impl<T: IntoKey> private::Key for T {
-  type Seed = <T::Key as private::Key>::Seed;
-
-  type Hash = <T::Key as private::Key>::Hash;
-
-  const BITS: usize = <T::Key as private::Key>::BITS;
-
-  const ZERO: Self::Hash = <T::Key as private::Key>::ZERO;
-
-  const INIT: *const Self::Hash = <T::Key as private::Key>::INIT;
+unsafe impl<T: IntoKey + Copy + Ord> private::Key for T {
+  type Word = <T::Key as private::Key>::Word;
 
   #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
+  fn into_word(x: Self) -> Self::Word {
+    <T::Key as private::Key>::into_word(T::inject(x))
+  }
+
+  #[inline(always)]
+  unsafe fn from_word(x: Self::Word) -> Self {
+    unsafe { T::project(<T::Key as private::Key>::from_word(x)) }
+  }
+
+  #[inline(always)]
+  fn seed_nondet() -> (Self::Word, Self::Word) {
     <T::Key as private::Key>::seed_nondet()
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> Self::Seed {
+  fn seed(g: &mut impl RngCore) -> (Self::Word, Self::Word) {
     <T::Key as private::Key>::seed(g)
   }
+}
+
+impl private::Word for u32 {
+  const BITS: usize = 32;
+
+  const ZERO: Self = 0;
+
+  const ONE: Self = 1;
+
+  const EMPTY_TABLE: *const Self = &raw const EMPTY_TABLE_U32 as *const Self;
 
   #[inline(always)]
-  fn invert_seed(m: Self::Seed) -> Self::Seed {
-    <T::Key as private::Key>::invert_seed(m)
+  fn into_usize(self) -> usize {
+    self as usize
   }
 
   #[inline(always)]
-  fn hash(k: Self, m: Self::Seed) -> Self::Hash {
-    <T::Key as private::Key>::hash(T::inject(k), m)
+  fn asr(x: Self, s: usize) -> Self {
+    ((x as i32) >> s) as u32
   }
 
   #[inline(always)]
-  unsafe fn invert_hash(h: Self::Hash, m: Self::Seed) -> T {
-    unsafe { T::project(<T::Key as private::Key>::invert_hash(h, m)) }
+  fn swap_bytes(self) -> Self {
+    self.swap_bytes()
   }
 
   #[inline(always)]
-  unsafe fn slot(h: Self::Hash, s: usize) -> usize {
-    unsafe { <T::Key as private::Key>::slot(h, s) }
+  fn wrapping_mul(self, y: Self) -> Self {
+    self.wrapping_mul(y)
+  }
+
+  #[inline(always)]
+  fn invert(a: u32) -> u32 {
+    // https://jeffhurchalla.com/2022/04/25/a-faster-multiplicative-inverse-mod-a-power-of-2/
+    let x = a.wrapping_mul(3) ^ 2;
+    let y = 1u32.wrapping_sub(a.wrapping_mul(x));
+    let x = x.wrapping_mul(y.wrapping_add(1));
+    let y = y.wrapping_mul(y);
+    let x = x.wrapping_mul(y.wrapping_add(1));
+    let y = y.wrapping_mul(y);
+    let x = x.wrapping_mul(y.wrapping_add(1));
+    x
+  }
+}
+
+impl private::Word for u64 {
+  const BITS: usize = 64;
+
+  const ZERO: Self = 0;
+
+  const ONE: Self = 1;
+
+  const EMPTY_TABLE: *const Self = &raw const EMPTY_TABLE_U64 as *const Self;
+
+  #[inline(always)]
+  fn into_usize(self) -> usize {
+    self as usize
+  }
+
+  #[inline(always)]
+  fn asr(x: Self, s: usize) -> Self {
+    ((x as i64) >> s) as u64
+  }
+
+  #[inline(always)]
+  fn swap_bytes(self) -> Self {
+    self.swap_bytes()
+  }
+
+  #[inline(always)]
+  fn wrapping_mul(self, y: Self) -> Self {
+    self.wrapping_mul(y)
+  }
+
+  #[inline(always)]
+  fn invert(a: u64) -> u64 {
+    // https://arxiv.org/abs/2204.04342
+    let x = a.wrapping_mul(3) ^ 2;
+    let y = 1u64.wrapping_sub(a.wrapping_mul(x));
+    let x = x.wrapping_mul(y.wrapping_add(1));
+    let y = y.wrapping_mul(y);
+    let x = x.wrapping_mul(y.wrapping_add(1));
+    let y = y.wrapping_mul(y);
+    let x = x.wrapping_mul(y.wrapping_add(1));
+    let y = y.wrapping_mul(y);
+    let x = x.wrapping_mul(y.wrapping_add(1));
+    x
   }
 }
 
 pub(crate) mod private {
-  use rand_core::RngCore;
-
   pub(crate) unsafe trait Key: Copy + Ord {
-    type Seed: Copy;
+    type Word: Word;
 
-    type Hash: Copy + Ord;
+    const BITS: usize = Self::Word::BITS;
 
+    const ZERO: Self::Word = Self::Word::ZERO;
+
+    const EMPTY_TABLE: *const Self::Word = Self::Word::EMPTY_TABLE;
+
+    fn into_word(_: Self) -> Self::Word;
+
+    unsafe fn from_word(_: Self::Word) -> Self;
+
+    fn seed_nondet() -> (Self::Word, Self::Word);
+
+    fn seed(_: &mut impl rand_core::RngCore) -> (Self::Word, Self::Word);
+  }
+
+  pub(crate) trait Word:
+    Copy
+    + Ord
+    + core::ops::Add<Self, Output = Self>
+    + core::ops::BitOr<Self, Output = Self>
+    + core::ops::Not<Output = Self>
+    + core::ops::Shr<usize, Output = Self>
+  {
     const BITS: usize;
 
-    const ZERO: Self::Hash;
+    const ZERO: Self;
 
-    const INIT: *const Self::Hash;
+    const ONE: Self;
 
-    fn seed_nondet() -> Self::Seed;
+    const EMPTY_TABLE: *const Self;
 
-    fn seed(_: &mut impl RngCore) -> Self::Seed;
+    fn into_usize(self) -> usize;
 
-    fn invert_seed(_: Self::Seed) -> Self::Seed;
+    fn swap_bytes(self) -> Self;
 
-    fn hash(_: Self, _: Self::Seed) -> Self::Hash;
+    fn wrapping_mul(self, _: Self) -> Self;
 
-    unsafe fn invert_hash(_: Self::Hash, _: Self::Seed) -> Self;
+    fn asr(_: Self, _: usize) -> Self;
 
-    unsafe fn slot(_: Self::Hash, _: usize) -> usize;
+    fn invert(_: Self) -> Self;
   }
 }
