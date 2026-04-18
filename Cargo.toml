@@ -39,3 +39,7 @@ mimalloc = { version = "0.1.48", features = ["v3"] }
 [[bench]]
 name = "unified"
 harness = false
+
+[[example]]
+name = "asm"
+crate-type = ["lib"]

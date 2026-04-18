@@ -91,7 +91,7 @@ impl<T: Key> Clone for HashSet<T> {
   }
 }
 
-impl <T: Key + Debug> Debug for HashSet<T> {
+impl <T: Key + Debug + Ord> Debug for HashSet<T> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut a = self.iter().collect::<Box<[T]>>();
     a.sort();

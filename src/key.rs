@@ -18,7 +18,7 @@ impl Key for NonZeroU32 {
 impl Key for NonZeroU64 {
 }
 
-impl<T: IntoKey + Copy + Ord> Key for T {
+impl<T: IntoKey> Key for T {
 }
 
 /// A trait for representing keys as [`NonZeroU32`] or [`NonZeroU64`].
@@ -109,7 +109,7 @@ unsafe impl private::Key for NonZeroU64 {
   }
 }
 
-unsafe impl<T: IntoKey + Copy + Ord> private::Key for T {
+unsafe impl<T: IntoKey> private::Key for T {
   type Word = <T::Key as private::Key>::Word;
 
   #[inline(always)]
@@ -148,11 +148,6 @@ impl private::Word for u32 {
   }
 
   #[inline(always)]
-  fn asr(x: Self, s: usize) -> Self {
-    ((x as i32) >> s) as u32
-  }
-
-  #[inline(always)]
   fn swap_bytes(self) -> Self {
     self.swap_bytes()
   }
@@ -160,6 +155,11 @@ impl private::Word for u32 {
   #[inline(always)]
   fn wrapping_mul(self, y: Self) -> Self {
     self.wrapping_mul(y)
+  }
+
+  #[inline(always)]
+  fn asr(x: Self, s: usize) -> Self {
+    ((x as i32) >> s) as u32
   }
 
   #[inline(always)]
@@ -191,11 +191,6 @@ impl private::Word for u64 {
   }
 
   #[inline(always)]
-  fn asr(x: Self, s: usize) -> Self {
-    ((x as i64) >> s) as u64
-  }
-
-  #[inline(always)]
   fn swap_bytes(self) -> Self {
     self.swap_bytes()
   }
@@ -203,6 +198,11 @@ impl private::Word for u64 {
   #[inline(always)]
   fn wrapping_mul(self, y: Self) -> Self {
     self.wrapping_mul(y)
+  }
+
+  #[inline(always)]
+  fn asr(x: Self, s: usize) -> Self {
+    ((x as i64) >> s) as u64
   }
 
   #[inline(always)]
@@ -222,7 +222,7 @@ impl private::Word for u64 {
 }
 
 pub(crate) mod private {
-  pub(crate) unsafe trait Key: Copy + Ord {
+  pub(crate) unsafe trait Key {
     type Word: Word;
 
     const BITS: usize = Self::Word::BITS;

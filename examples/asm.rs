@@ -1,87 +1,92 @@
 #![allow(missing_docs)]
 
 use std::num::NonZeroU32;
-use std::hint::black_box;
+use std::num::NonZeroU64;
 use tangerine::map::HashMap;
+use tangerine::map::Entry;
 
-fn drop(_: HashMap<NonZeroU32, usize>) {
+pub fn drop(_: HashMap<NonZeroU32, NonZeroU64>) {
 }
 
-fn new() -> HashMap<NonZeroU32, usize> {
+pub fn new() -> HashMap<NonZeroU32, NonZeroU64> {
   HashMap::new()
 }
 
-fn len(t: &HashMap<NonZeroU32, usize>) -> usize {
+pub fn len(t: &HashMap<NonZeroU32, NonZeroU64>) -> usize {
   t.len()
 }
 
-fn is_empty(t: &HashMap<NonZeroU32, usize>) -> bool {
+pub fn is_empty(t: &HashMap<NonZeroU32, NonZeroU64>) -> bool {
   t.is_empty()
 }
 
-fn contains_key(t: &HashMap<NonZeroU32, usize>, k: NonZeroU32) -> bool {
+pub fn contains_key(t: &HashMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> bool {
   t.contains_key(k)
 }
 
-fn get(t: &HashMap<NonZeroU32, usize>, k: NonZeroU32) -> Option<&usize> {
+pub fn get(t: &HashMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
   t.get(k)
 }
 
-fn get_value(t: &HashMap<NonZeroU32, usize>, k: NonZeroU32) -> Option<usize> {
+pub fn get_value(t: &HashMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
   match t.get(k) { None => None, Some(&y) => Some(y) }
 }
 
-fn insert(t: &mut HashMap<NonZeroU32, usize>, k: NonZeroU32, v: usize) -> Option<usize> {
+pub fn insert(t: &mut HashMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU64) -> Option<NonZeroU64> {
   t.insert(k, v)
 }
 
-fn remove(t: &mut HashMap<NonZeroU32, usize>, k: NonZeroU32) -> Option<usize> {
+pub fn entry_insert(t: &mut HashMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
+  match t.entry(key) {
+    Entry::Occupied(entry) => Some(core::mem::replace(entry.into_mut_ref(), value)),
+    Entry::Vacant(entry) => { let _ = entry.insert(value); None }
+  }
+}
+pub fn entry_try_insert(
+    t: &mut HashMap<NonZeroU32, NonZeroU64>,
+    key: NonZeroU32,
+    value: NonZeroU64
+  ) -> Result<&mut NonZeroU64, (&mut NonZeroU64, NonZeroU64)>
+{
+  match t.entry(key) {
+    Entry::Occupied(entry) => Err((entry.into_mut_ref(), value)),
+    Entry::Vacant(entry) => Ok(entry.insert(value)),
+  }
+}
+
+pub fn remove(t: &mut HashMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
   t.remove(k)
 }
 
-fn clear(t: &mut HashMap<NonZeroU32, usize>) {
+pub fn entry_remove(t: &mut HashMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Option<NonZeroU64> {
+  match t.entry(key) {
+    Entry::Occupied(entry) => Some(entry.remove()),
+    Entry::Vacant(_) => None,
+  }
+}
+
+pub fn clear(t: &mut HashMap<NonZeroU32, NonZeroU64>) {
   t.clear();
 }
 
-fn reset(t: &mut HashMap<NonZeroU32, usize>) {
+pub fn reset(t: &mut HashMap<NonZeroU32, NonZeroU64>) {
   t.reset();
 }
 
-fn clone(t: &HashMap<NonZeroU32, usize>) -> HashMap<NonZeroU32, usize> {
+pub fn clone(t: &HashMap<NonZeroU32, NonZeroU64>) -> HashMap<NonZeroU32, NonZeroU64> {
   t.clone()
 }
 
-fn sum_fold(t: &mut HashMap<NonZeroU32, usize>) -> usize {
+pub fn sum_fold(t: &mut HashMap<NonZeroU32, u64>) -> u64 {
   t.values().fold(0, |x, &y| x.wrapping_add(y))
 }
 
-fn sum_loop(t: &mut HashMap<NonZeroU32, usize>) -> usize {
-  let mut x = 0usize;
+pub fn sum_loop(t: &mut HashMap<NonZeroU32, u64>) -> u64 {
+  let mut x = 0u64;
   for &y in t.values() { x = x.wrapping_add(y); }
   x
 }
 
-fn std_clear(t: &mut std::collections::HashMap<NonZeroU32, usize>) {
+pub fn std_clear(t: &mut std::collections::HashMap<NonZeroU32, NonZeroU64>) {
   t.clear();
-}
-
-fn main() {
-  let _ =
-    black_box([
-      drop as *mut u8,
-      new as *mut u8,
-      len as *mut u8,
-      is_empty as *mut u8,
-      contains_key as *mut u8,
-      get as *mut u8,
-      get_value as *mut u8,
-      insert as *mut u8,
-      remove as *mut u8,
-      clear as *mut u8,
-      reset as *mut u8,
-      clone as *mut u8,
-      sum_fold as *mut u8,
-      sum_loop as *mut u8,
-      std_clear as *mut u8,
-    ]);
 }

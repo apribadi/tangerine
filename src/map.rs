@@ -920,10 +920,10 @@ impl<K: Key, V: Clone> Clone for HashMap<K, V> {
   }
 }
 
-impl <K: Key + Debug, V: Debug> Debug for HashMap<K, V> {
+impl <K: Key + Debug + Ord, V: Debug> Debug for HashMap<K, V> {
   fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
     let mut a = self.iter().collect::<Box<[(K, &V)]>>();
-    a.sort_by_key(|&(x, _)| x);
+    a.sort_by(|&(ref x, _), &(ref y, _)| x.cmp(y));
     f.debug_map().entries(a).finish()
   }
 }
@@ -981,86 +981,10 @@ pub mod internal {
   }
 }
 
-type ExampleMap = HashMap<core::num::NonZeroU32, usize>;
-
+/*
 #[allow(missing_docs)]
 #[inline(never)]
-pub fn get(t: &ExampleMap, key: core::num::NonZeroU32) -> Option<&usize> {
-  t.get(key)
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn get_value(t: &HashMap<core::num::NonZeroU32, core::num::NonZeroU64>, key: core::num::NonZeroU32) -> Option<core::num::NonZeroU64> {
-  match t.get(key) { None => None, Some(&y) => Some(y) }
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn contains_key(t: &ExampleMap, key: core::num::NonZeroU32) -> bool {
-  t.contains_key(key)
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn insert(t: &mut ExampleMap, key: core::num::NonZeroU32, value: usize) -> Option<usize> {
-  t.insert(key, value)
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn remove(t: &mut ExampleMap, key: core::num::NonZeroU32) -> Option<usize> {
-  t.remove(key)
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn entry_insert(
-    t: &mut ExampleMap,
-    key: core::num::NonZeroU32,
-    value: usize
-  ) -> Option<usize>
-{
-  match t.entry(key) {
-    Entry::Occupied(entry) => Some(core::mem::replace(entry.into_mut_ref(), value)),
-    Entry::Vacant(entry) => { let _ = entry.insert(value); None }
-  }
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn entry_try_insert(
-    t: &mut ExampleMap,
-    key: core::num::NonZeroU32,
-    value: usize
-  ) -> Result<&mut usize, (&mut usize, usize)>
-{
-  match t.entry(key) {
-    Entry::Occupied(entry) => Err((entry.into_mut_ref(), value)),
-    Entry::Vacant(entry) => Ok(entry.insert(value)),
-  }
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn entry_remove(
-    t: &mut ExampleMap,
-    key: core::num::NonZeroU32
-  ) -> Option<usize>
-{
-  match t.entry(key) {
-    Entry::Occupied(entry) => Some(entry.remove()),
-    Entry::Vacant(_) => None,
-  }
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn entry_incr(
-    t: &mut ExampleMap,
-    key: core::num::NonZeroU32
-  )
-{
+pub fn entry_incr(t: &mut ExampleMap, key: ExampleKey) {
   match t.entry(key) {
     Entry::Occupied(entry) => { *entry.into_mut_ref() += 1; }
     Entry::Vacant(entry) => { let _ = entry.insert(1); }
@@ -1069,11 +993,7 @@ pub fn entry_incr(
 
 #[allow(missing_docs)]
 #[inline(never)]
-pub fn entry_decr(
-    t: &mut ExampleMap,
-    key: core::num::NonZeroU32
-  )
-{
+pub fn entry_decr(t: &mut ExampleMap, key: ExampleKey) {
   match t.entry(key) {
     Entry::Occupied(mut entry) => {
       if *entry.get_mut() <= 1 {
@@ -1085,21 +1005,4 @@ pub fn entry_decr(
     Entry::Vacant(_) => { }
   }
 }
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn clear(t: &mut ExampleMap) {
-  t.clear();
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn reset(t: &mut ExampleMap) {
-  t.reset();
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn len(t: &ExampleMap) -> usize {
-  t.len()
-}
+*/
