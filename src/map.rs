@@ -1,9 +1,6 @@
 //! This module provides a fast hash map keyed by types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
-// TODO:
-// - get_disjoint_mut
-
 extern crate alloc;
 
 use alloc::alloc::Layout;
@@ -35,21 +32,22 @@ pub struct IntMap<K: Key, V> {
   seed_inverted: (K::Word, K::Word),
 }
 
-/// TODO:
+/// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
+/// may either be vacant or occupied.
 pub enum Entry<'a, K: Key, V> {
-  /// TODO:
+  /// An occupied entry.
   Occupied(OccupiedEntry<'a, K, V>),
-  /// TODO:
+  /// A vacant entry.
   Vacant(VacantEntry<'a, K, V>),
 }
 
-/// TODO:
+/// A view of an occupied entry in a map.
 pub struct OccupiedEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
   pos: usize,
 }
 
-/// TODO:
+/// A view of a vacant entry in a map.
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
   pos: usize,
@@ -482,7 +480,8 @@ impl<K: Key, V> IntMap<K, V> {
     }
   }
 
-  /// TODO:
+  /// Returns a view of the entry in the map corresponding to the given key for
+  /// subsequent inspection and modification.
   #[inline(always)]
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
     let s = self.shift;
@@ -566,15 +565,19 @@ impl<K: Key, V> IntMap<K, V> {
     value
   }
 
-  /// TODO:
-  pub fn get_or_insert(&mut self, key: K, value: V) -> &mut V {
+  /// Ensures that there is a value associated with the given key by inserting
+  /// the provided default value if the key was previously absent. Returns a
+  /// mutable reference to the value in the entry.
+  pub fn get_or_insert(&mut self, key: K, default: V) -> &mut V {
     match self.entry(key) {
       Entry::Occupied(entry) => entry.into_mut(),
-      Entry::Vacant(entry) => entry.insert(value),
+      Entry::Vacant(entry) => entry.insert(default),
     }
   }
 
-  /// TODO:
+  /// Ensures that there is a value associated with the given key by inserting
+  /// the result of calling the provided default function if the key was
+  /// previously absent. Returns a mutable reference to the value in the entry.
   pub fn get_or_insert_with<F: FnOnce() -> V>(&mut self, key: K, default: F) -> &mut V {
     match self.entry(key) {
       Entry::Occupied(entry) => entry.into_mut(),
@@ -582,7 +585,10 @@ impl<K: Key, V> IntMap<K, V> {
     }
   }
 
-  /// TODO:
+  /// Ensures that there is a value associated with the given key by inserting
+  /// the result of calling [`V::default`](Default::default) if the key was
+  /// previously absent.  Returns a mutable reference to the value in the
+  /// entry.
   pub fn get_or_insert_default(&mut self, key: K) -> &mut V where V: Default {
     match self.entry(key) {
       Entry::Occupied(entry) => entry.into_mut(),
@@ -820,25 +826,26 @@ impl<K: Key, V> Index<K> for IntMap<K, V> {
 }
 
 impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
-  /// TODO:
+  /// Gets a mutable reference to the value in the entry.
   #[inline(always)]
   pub fn get_mut(&mut self) -> &mut V {
     unsafe { &mut *self.map.data.cast_mut().add(self.pos) }
   }
 
-  /// TODO:
+  /// Converts itself into a mutable reference to the value in the entry, with
+  /// a lifetime from the original borrow for the call to [`IntMap::entry`].
   #[inline(always)]
   pub fn into_mut(self) -> &'a mut V {
     unsafe { &mut *self.map.data.cast_mut().add(self.pos) }
   }
 
-  /// TODO:
+  /// Inserts the given value into the entry, and returns the previous value.
   #[inline(always)]
   pub fn insert(&mut self, value: V) -> V {
     unsafe { self.map.data.cast_mut().add(self.pos).replace(value) }
   }
 
-  /// TODO:
+  /// Removes the value occupying the entry, and returns that value.
   #[inline(always)]
   pub fn remove(self) -> V {
     unsafe { self.map.remove_at(self.pos) }
@@ -846,7 +853,8 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
 }
 
 impl<'a, K: Key, V> VacantEntry<'a, K, V> {
-  /// TODO:
+  /// Inserts the given value into the entry, and returns a mutable reference
+  /// to it.
   #[inline(always)]
   pub fn insert(self, value: V) -> &'a mut V {
     unsafe { self.map.insert_at(self.pos, self.curr, self.hash, value) }
