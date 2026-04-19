@@ -43,7 +43,7 @@ pub fn insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU
 
 pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
   match t.entry(key) {
-    Entry::Occupied(entry) => Some(core::mem::replace(entry.into_mut_ref(), value)),
+    Entry::Occupied(entry) => Some(core::mem::replace(entry.into_mut(), value)),
     Entry::Vacant(entry) => { let _ = entry.insert(value); None }
   }
 }
@@ -54,7 +54,7 @@ pub fn entry_try_insert(
   ) -> Result<&mut NonZeroU64, (&mut NonZeroU64, NonZeroU64)>
 {
   match t.entry(key) {
-    Entry::Occupied(entry) => Err((entry.into_mut_ref(), value)),
+    Entry::Occupied(entry) => Err((entry.into_mut(), value)),
     Entry::Vacant(entry) => Ok(entry.insert(value)),
   }
 }
@@ -101,7 +101,7 @@ pub fn std_clear(t: &mut std::collections::HashMap<NonZeroU32, NonZeroU64>) {
 #[inline(never)]
 pub fn entry_incr(t: &mut ExampleMap, key: ExampleKey) {
   match t.entry(key) {
-    Entry::Occupied(entry) => { *entry.into_mut_ref() += 1; }
+    Entry::Occupied(entry) => { *entry.into_mut() += 1; }
     Entry::Vacant(entry) => { let _ = entry.insert(1); }
   }
 }
@@ -114,7 +114,7 @@ pub fn entry_decr(t: &mut ExampleMap, key: ExampleKey) {
       if *entry.get_mut() <= 1 {
         let _ = entry.remove();
       } else {
-        *entry.into_mut_ref() -= 1;
+        *entry.into_mut() -= 1;
       }
     }
     Entry::Vacant(_) => { }

@@ -4,13 +4,6 @@
 // TODO:
 // - get_disjoint_mut
 
-// TODO:
-// - special case for shift == 0, where capacity = 2 ** BITS
-// - probably need to store capacity explicity
-
-// TODO:
-// - rename IntMap => IntMap
-
 extern crate alloc;
 
 use alloc::alloc::Layout;
@@ -37,7 +30,7 @@ pub struct IntMap<K: Key, V> {
   slack: usize,
   shift: usize,
   table: *const K::Word,
-  value: *const V,
+  data: *const V,
   seed: (K::Word, K::Word),
   seed_inverted: (K::Word, K::Word),
 }
@@ -53,13 +46,13 @@ pub enum Entry<'a, K: Key, V> {
 /// TODO:
 pub struct OccupiedEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
-  slot: usize,
+  pos: usize,
 }
 
 /// TODO:
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
-  slot: usize,
+  pos: usize,
   curr: K::Word,
   hash: K::Word,
 }
@@ -179,7 +172,7 @@ impl<K: Key, V> IntMap<K, V> {
       slack: capacity::<K>(K::BITS - 1),
       shift: K::BITS - 1,
       table: K::INIT,
-      value: K::INIT.wrapping_add(3).cast(),
+      data: K::INIT.wrapping_add(3).cast(),
       seed: m,
       seed_inverted: invert_seed(m),
     }
@@ -239,7 +232,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get(&self, key: K) -> Option<&V> {
     let s = self.shift;
     let t = self.table;
-    let u = self.value;
+    let u = self.data;
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
@@ -269,7 +262,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let s = self.shift;
     let t = self.table;
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
@@ -312,7 +305,7 @@ impl<K: Key, V> IntMap<K, V> {
     self.slack = capacity::<K>(s) - 1;
     self.shift = s;
     self.table = t;
-    self.value = u;
+    self.data = u;
     unsafe { u.add(k) }
   }
 
@@ -322,7 +315,7 @@ impl<K: Key, V> IntMap<K, V> {
     let old_r = self.slack.wrapping_add(1);
     let old_s = self.shift;
     let old_t = self.table.cast_mut();
-    let old_u = self.value.cast_mut();
+    let old_u = self.data.cast_mut();
     let old_d = ptr_diff(old_u.cast(), old_t);
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
@@ -358,7 +351,7 @@ impl<K: Key, V> IntMap<K, V> {
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.shift = new_s;
     self.table = new_t;
-    self.value = new_u;
+    self.data = new_u;
     // Initialize new table.
     let mut i = new_d;
     loop {
@@ -403,7 +396,7 @@ impl<K: Key, V> IntMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
@@ -452,7 +445,7 @@ impl<K: Key, V> IntMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
@@ -494,7 +487,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
     let s = self.shift;
     let t = self.table;
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
@@ -512,18 +505,18 @@ impl<K: Key, V> IntMap<K, V> {
     let i = select_unpredictable(a > h, i, k);
     let x = select_unpredictable(a > h, x, a);
     if x == h {
-      Entry::Occupied(OccupiedEntry { map: self, slot: i })
+      Entry::Occupied(OccupiedEntry { map: self, pos: i })
     } else {
-      Entry::Vacant(VacantEntry { map: self, slot: i, curr: x, hash: h })
+      Entry::Vacant(VacantEntry { map: self, pos: i, curr: x, hash: h })
     }
   }
 
   #[inline(always)]
-  unsafe fn insert_at(&mut self, at: usize, curr: K::Word, h: K::Word, value: V) -> &mut V {
+  unsafe fn insert_at(&mut self, pos: usize, curr: K::Word, h: K::Word, value: V) -> &mut V {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
     let p =
@@ -531,7 +524,7 @@ impl<K: Key, V> IntMap<K, V> {
         self.insert_init(h, value)
       } else {
         self.slack = r.wrapping_sub(1);
-        let mut i = at;
+        let mut i = pos;
         let mut x = curr;
         let mut y = value;
         unsafe { t.add(i).write(h) };
@@ -544,23 +537,23 @@ impl<K: Key, V> IntMap<K, V> {
         if addr_eq(t.wrapping_add(i + 1), u) || r == 0 {
           self.insert_grow(h, i)
         } else {
-          unsafe { u.add(at) }
+          unsafe { u.add(pos) }
         }
       };
     unsafe { &mut *p }
   }
 
   #[inline(always)]
-  unsafe fn remove_at(&mut self, at: usize) -> V {
+  unsafe fn remove_at(&mut self, pos: usize) -> V {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
     self.slack = r + 1;
-    let value = unsafe { u.add(at).read() };
-    let mut i = at;
+    let value = unsafe { u.add(pos).read() };
+    let mut i = pos;
     loop {
       i = i + 1;
       let x = unsafe { t.add(i).read() };
@@ -576,7 +569,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// TODO:
   pub fn get_or_insert(&mut self, key: K, value: V) -> &mut V {
     match self.entry(key) {
-      Entry::Occupied(entry) => entry.into_mut_ref(),
+      Entry::Occupied(entry) => entry.into_mut(),
       Entry::Vacant(entry) => entry.insert(value),
     }
   }
@@ -584,7 +577,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// TODO:
   pub fn get_or_insert_with<F: FnOnce() -> V>(&mut self, key: K, default: F) -> &mut V {
     match self.entry(key) {
-      Entry::Occupied(entry) => entry.into_mut_ref(),
+      Entry::Occupied(entry) => entry.into_mut(),
       Entry::Vacant(entry) => entry.insert(default()),
     }
   }
@@ -592,7 +585,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// TODO:
   pub fn get_or_insert_default(&mut self, key: K) -> &mut V where V: Default {
     match self.entry(key) {
-      Entry::Occupied(entry) => entry.into_mut_ref(),
+      Entry::Occupied(entry) => entry.into_mut(),
       Entry::Vacant(entry) => entry.insert(V::default()),
     }
   }
@@ -613,7 +606,7 @@ impl<K: Key, V> IntMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     if is_dummy::<K>(s) { return }
     let c = capacity::<K>(s);
     let n = c - r;
@@ -667,14 +660,14 @@ impl<K: Key, V> IntMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     if is_dummy::<K>(s) { return }
     let n = capacity::<K>(s) - r;
     let d = ptr_diff(u.cast(), t);
     self.slack = capacity::<K>(K::BITS - 1);
     self.shift = K::BITS - 1;
     self.table = K::INIT;
-    self.value = K::INIT.wrapping_add(3).cast();
+    self.data = K::INIT.wrapping_add(3).cast();
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;
@@ -699,14 +692,14 @@ impl<K: Key, V> IntMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.value;
+    let u = self.data;
     let m = self.seed_inverted;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        slot: ptr_diff(u.cast(), t),
+        pos: ptr_diff(u.cast(), t),
         table: t,
         f: move |x, i| unsafe { (invert_hash(x, m), &*u.add(i)) }
       };
@@ -720,14 +713,14 @@ impl<K: Key, V> IntMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     let m = self.seed_inverted;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        slot: ptr_diff(u.cast(), t),
+        pos: ptr_diff(u.cast(), t),
         table: t,
         f: move |x, i| unsafe { (invert_hash(x, m), &mut *u.add(i)) }
       };
@@ -740,14 +733,14 @@ impl<K: Key, V> IntMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.value;
+    let u = self.data;
     let m = self.seed_inverted;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        slot: ptr_diff(u.cast(), t),
+        pos: ptr_diff(u.cast(), t),
         table: t,
         f: move |x, _| unsafe { invert_hash(x, m) }
       };
@@ -761,13 +754,13 @@ impl<K: Key, V> IntMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.value;
+    let u = self.data;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        slot: ptr_diff(u.cast(), t),
+        pos: ptr_diff(u.cast(), t),
         table: t,
         f: move |_, i| unsafe { &*u.add(i) }
       };
@@ -781,13 +774,13 @@ impl<K: Key, V> IntMap<K, V> {
     let r = self.slack;
     let s = self.shift;
     let t = self.table;
-    let u = self.value.cast_mut();
+    let u = self.data.cast_mut();
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
     let i: Iter<K, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        slot: ptr_diff(u.cast(), t),
+        pos: ptr_diff(u.cast(), t),
         table: t,
         f: move |_, i| unsafe { &mut *u.add(i) }
       };
@@ -797,7 +790,7 @@ impl<K: Key, V> IntMap<K, V> {
   fn num_slots(&self) -> usize {
     let s = self.shift;
     let t = self.table;
-    let u = self.value;
+    let u = self.data;
     if is_dummy::<K>(s) { return 0 }
     ptr_diff(u.cast(), t)
   }
@@ -830,25 +823,25 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
   /// TODO:
   #[inline(always)]
   pub fn get_mut(&mut self) -> &mut V {
-    unsafe { &mut *self.map.value.cast_mut().add(self.slot) }
+    unsafe { &mut *self.map.data.cast_mut().add(self.pos) }
   }
 
   /// TODO:
   #[inline(always)]
-  pub fn into_mut_ref(self) -> &'a mut V {
-    unsafe { &mut *self.map.value.cast_mut().add(self.slot) }
+  pub fn into_mut(self) -> &'a mut V {
+    unsafe { &mut *self.map.data.cast_mut().add(self.pos) }
   }
 
   /// TODO:
   #[inline(always)]
   pub fn insert(&mut self, value: V) -> V {
-    unsafe { self.map.value.cast_mut().add(self.slot).replace(value) }
+    unsafe { self.map.data.cast_mut().add(self.pos).replace(value) }
   }
 
   /// TODO:
   #[inline(always)]
   pub fn remove(self) -> V {
-    unsafe { self.map.remove_at(self.slot) }
+    unsafe { self.map.remove_at(self.pos) }
   }
 }
 
@@ -856,13 +849,13 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
   /// TODO:
   #[inline(always)]
   pub fn insert(self, value: V) -> &'a mut V {
-    unsafe { self.map.insert_at(self.slot, self.curr, self.hash, value) }
+    unsafe { self.map.insert_at(self.pos, self.curr, self.hash, value) }
   }
 }
 
 struct Iter<K: Key, T, F: FnMut(K::Word, usize) -> T> {
   len: usize,
-  slot: usize,
+  pos: usize,
   table: *const K::Word,
   f: F,
 }
@@ -875,7 +868,7 @@ impl<K: Key, T, F: FnMut(K::Word, usize) -> T> Iterator for Iter<K, T, F> {
     let n = self.len;
     if n == 0 { return None }
     let t = self.table;
-    let mut i = self.slot;
+    let mut i = self.pos;
     let mut x;
     loop {
       i = i - 1;
@@ -883,7 +876,7 @@ impl<K: Key, T, F: FnMut(K::Word, usize) -> T> Iterator for Iter<K, T, F> {
       if x != K::ZERO { break }
     }
     self.len = n - 1;
-    self.slot = i;
+    self.pos = i;
     Some((self.f)(x, i))
   }
 
@@ -896,7 +889,7 @@ impl<K: Key, T, F: FnMut(K::Word, usize) -> T> Iterator for Iter<K, T, F> {
   fn fold<U, G: FnMut(U, T) -> U>(self, init: U, g: G) -> U {
     let t = self.table;
     let mut n = self.len;
-    let mut i = self.slot;
+    let mut i = self.pos;
     let mut f = self.f;
     let mut u = init;
     let mut g = g;
