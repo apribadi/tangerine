@@ -51,7 +51,7 @@ pub struct OccupiedEntry<'a, K: Key, V> {
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
   pos: usize,
-  curr: K::Word,
+  cur: K::Word,
   hash: K::Word,
 }
 
@@ -310,7 +310,7 @@ impl<K: Key, V> IntMap<K, V> {
   #[inline(never)]
   #[cold]
   fn insert_grow(&mut self, h: K::Word, last_write: usize) -> *mut V {
-    let old_r = self.slack.wrapping_add(1);
+    let old_r = self.slack;
     let old_s = self.shift;
     let old_t = self.table.cast_mut();
     let old_u = self.data.cast_mut();
@@ -318,7 +318,6 @@ impl<K: Key, V> IntMap<K, V> {
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
     // Temporarily place the table in a valid state in case we panic.
-    self.slack = old_r;
     let z = unsafe { old_t.add(last_write).replace(K::ZERO) };
     // Compute new sizes.
     debug_assert!(old_s != 0);
@@ -417,7 +416,6 @@ impl<K: Key, V> IntMap<K, V> {
       if is_dummy::<K>(s) {
         let _: *mut V = self.insert_init(h, value);
       } else {
-        self.slack = r.wrapping_sub(1);
         let mut i = i;
         let mut x = x;
         let mut y = value;
@@ -430,6 +428,8 @@ impl<K: Key, V> IntMap<K, V> {
         unsafe { u.add(i).write(y) };
         if addr_eq(t.wrapping_add(i + 1), u) || r == 0 {
           let _: *mut V = self.insert_grow(h, i);
+        } else {
+          self.slack = r - 1;
         }
       }
       None
@@ -506,12 +506,12 @@ impl<K: Key, V> IntMap<K, V> {
     if x == h {
       Entry::Occupied(OccupiedEntry { map: self, pos: i })
     } else {
-      Entry::Vacant(VacantEntry { map: self, pos: i, curr: x, hash: h })
+      Entry::Vacant(VacantEntry { map: self, pos: i, cur: x, hash: h })
     }
   }
 
   #[inline(always)]
-  unsafe fn insert_at(&mut self, pos: usize, curr: K::Word, h: K::Word, value: V) -> &mut V {
+  unsafe fn insert_at(&mut self, pos: usize, cur: K::Word, h: K::Word, value: V) -> &mut V {
     let r = self.slack;
     let s = self.shift;
     let t = self.table.cast_mut();
@@ -522,9 +522,8 @@ impl<K: Key, V> IntMap<K, V> {
       if is_dummy::<K>(s) {
         self.insert_init(h, value)
       } else {
-        self.slack = r.wrapping_sub(1);
         let mut i = pos;
-        let mut x = curr;
+        let mut x = cur;
         let mut y = value;
         unsafe { t.add(i).write(h) };
         while x != K::ZERO {
@@ -536,6 +535,7 @@ impl<K: Key, V> IntMap<K, V> {
         if addr_eq(t.wrapping_add(i + 1), u) || r == 0 {
           self.insert_grow(h, i)
         } else {
+          self.slack = r - 1;
           unsafe { u.add(pos) }
         }
       };
@@ -857,7 +857,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
   /// to it.
   #[inline(always)]
   pub fn insert(self, value: V) -> &'a mut V {
-    unsafe { self.map.insert_at(self.pos, self.curr, self.hash, value) }
+    unsafe { self.map.insert_at(self.pos, self.cur, self.hash, value) }
   }
 }
 
@@ -959,14 +959,16 @@ impl<K: Key, V> Extend<(K, V)> for IntMap<K, V> {
 
 impl<const N: usize, K: Key, V> From<[(K, V); N]> for IntMap<K, V> {
   fn from(value: [(K, V); N]) -> Self {
-    Self::from_iter(value)
+    let mut t = Self::new();
+    t.extend(value);
+    t
   }
 }
 
 impl<K: Key, V> FromIterator<(K, V)> for IntMap<K, V> {
   fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
     let mut t = Self::new();
-    iter.into_iter().for_each(|(x, y)| { let _: Option<V> = t.insert(x, y); });
+    t.extend(iter);
     t
   }
 }
