@@ -3,7 +3,7 @@
 Tangerine is a high performance hashmap and hashset implementation for keys
 representable as [`NonZeroU32`](std::num::NonZeroU32) or [`NonZeroU64`](std::num::NonZeroU64).
 
-```
+```rust
 use tangerine::map::IntMap;
 use std::num::NonZeroU32;
 
@@ -21,14 +21,12 @@ assert!(t.get(NonZeroU32::MAX) == None);
 
 - nightly
 
-# The Implementation of Tangerine
+# Searching for a Key
 
-## Searching for a Key
+# ???
 
-## ???
+# Searching for a Key, the Actual Algorithm
 
-## Searching for a Key, the Actual Algorithm
+# Insertion and Removal
 
-## Insertion and Removal
-
-## Hashing (and Universal Hashing)
+# Hashing (and Universal Hashing)
