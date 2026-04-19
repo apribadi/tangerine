@@ -5,14 +5,14 @@ use expect_test::expect;
 use std::fmt::Write;
 use std::num::NonZeroU64;
 use std::write;
-use tangerine::map::HashMap;
+use tangerine::map::IntMap;
 use tangerine::map::internal;
 
 /*
 #[test]
 fn test_lifetime() {
   let mut g = Rng::from_u64(0);
-  let mut t = HashMap::new_seeded(&mut g);
+  let mut t = IntMap::new_seeded(&mut g);
   let key = NonZeroU64::new(13).unwrap();
   t.insert(key, 1u64);
   let mut i = t.keys();
@@ -26,7 +26,7 @@ fn test_lifetime() {
 fn test_api() {
   let mut s = String::new();
   let mut g = Rng::from_u64(0);
-  let mut t = HashMap::new_seeded(&mut g);
+  let mut t = IntMap::new_seeded(&mut g);
 
   t.clear();
   t.reset();
@@ -95,7 +95,7 @@ fn test_api() {
 fn test_empty() {
   let mut s = String::new();
   let mut g = Rng::from_u64(0);
-  let mut t = HashMap::<NonZeroU64, u64>::new_seeded(&mut g);
+  let mut t = IntMap::<NonZeroU64, u64>::new_seeded(&mut g);
 
   let key = NonZeroU64::new(13).unwrap();
 
@@ -120,7 +120,7 @@ fn test_empty() {
 fn test_iter() {
   let mut s = String::new();
   let mut g = Rng::from_u64(0);
-  let mut t = HashMap::new_seeded(&mut g);
+  let mut t = IntMap::new_seeded(&mut g);
 
   for i in 1 ..= 10 {
     let k = NonZeroU64::new(i).unwrap();
@@ -156,7 +156,7 @@ fn test_iter() {
 fn test_1() {
   let mut s = String::new();
   let mut g = Rng::from_u64(0);
-  let mut t = HashMap::new_seeded(&mut g);
+  let mut t = IntMap::new_seeded(&mut g);
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();

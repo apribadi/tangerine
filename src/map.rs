@@ -9,7 +9,7 @@
 // - probably need to store capacity explicity
 
 // TODO:
-// - rename HashMap => IntMap
+// - rename IntMap => IntMap
 
 extern crate alloc;
 
@@ -33,7 +33,7 @@ use crate::key::private::Word;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
 /// or [`NonZeroU64`](core::num::NonZeroU64).
-pub struct HashMap<K: Key, V> {
+pub struct IntMap<K: Key, V> {
   slack: usize,
   shift: usize,
   table: *const K::Word,
@@ -52,22 +52,22 @@ pub enum Entry<'a, K: Key, V> {
 
 /// TODO:
 pub struct OccupiedEntry<'a, K: Key, V> {
-  map: &'a mut HashMap<K, V>,
+  map: &'a mut IntMap<K, V>,
   slot: usize,
 }
 
 /// TODO:
 pub struct VacantEntry<'a, K: Key, V> {
-  map: &'a mut HashMap<K, V>,
+  map: &'a mut IntMap<K, V>,
   slot: usize,
   curr: K::Word,
   hash: K::Word,
 }
 
-unsafe impl<K: Key + Send, V: Send> Send for HashMap<K, V> {
+unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
 }
 
-unsafe impl<K: Key + Sync, V: Sync> Sync for HashMap<K, V> {
+unsafe impl<K: Key + Sync, V: Sync> Sync for IntMap<K, V> {
 }
 
 #[inline(always)]
@@ -172,7 +172,7 @@ fn slot<W: Word>(h: W, s: usize) -> usize {
   W::into_usize(! h >> s)
 }
 
-impl<K: Key, V> HashMap<K, V> {
+impl<K: Key, V> IntMap<K, V> {
   #[inline(always)]
   fn from_seed(m: (K::Word, K::Word)) -> Self {
     Self {
@@ -811,13 +811,13 @@ impl<K: Key, V> HashMap<K, V> {
   }
 }
 
-impl<K: Key, V> Drop for HashMap<K, V> {
+impl<K: Key, V> Drop for IntMap<K, V> {
   fn drop(&mut self) {
     self.reset()
   }
 }
 
-impl<K: Key, V> Index<K> for HashMap<K, V> {
+impl<K: Key, V> Index<K> for IntMap<K, V> {
   type Output = V;
 
   #[inline(always)]
@@ -922,7 +922,7 @@ impl<K: Key, T, F: FnMut(K::Word, usize) -> T> ExactSizeIterator for Iter<K, T, 
   }
 }
 
-impl<K: Key, V: Clone> Clone for HashMap<K, V> {
+impl<K: Key, V: Clone> Clone for IntMap<K, V> {
   fn clone(&self) -> Self {
     let mut t = Self::new();
     self.iter().for_each(|(x, y)| { let _: Option<V> = t.insert(x, y.clone()); });
@@ -930,7 +930,7 @@ impl<K: Key, V: Clone> Clone for HashMap<K, V> {
   }
 }
 
-impl <K: Key + Debug + Ord, V: Debug> Debug for HashMap<K, V> {
+impl <K: Key + Debug + Ord, V: Debug> Debug for IntMap<K, V> {
   fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
     let mut a = self.iter().collect::<Box<[(K, &V)]>>();
     a.sort_by(|&(ref x, _), &(ref y, _)| x.cmp(y));
@@ -938,13 +938,13 @@ impl <K: Key + Debug + Ord, V: Debug> Debug for HashMap<K, V> {
   }
 }
 
-impl<K: Key, V> Default for HashMap<K, V> {
+impl<K: Key, V> Default for IntMap<K, V> {
   fn default() -> Self {
     Self::new()
   }
 }
 
-impl<K: Key, V> Extend<(K, V)> for HashMap<K, V> {
+impl<K: Key, V> Extend<(K, V)> for IntMap<K, V> {
   fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
     iter.into_iter().for_each(|(x, y)| { let _: Option<V> = self.insert(x, y); });
   }
@@ -956,13 +956,13 @@ impl<K: Key, V> Extend<(K, V)> for HashMap<K, V> {
   }
 }
 
-impl<const N: usize, K: Key, V> From<[(K, V); N]> for HashMap<K, V> {
+impl<const N: usize, K: Key, V> From<[(K, V); N]> for IntMap<K, V> {
   fn from(value: [(K, V); N]) -> Self {
     Self::from_iter(value)
   }
 }
 
-impl<K: Key, V> FromIterator<(K, V)> for HashMap<K, V> {
+impl<K: Key, V> FromIterator<(K, V)> for IntMap<K, V> {
   fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
     let mut t = Self::new();
     iter.into_iter().for_each(|(x, y)| { let _: Option<V> = t.insert(x, y); });
@@ -975,44 +975,18 @@ pub mod internal {
 
   #![allow(missing_docs)]
 
-  use super::HashMap;
+  use super::IntMap;
   use super::Key;
 
-  pub fn num_slots<K: Key, V>(t: &HashMap<K, V>) -> usize {
+  pub fn num_slots<K: Key, V>(t: &IntMap<K, V>) -> usize {
     t.num_slots()
   }
 
-  pub fn allocation_size<K: Key, V>(t: &HashMap<K, V>) -> usize {
+  pub fn allocation_size<K: Key, V>(t: &IntMap<K, V>) -> usize {
     t.allocation_size()
   }
 
-  pub fn load_factor<K: Key, V>(t: &HashMap<K, V>) -> f64 {
+  pub fn load_factor<K: Key, V>(t: &IntMap<K, V>) -> f64 {
     t.load_factor()
   }
 }
-
-/*
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn entry_incr(t: &mut ExampleMap, key: ExampleKey) {
-  match t.entry(key) {
-    Entry::Occupied(entry) => { *entry.into_mut_ref() += 1; }
-    Entry::Vacant(entry) => { let _ = entry.insert(1); }
-  }
-}
-
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn entry_decr(t: &mut ExampleMap, key: ExampleKey) {
-  match t.entry(key) {
-    Entry::Occupied(mut entry) => {
-      if *entry.get_mut() <= 1 {
-        let _ = entry.remove();
-      } else {
-        *entry.into_mut_ref() -= 1;
-      }
-    }
-    Entry::Vacant(_) => { }
-  }
-}
-*/

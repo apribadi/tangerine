@@ -12,9 +12,9 @@ pub(crate) trait Map<T> {
   fn remove(&mut self, _: NonZeroU32) -> Option<T>;
 }
 
-impl<T> Map<T> for tangerine::map::HashMap<NonZeroU32, T> {
+impl<T> Map<T> for tangerine::map::IntMap<NonZeroU32, T> {
   #[inline(always)]
-  fn new() -> Self { tangerine::map::HashMap::new() }
+  fn new() -> Self { tangerine::map::IntMap::new() }
 
   #[inline(always)]
   fn len(&self) -> usize { self.len() }

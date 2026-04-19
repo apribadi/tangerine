@@ -6,25 +6,25 @@ use core::iter::ExactSizeIterator;
 use rand_core::RngCore;
 
 use crate::key::Key;
-use crate::map::HashMap;
+use crate::map::IntMap;
 
 /// A fast hash set containing types representable as `NonZeroU32` or
 /// `NonZeroU64`.
-pub struct HashSet<T: Key> {
-  map: HashMap<T, ()>,
+pub struct IntSet<T: Key> {
+  map: IntMap<T, ()>,
 }
 
-impl<T: Key> HashSet<T> {
+impl<T: Key> IntSet<T> {
   /// Creates an empty set, seeding the hash function from a thread-local
   /// random number generator.
   pub fn new() -> Self {
-    Self { map: HashMap::new() }
+    Self { map: IntMap::new() }
   }
 
   /// Creates an empty set, seeding the hash function from the given random
   /// number generator.
   pub fn new_seeded(rng: &mut impl RngCore) -> Self {
-    Self { map: HashMap::new_seeded(rng) }
+    Self { map: IntMap::new_seeded(rng) }
   }
 
   /// Returns the number of values.
@@ -83,7 +83,7 @@ impl<T: Key> HashSet<T> {
   }
 }
 
-impl<T: Key> Clone for HashSet<T> {
+impl<T: Key> Clone for IntSet<T> {
   fn clone(&self) -> Self {
     let mut t = Self::new();
     self.iter().for_each(|x| { let _ = t.insert(x); });
@@ -91,7 +91,7 @@ impl<T: Key> Clone for HashSet<T> {
   }
 }
 
-impl <T: Key + Debug + Ord> Debug for HashSet<T> {
+impl <T: Key + Debug + Ord> Debug for IntSet<T> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut a = self.iter().collect::<Box<[T]>>();
     a.sort();
@@ -99,25 +99,25 @@ impl <T: Key + Debug + Ord> Debug for HashSet<T> {
   }
 }
 
-impl<T: Key> Default for HashSet<T> {
+impl<T: Key> Default for IntSet<T> {
   fn default() -> Self {
     Self::new()
   }
 }
 
-impl<T: Key> Extend<T> for HashSet<T> {
+impl<T: Key> Extend<T> for IntSet<T> {
   fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
     iter.into_iter().for_each(|x| { let _ = self.insert(x); });
   }
 }
 
-impl<const N: usize, T: Key> From<[T; N]> for HashSet<T> {
+impl<const N: usize, T: Key> From<[T; N]> for IntSet<T> {
   fn from(value: [T; N]) -> Self {
     Self::from_iter(value)
   }
 }
 
-impl<T: Key> FromIterator<T> for HashSet<T> {
+impl<T: Key> FromIterator<T> for IntSet<T> {
   fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
     let mut t = Self::new();
     iter.into_iter().for_each(|x| { let _ = t.insert(x); });
@@ -130,18 +130,18 @@ pub mod internal {
 
   #![allow(missing_docs)]
 
-  use super::HashSet;
+  use super::IntSet;
   use super::Key;
 
-  pub fn num_slots<T: Key>(t: &HashSet<T>) -> usize {
+  pub fn num_slots<T: Key>(t: &IntSet<T>) -> usize {
     crate::map::internal::num_slots(&t.map)
   }
 
-  pub fn allocation_size<T: Key>(t: &HashSet<T>) -> usize {
+  pub fn allocation_size<T: Key>(t: &IntSet<T>) -> usize {
     crate::map::internal::allocation_size(&t.map)
   }
 
-  pub fn load_factor<T: Key>(t: &HashSet<T>) -> f64 {
+  pub fn load_factor<T: Key>(t: &IntSet<T>) -> f64 {
     crate::map::internal::load_factor(&t.map)
   }
 }
