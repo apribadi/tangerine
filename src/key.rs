@@ -28,13 +28,13 @@ impl<T: IntoKey> Key for T {
 ///
 /// # Safety
 ///
-/// It must be safe to `project` the result of any `inject`, possibly
-/// multiple times, e.g.
+/// It must be sound to `project` the result of any `inject`, possibly multiple
+/// times, e.g.
 ///
 /// ```text
-/// let y = inject(x);
-/// let _ = unsafe { project(y) };
-/// let _ = unsafe { project(y) };
+/// let y = T::inject(x);
+/// let ... = unsafe { T::project(y) };
+/// let ... = unsafe { T::project(y) };
 /// ```
 pub unsafe trait IntoKey {
   #![allow(missing_docs)]
@@ -45,10 +45,6 @@ pub unsafe trait IntoKey {
 
   unsafe fn project(_: Self::Key) -> Self;
 }
-
-static EMPTY_TABLE_U32: [u32; 3] = [0u32; 3];
-
-static EMPTY_TABLE_U64: [u64; 3] = [0u64; 3];
 
 unsafe impl private::Key for NonZeroU32 {
   type Word = u32;
@@ -61,22 +57,6 @@ unsafe impl private::Key for NonZeroU32 {
   #[inline(always)]
   unsafe fn from_word(x: Self::Word) -> Self {
     unsafe { Self::new_unchecked(x) }
-  }
-
-  #[inline(always)]
-  fn seed_nondet() -> (Self::Word, Self::Word) {
-    let n = dandelion::thread_local::u64();
-    let a = n as u32;
-    let b = (n >> 32) as u32;
-    (a | 1, b | 1)
-  }
-
-  #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> (Self::Word, Self::Word) {
-    let n = g.next_u64();
-    let a = n as u32;
-    let b = (n >> 32) as u32;
-    (a | 1, b | 1)
   }
 }
 
@@ -92,21 +72,6 @@ unsafe impl private::Key for NonZeroU64 {
   unsafe fn from_word(x: Self::Word) -> Self {
     unsafe { Self::new_unchecked(x) }
   }
-
-  #[inline(always)]
-  fn seed_nondet() -> (Self::Word, Self::Word) {
-    let n = dandelion::thread_local::u128();
-    let a = n as u64;
-    let b = (n >> 64) as u64;
-    (a | 1, b | 1)
-  }
-
-  #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> (Self::Word, Self::Word) {
-    let a = g.next_u64();
-    let b = g.next_u64();
-    (a | 1, b | 1)
-  }
 }
 
 unsafe impl<T: IntoKey> private::Key for T {
@@ -121,26 +86,16 @@ unsafe impl<T: IntoKey> private::Key for T {
   unsafe fn from_word(x: Self::Word) -> Self {
     unsafe { T::project(<T::Key as private::Key>::from_word(x)) }
   }
-
-  #[inline(always)]
-  fn seed_nondet() -> (Self::Word, Self::Word) {
-    <T::Key as private::Key>::seed_nondet()
-  }
-
-  #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> (Self::Word, Self::Word) {
-    <T::Key as private::Key>::seed(g)
-  }
 }
+
+static INIT_U32: [u32; 3] = [0u32; 3];
 
 impl private::Word for u32 {
   const BITS: usize = 32;
 
   const ZERO: Self = 0;
 
-  const ONE: Self = 1;
-
-  const EMPTY_TABLE: *const Self = &raw const EMPTY_TABLE_U32 as *const Self;
+  const INIT: *const Self = &raw const INIT_U32 as *const Self;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -174,16 +129,32 @@ impl private::Word for u32 {
     let x = x.wrapping_mul(y.wrapping_add(1));
     x
   }
+
+  #[inline(always)]
+  fn seed_nondet() -> (Self, Self) {
+    let n = dandelion::thread_local::u64();
+    let a = n as u32;
+    let b = (n >> 32) as u32;
+    (a | 1, b | 1)
+  }
+
+  #[inline(always)]
+  fn seed(g: &mut impl RngCore) -> (Self, Self) {
+    let n = g.next_u64();
+    let a = n as u32;
+    let b = (n >> 32) as u32;
+    (a | 1, b | 1)
+  }
 }
+
+static INIT_U64: [u64; 3] = [0u64; 3];
 
 impl private::Word for u64 {
   const BITS: usize = 64;
 
   const ZERO: Self = 0;
 
-  const ONE: Self = 1;
-
-  const EMPTY_TABLE: *const Self = &raw const EMPTY_TABLE_U64 as *const Self;
+  const INIT: *const Self = &raw const INIT_U64 as *const Self;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -219,6 +190,21 @@ impl private::Word for u64 {
     let x = x.wrapping_mul(y.wrapping_add(1));
     x
   }
+
+  #[inline(always)]
+  fn seed_nondet() -> (Self, Self) {
+    let n = dandelion::thread_local::u128();
+    let a = n as u64;
+    let b = (n >> 64) as u64;
+    (a | 1, b | 1)
+  }
+
+  #[inline(always)]
+  fn seed(g: &mut impl RngCore) -> (Self, Self) {
+    let a = g.next_u64();
+    let b = g.next_u64();
+    (a | 1, b | 1)
+  }
 }
 
 pub(crate) mod private {
@@ -229,15 +215,21 @@ pub(crate) mod private {
 
     const ZERO: Self::Word = Self::Word::ZERO;
 
-    const EMPTY_TABLE: *const Self::Word = Self::Word::EMPTY_TABLE;
+    const INIT: *const Self::Word = Self::Word::INIT;
 
     fn into_word(_: Self) -> Self::Word;
 
     unsafe fn from_word(_: Self::Word) -> Self;
 
-    fn seed_nondet() -> (Self::Word, Self::Word);
+    #[inline(always)]
+    fn seed_nondet() -> (Self::Word, Self::Word) {
+      Self::Word::seed_nondet()
+    }
 
-    fn seed(_: &mut impl rand_core::RngCore) -> (Self::Word, Self::Word);
+    #[inline(always)]
+    fn seed(g: &mut impl rand_core::RngCore) -> (Self::Word, Self::Word) {
+      Self::Word::seed(g)
+    }
   }
 
   pub(crate) trait Word:
@@ -252,9 +244,7 @@ pub(crate) mod private {
 
     const ZERO: Self;
 
-    const ONE: Self;
-
-    const EMPTY_TABLE: *const Self;
+    const INIT: *const Self;
 
     fn into_usize(self) -> usize;
 
@@ -265,5 +255,9 @@ pub(crate) mod private {
     fn asr(_: Self, _: usize) -> Self;
 
     fn invert(_: Self) -> Self;
+
+    fn seed_nondet() -> (Self, Self);
+
+    fn seed(_: &mut impl rand_core::RngCore) -> (Self, Self);
   }
 }

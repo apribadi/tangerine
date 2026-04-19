@@ -136,7 +136,7 @@ const fn is_dummy<K: Key>(s: usize) -> bool {
 
 #[inline(always)]
 fn capacity<K: Key>(s: usize) -> usize {
-  let n = (! K::Word::ZERO >> 1) + K::Word::ONE;
+  let n = ! (! K::Word::ZERO >> 1);
   let n = n >> s;
   let n = n | K::Word::asr(n, K::Word::BITS - 1);
   K::Word::into_usize(n)
@@ -178,8 +178,8 @@ impl<K: Key, V> HashMap<K, V> {
     Self {
       slack: capacity::<K>(K::BITS - 1),
       shift: K::BITS - 1,
-      table: K::EMPTY_TABLE,
-      value: K::EMPTY_TABLE.wrapping_add(3).cast(),
+      table: K::INIT,
+      value: K::INIT.wrapping_add(3).cast(),
       seed: m,
       seed_inverted: invert_seed(m),
     }
@@ -673,8 +673,8 @@ impl<K: Key, V> HashMap<K, V> {
     let d = ptr_diff(u.cast(), t);
     self.slack = capacity::<K>(K::BITS - 1);
     self.shift = K::BITS - 1;
-    self.table = K::EMPTY_TABLE;
-    self.value = K::EMPTY_TABLE.wrapping_add(3).cast();
+    self.table = K::INIT;
+    self.value = K::INIT.wrapping_add(3).cast();
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;
