@@ -5,15 +5,15 @@ representable as [`NonZeroU32`](std::num::NonZeroU32) or [`NonZeroU64`](std::num
 
 ```
 use tangerine::map::IntMap;
-use std::num::NonZeroU64;
+use std::num::NonZeroU32;
 
 let mut t = IntMap::new();
-let _ = t.insert(NonZeroU64::new(1).unwrap(), 0);
-assert!(t.get(NonZeroU64::new(1).unwrap()) == Some(&0));
-assert!(t.get(NonZeroU64::new(2).unwrap()) == None);
+let _ = t.insert(NonZeroU32::MIN, 0u64);
+assert!(t.get(NonZeroU32::MIN) == Some(&0u64));
+assert!(t.get(NonZeroU32::MAX) == None);
 ```
 
-# Interface Differences From [`std::collections::HashMap`]
+# Interface Differences from `std::collections::HashMap`
 
 - 
 
@@ -23,9 +23,11 @@ assert!(t.get(NonZeroU64::new(2).unwrap()) == None);
 
 # The Implementation of Tangerine
 
-## A Simple Lookup
+## Searching for a Key
 
-## The Actual Lookup Algorithm
+## ???
+
+## Searching for a Key, the Actual Algorithm
 
 ## Insertion and Removal
 
