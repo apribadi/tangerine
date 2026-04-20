@@ -426,7 +426,7 @@ impl<K: Key, V> IntMap<K, V> {
           x = unsafe { t.add(i).replace(x) };
         }
         unsafe { u.add(i).write(y) };
-        if addr_eq(t.wrapping_add(i + 1), u) || r == 0 {
+        if addr_eq(unsafe { t.add(i + 1) }, u) || r == 0 {
           let _: *mut V = self.insert_grow(h, i);
         } else {
           self.slack = r - 1;
@@ -532,7 +532,7 @@ impl<K: Key, V> IntMap<K, V> {
           x = unsafe { t.add(i).replace(x) };
         }
         unsafe { u.add(i).write(y) };
-        if addr_eq(t.wrapping_add(i + 1), u) || r == 0 {
+        if addr_eq(unsafe { t.add(i + 1) }, u) || r == 0 {
           self.insert_grow(h, i)
         } else {
           self.slack = r - 1;
@@ -808,6 +808,21 @@ impl<K: Key, V> IntMap<K, V> {
   fn load_factor(&self) -> f64 {
     self.len() as f64 / self.num_slots() as f64
   }
+
+  fn displacements(&self) -> [usize; 10] {
+    let s = self.shift;
+    let t = self.table;
+    let u = self.data;
+    let d = ptr_diff(u.cast(), t);
+    let mut r = [0usize; 10];
+    for i in 0 .. d {
+      let x = unsafe { t.add(i).read() };
+      if x != K::ZERO {
+        r[usize::min(9, i - slot(x, s))] += 1;
+      }
+    }
+    r
+  }
 }
 
 impl<K: Key, V> Drop for IntMap<K, V> {
@@ -991,5 +1006,9 @@ pub mod internal {
 
   pub fn load_factor<K: Key, V>(t: &IntMap<K, V>) -> f64 {
     t.load_factor()
+  }
+
+  pub fn displacements<K: Key, V>(t: &IntMap<K, V>) -> [usize; 10] {
+    t.displacements()
   }
 }

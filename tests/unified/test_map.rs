@@ -337,3 +337,39 @@ fn test_working_set() {
       10000
   "#]].assert_eq(&s.drain(..).as_str());
 }
+
+#[test]
+fn test_displacements() {
+  let mut s = String::new();
+  let mut g = Rng::from_u64(0);
+  let mut t = IntMap::new_seeded(&mut g);
+
+  for i in 1 ..= 16384 {
+    let k = NonZeroU64::new(i).unwrap();
+    let _ = t.insert(k, ());
+  }
+
+  write!(s, "num_slots = {}\n", internal::num_slots(&t));
+  write!(s, "len = {}\n", t.len());
+  write!(s, "load_factor = {}\n", internal::load_factor(&t));
+
+  for (i, &c) in internal::displacements(&t).iter().enumerate() {
+    write!(s, "{}: {}\n", i, c);
+  }
+
+  expect![[r#"
+      num_slots = 32784
+      len = 16384
+      load_factor = 0.4997559785261103
+      0: 11720
+      1: 3769
+      2: 722
+      3: 143
+      4: 29
+      5: 1
+      6: 0
+      7: 0
+      8: 0
+      9: 0
+  "#]].assert_eq(&s.drain(..).as_str());
+}
