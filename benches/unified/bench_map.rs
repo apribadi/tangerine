@@ -4,6 +4,8 @@ use divan::black_box;
 use crate::util::Map;
 
 const ARGS: &'static [usize] = &[
+  100,
+  300,
   1_000,
   3_000,
   10_000,
@@ -16,16 +18,16 @@ const SAMPLE_COUNT: u32 = 9;
 
 fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
   let n: [usize; 10] = [
-    50,
-    54,
-    57,
-    62,
-    66,
-    71,
-    76,
-    81,
-    87,
-    93,
+    500,
+    535,
+    574,
+    615,
+    659,
+    707,
+    757,
+    812,
+    870,
+    933,
   ];
   let mut a = 0;
   for &n in &n { a += n; }

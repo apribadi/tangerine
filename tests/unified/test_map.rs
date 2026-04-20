@@ -306,16 +306,16 @@ fn test_1() {
 
 fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
   let n: [usize; 10] = [
-    50,
-    54,
-    57,
-    62,
-    66,
-    71,
-    76,
-    81,
-    87,
-    93,
+    500,
+    535,
+    574,
+    615,
+    659,
+    707,
+    757,
+    812,
+    870,
+    933,
   ];
   let mut a = 0;
   for &n in &n { a += n; }
@@ -326,25 +326,24 @@ fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
   r
 }
 
-
 #[test]
 fn test_working_set() {
   let mut s = String::new();
   write!(s, "{:?}\n", sizes_from_working_set(10_000));
   write!(s, "{:?}\n", sizes_from_working_set(10_000).iter().sum::<usize>());
   expect![[r#"
-      [717, 774, 817, 889, 946, 1018, 1090, 1162, 1248, 1339]
+      [718, 768, 824, 883, 946, 1015, 1087, 1166, 1249, 1344]
       10000
   "#]].assert_eq(&s.drain(..).as_str());
 }
 
 #[test]
-fn test_displacements() {
+fn test_displacement_histogram() {
   let mut s = String::new();
   let mut g = Rng::from_u64(0);
   let mut t = IntMap::new_seeded(&mut g);
 
-  for i in 1 ..= 16384 {
+  for i in 1 ..= 512 {
     let k = NonZeroU64::new(i).unwrap();
     let _ = t.insert(k, ());
   }
@@ -353,20 +352,20 @@ fn test_displacements() {
   write!(s, "len = {}\n", t.len());
   write!(s, "load_factor = {}\n", internal::load_factor(&t));
 
-  for (i, &c) in internal::displacements(&t).iter().enumerate() {
+  for (i, &c) in internal::displacement_histogram(&t).iter().enumerate() {
     write!(s, "{}: {}\n", i, c);
   }
 
   expect![[r#"
-      num_slots = 32784
-      len = 16384
-      load_factor = 0.4997559785261103
-      0: 11720
-      1: 3769
-      2: 722
-      3: 143
-      4: 29
-      5: 1
+      num_slots = 1036
+      len = 512
+      load_factor = 0.4942084942084942
+      0: 277
+      1: 121
+      2: 75
+      3: 26
+      4: 11
+      5: 2
       6: 0
       7: 0
       8: 0

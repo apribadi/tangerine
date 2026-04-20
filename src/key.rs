@@ -88,14 +88,14 @@ unsafe impl<T: IntoKey> private::Key for T {
   }
 }
 
-static INIT_U32: [u32; 3] = [0u32; 3];
+static EMPTY_TABLE_U32: [u32; 3] = [0u32; 3];
 
 impl private::Word for u32 {
   const BITS: usize = 32;
 
   const ZERO: Self = 0;
 
-  const INIT: *const Self = &raw const INIT_U32 as *const Self;
+  const EMPTY_TABLE: *const Self = &raw const EMPTY_TABLE_U32 as *const Self;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -147,14 +147,14 @@ impl private::Word for u32 {
   }
 }
 
-static INIT_U64: [u64; 3] = [0u64; 3];
+static EMPTY_TABLE_U64: [u64; 3] = [0u64; 3];
 
 impl private::Word for u64 {
   const BITS: usize = 64;
 
   const ZERO: Self = 0;
 
-  const INIT: *const Self = &raw const INIT_U64 as *const Self;
+  const EMPTY_TABLE: *const Self = &raw const EMPTY_TABLE_U64 as *const Self;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -215,21 +215,11 @@ pub(crate) mod private {
 
     const ZERO: Self::Word = Self::Word::ZERO;
 
-    const INIT: *const Self::Word = Self::Word::INIT;
+    const EMPTY_TABLE: *const Self::Word = Self::Word::EMPTY_TABLE;
 
     fn into_word(_: Self) -> Self::Word;
 
     unsafe fn from_word(_: Self::Word) -> Self;
-
-    #[inline(always)]
-    fn seed_nondet() -> (Self::Word, Self::Word) {
-      Self::Word::seed_nondet()
-    }
-
-    #[inline(always)]
-    fn seed(g: &mut impl rand_core::RngCore) -> (Self::Word, Self::Word) {
-      Self::Word::seed(g)
-    }
   }
 
   pub(crate) trait Word:
@@ -244,7 +234,7 @@ pub(crate) mod private {
 
     const ZERO: Self;
 
-    const INIT: *const Self;
+    const EMPTY_TABLE: *const Self;
 
     fn into_usize(self) -> usize;
 

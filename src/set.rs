@@ -51,7 +51,7 @@ impl<T: Key> IntSet<T> {
   pub fn insert(&mut self, value: T) -> bool {
     match self.map.insert(value, ()) {
       None => false,
-      Some(_) => true,
+      Some(()) => true,
     }
   }
 
@@ -61,7 +61,7 @@ impl<T: Key> IntSet<T> {
   pub fn remove(&mut self, value: T) -> bool {
     match self.map.remove(value) {
       None => false,
-      Some(_) => true,
+      Some(()) => true,
     }
   }
 
@@ -85,9 +85,7 @@ impl<T: Key> IntSet<T> {
 
 impl<T: Key> Clone for IntSet<T> {
   fn clone(&self) -> Self {
-    let mut t = Self::new();
-    self.iter().for_each(|x| { let _ = t.insert(x); });
-    t
+    Self { map: self.map.clone() }
   }
 }
 
@@ -107,7 +105,13 @@ impl<T: Key> Default for IntSet<T> {
 
 impl<T: Key> Extend<T> for IntSet<T> {
   fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-    iter.into_iter().for_each(|x| { let _ = self.insert(x); });
+    iter.into_iter().for_each(|x| { let _: bool = self.insert(x); });
+  }
+
+  #[cfg(feature = "nightly")]
+  #[inline(always)]
+  fn extend_one(&mut self, item: T) {
+    let _: bool = self.insert(item);
   }
 }
 
@@ -120,28 +124,7 @@ impl<const N: usize, T: Key> From<[T; N]> for IntSet<T> {
 impl<T: Key> FromIterator<T> for IntSet<T> {
   fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
     let mut t = Self::new();
-    iter.into_iter().for_each(|x| { let _ = t.insert(x); });
+    t.extend(iter);
     t
-  }
-}
-
-pub mod internal {
-  //! Unstable API exposing implementation details for benchmarks and tests.
-
-  #![allow(missing_docs)]
-
-  use super::IntSet;
-  use super::Key;
-
-  pub fn num_slots<T: Key>(t: &IntSet<T>) -> usize {
-    crate::map::internal::num_slots(&t.map)
-  }
-
-  pub fn allocation_size<T: Key>(t: &IntSet<T>) -> usize {
-    crate::map::internal::allocation_size(&t.map)
-  }
-
-  pub fn load_factor<T: Key>(t: &IntSet<T>) -> f64 {
-    crate::map::internal::load_factor(&t.map)
   }
 }

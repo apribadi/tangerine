@@ -1,10 +1,12 @@
 #![allow(missing_docs)]
 
 use dandelion::Rng;
+use std::mem::replace;
 use std::num::NonZeroU32;
 use std::num::NonZeroU64;
 use tangerine::map::Entry;
 use tangerine::map::IntMap;
+use tangerine::set::IntSet;
 
 pub fn drop(_: IntMap<NonZeroU32, NonZeroU64>) {
 }
@@ -43,7 +45,7 @@ pub fn insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU
 
 pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
   match t.entry(key) {
-    Entry::Occupied(entry) => Some(core::mem::replace(entry.into_mut(), value)),
+    Entry::Occupied(entry) => Some(replace(entry.into_mut(), value)),
     Entry::Vacant(entry) => { let _ = entry.insert(value); None }
   }
 }
@@ -92,32 +94,53 @@ pub fn sum_loop(t: &mut IntMap<NonZeroU32, u64>) -> u64 {
   x
 }
 
+pub fn inc(t: &mut IntMap<NonZeroU32, u64>, key: NonZeroU32) {
+  *t.get_or_insert(key, 0) += 1;
+}
+
+pub fn entry_inc(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
+  match t.entry(key) {
+    Entry::Occupied(mut entry) => {
+      let value = entry.get_mut();
+      *value = (*value).saturating_add(1);
+    }
+    Entry::Vacant(e) => {
+      let _ = e.insert(NonZeroU64::MIN);
+    }
+  }
+}
+
+pub fn entry_dec(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
+  match t.entry(key) {
+    Entry::Occupied(mut entry) => {
+      let value = entry.get_mut();
+      match NonZeroU64::new((*value).get() - 1) {
+        None => {
+          let _ = entry.remove();
+        }
+        Some(n) => {
+          *value = n;
+        }
+      }
+    }
+    Entry::Vacant(_) => {
+    }
+  }
+}
+
 pub fn std_clear(t: &mut std::collections::HashMap<NonZeroU32, NonZeroU64>) {
   t.clear();
 }
 
-/*
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn entry_incr(t: &mut ExampleMap, key: ExampleKey) {
-  match t.entry(key) {
-    Entry::Occupied(entry) => { *entry.into_mut() += 1; }
-    Entry::Vacant(entry) => { let _ = entry.insert(1); }
-  }
+pub fn set_contains(t: &IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
+  t.contains(k)
 }
 
-#[allow(missing_docs)]
-#[inline(never)]
-pub fn entry_decr(t: &mut ExampleMap, key: ExampleKey) {
-  match t.entry(key) {
-    Entry::Occupied(mut entry) => {
-      if *entry.get_mut() <= 1 {
-        let _ = entry.remove();
-      } else {
-        *entry.into_mut() -= 1;
-      }
-    }
-    Entry::Vacant(_) => { }
-  }
+pub fn set_insert(t: &mut IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
+  t.insert(k)
 }
-*/
+
+
+pub fn set_remove(t: &mut IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
+  t.remove(k)
+}
