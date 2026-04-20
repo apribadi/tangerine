@@ -815,11 +815,14 @@ impl<K: Key, V> IntMap<K, V> {
     let u = self.data;
     let d = ptr_diff(u.cast(), t);
     let mut r = [0usize; 10];
-    for i in 0 .. d {
+    let mut i = d;
+    loop {
+      i = i - 1;
       let x = unsafe { t.add(i).read() };
       if x != K::ZERO {
         r[usize::min(9, i - slot(x, s))] += 1;
       }
+      if i == 0 { break }
     }
     r
   }
