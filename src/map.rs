@@ -137,20 +137,22 @@ fn invert_seed<W: Word>(m: (W, W)) -> (W, W) {
 }
 
 #[inline(always)]
-fn hash<K: Key>(k: K, (a, b): (K::Word, K::Word)) -> K::Word {
-  let h = K::into_word(k);
-  let h = h.wrapping_mul(a);
-  let h = h.swap_bytes();
-  let h = h.wrapping_mul(b);
-  h
+fn hash_word<W: Word>(x: W, m: (W, W)) -> W {
+  let x = x.wrapping_mul(m.0);
+  let x = x.swap_bytes();
+  let x = x.wrapping_mul(m.1);
+  x
 }
 
 #[inline(always)]
-unsafe fn invert_hash<K: Key>(h: K::Word, (a, b): (K::Word, K::Word)) -> K {
-  let h = h.wrapping_mul(a);
-  let h = h.swap_bytes();
-  let h = h.wrapping_mul(b);
-  unsafe { K::from_word(h) }
+fn hash<K: Key>(k: K, m: (K::Word, K::Word)) -> K::Word {
+  hash_word(K::into_word(k), m)
+}
+
+#[inline(always)]
+unsafe fn invert_hash<K: Key>(h: K::Word, m: (K::Word, K::Word)) -> K {
+  let k = hash_word(h, m);
+  unsafe { K::from_word(k) }
 }
 
 #[inline(always)]
@@ -592,10 +594,46 @@ impl<K: Key, V> IntMap<K, V> {
     }
   }
 
-  /// TODO:
+  /// For each given key, retrieves a mutable reference to the associated
+  /// value, if present.
+  ///
+  /// # Panics
+  ///
+  /// Panics if any key is the same as any other key.
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
-    let _ = keys;
-    unimplemented!()
+    let mut values = [const { None }; N];
+    if N == 0 { return values }
+    let keys = keys.map(K::into_word);
+    let mut is_disjoint = true;
+    for &a in keys[0 .. N - 1].iter() {
+      for &b in keys[1 .. N].iter() {
+        is_disjoint &= a != b;
+      }
+    }
+    assert!(is_disjoint);
+    let s = self.shift;
+    let t = self.head;
+    let u = self.data.cast_mut();
+    let m = self.seed;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(u.addr() != 0) };
+    for j in 0 .. N {
+      let h = hash_word(keys[j], m);
+      let k = slot(h, s);
+      prefetch_write(u.wrapping_add(k));
+      let a = unsafe { t.add(k).read() };
+      let mut i = k;
+      let mut x;
+      loop {
+        i = i + 1;
+        x = unsafe { t.add(i).read() };
+        if ! (x > h) { break }
+      }
+      let i = select_unpredictable(a > h, i, k);
+      let x = select_unpredictable(a > h, x, a);
+      values[j] = if x != h { None } else { Some(unsafe { &mut *u.add(i) }) };
+    }
+    values
   }
 
   /// Removes every item from the map. Retains heap-allocated memory.

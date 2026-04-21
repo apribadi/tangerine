@@ -39,6 +39,10 @@ pub fn get_value(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<No
   match t.get(k) { None => None, Some(&y) => Some(y) }
 }
 
+pub fn get_disjoint_mut(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 4]) -> [Option<&mut NonZeroU64>; 4] {
+  t.get_disjoint_mut(ks)
+}
+
 pub fn insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU64) -> Option<NonZeroU64> {
   t.insert(k, v)
 }
@@ -139,7 +143,6 @@ pub fn set_contains(t: &IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
 pub fn set_insert(t: &mut IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
   t.insert(k)
 }
-
 
 pub fn set_remove(t: &mut IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
   t.remove(k)
