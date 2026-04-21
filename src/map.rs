@@ -317,7 +317,7 @@ impl<K: Key, V> IntMap<K, V> {
     let old_d = ptr_diff(old_u.cast(), old_t);
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
-    // Temporarily place the table in a valid state in case we panic.
+    // Place the table in a valid state in case we panic.
     let z = unsafe { old_t.add(last_write).replace(K::ZERO) };
     // Compute new sizes.
     debug_assert!(old_s != 0);
@@ -341,9 +341,6 @@ impl<K: Key, V> IntMap<K, V> {
     let new_t = unsafe { alloc(new_l) } as *mut K::Word;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
     let new_u = unsafe { new_t.add(new_d) } as *mut V;
-    // At this point, we're guaranteed to successfully finish growing the
-    // table. We re-add the last write.
-    unsafe { old_t.add(last_write).write(z) };
     // Update struct fields.
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.shift = new_s;
@@ -356,6 +353,8 @@ impl<K: Key, V> IntMap<K, V> {
       unsafe { write_bytes(new_t.add(i), 0u8, allocation_chunk::<K, V>()) };
       if i == 0 { break }
     }
+    // Re-add the last write so that we copy it to the new table.
+    unsafe { old_t.add(last_write).write(z) };
     // Copy slots.
     let mut i = 0;
     let mut j = 0;
@@ -541,6 +540,7 @@ impl<K: Key, V> IntMap<K, V> {
       };
     unsafe { &mut *p }
   }
+
 
   #[inline(always)]
   unsafe fn remove_at(&mut self, pos: usize) -> V {
