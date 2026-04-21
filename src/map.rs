@@ -585,7 +585,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// the result of calling [`V::default`](Default::default) if the key was
   /// previously absent.  Returns a mutable reference to the value in the
   /// entry.
-  pub fn get_or_insert_default(&mut self, key: K) -> &mut V where V: Default {
+  pub fn get_or_default(&mut self, key: K) -> &mut V where V: Default {
     match self.entry(key) {
       Entry::Occupied(entry) => entry.into_mut(),
       Entry::Vacant(entry) => entry.insert(V::default()),
@@ -836,6 +836,12 @@ impl<K: Key, V> Index<K> for IntMap<K, V> {
 }
 
 impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
+  /// Gets a reference to the value in the entry.
+  #[inline(always)]
+  pub fn get(&self) -> &V {
+    unsafe { &*self.map.data.add(self.pos) }
+  }
+
   /// Gets a mutable reference to the value in the entry.
   #[inline(always)]
   pub fn get_mut(&mut self) -> &mut V {
