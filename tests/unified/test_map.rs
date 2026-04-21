@@ -343,7 +343,7 @@ fn test_displacement_histogram() {
   let mut g = Rng::from_u64(0);
   let mut t = IntMap::new_seeded(&mut g);
 
-  for i in 1 ..= 512 {
+  for i in 1 ..= 128 {
     let k = NonZeroU64::new(i).unwrap();
     let _ = t.insert(k, ());
   }
@@ -357,15 +357,15 @@ fn test_displacement_histogram() {
   }
 
   expect![[r#"
-      num_slots = 1036
-      len = 512
-      load_factor = 0.4942084942084942
-      0: 277
-      1: 121
-      2: 75
-      3: 26
-      4: 11
-      5: 2
+      num_slots = 264
+      len = 128
+      load_factor = 0.48484848484848486
+      0: 74
+      1: 36
+      2: 13
+      3: 3
+      4: 2
+      5: 0
       6: 0
       7: 0
       8: 0

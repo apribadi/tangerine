@@ -317,8 +317,9 @@ impl<K: Key, V> IntMap<K, V> {
     let old_d = ptr_diff(old_u.cast(), old_t);
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
-    // Place the table in a valid state in case we panic.
-    let z = unsafe { old_t.add(last_write).replace(K::ZERO) };
+    // Remove the last slot so that the table is in a valid state, in case we
+    // panic.
+    let last_write_hash = unsafe { old_t.add(last_write).replace(K::ZERO) };
     // Compute new sizes.
     debug_assert!(old_s != 0);
     let new_s = old_s - 1;
@@ -354,7 +355,7 @@ impl<K: Key, V> IntMap<K, V> {
       if i == 0 { break }
     }
     // Re-add the last write so that we copy it to the new table.
-    unsafe { old_t.add(last_write).write(z) };
+    unsafe { old_t.add(last_write).write(last_write_hash) };
     // Copy slots.
     let mut i = 0;
     let mut j = 0;
@@ -472,7 +473,8 @@ impl<K: Key, V> IntMap<K, V> {
         let y = unsafe { u.add(i).read() };
         unsafe { t.add(i - 1).write(x) };
         unsafe { u.add(i - 1).write(y) };
-        // NOTE: We could do the loop exit test here instead.
+        // NOTE: We could do the loop exit test here instead, with the
+        // modification that y is MaybeUninit<V>.
       }
       unsafe { t.add(i - 1).write(K::ZERO) };
       Some(value)
@@ -556,7 +558,7 @@ impl<K: Key, V> IntMap<K, V> {
     loop {
       i = i + 1;
       let x = unsafe { t.add(i).read() };
-      if ! (slot(x, s) <= i - 1 && /* likely */ x != K::ZERO) { break }
+      if ! (slot(x, s) <= i - 1 && x != K::ZERO) { break }
       let y = unsafe { u.add(i).read() };
       unsafe { t.add(i - 1).write(x) };
       unsafe { u.add(i - 1).write(y) };
