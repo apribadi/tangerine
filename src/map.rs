@@ -605,9 +605,9 @@ impl<K: Key, V> IntMap<K, V> {
     if N == 0 { return values }
     let keys = keys.map(K::into_word);
     let mut is_disjoint = true;
-    for &a in keys[0 .. N - 1].iter() {
-      for &b in keys[1 .. N].iter() {
-        is_disjoint &= a != b;
+    for i in 0 .. N - 1 {
+      for j in i + 1 .. N {
+        is_disjoint &= keys[i] != keys[j];
       }
     }
     assert!(is_disjoint);
