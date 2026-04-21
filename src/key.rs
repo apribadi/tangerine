@@ -3,7 +3,7 @@
 
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
-use rand_core::RngCore;
+use rand_core::Rng;
 
 /// A sealed trait for hashable keys representable as [`NonZeroU32`] or
 /// [`NonZeroU64`]. The only way to implement this trait for additional types is
@@ -88,14 +88,14 @@ unsafe impl<T: IntoKey> private::Key for T {
   }
 }
 
-static EMPTY_TABLE_U32: [u32; 3] = [0u32; 3];
+static EMPTY_U32: [u32; 3] = [0u32; 3];
 
 impl private::Word for u32 {
   const BITS: usize = 32;
 
   const ZERO: Self = 0;
 
-  const EMPTY_TABLE: *const Self = &raw const EMPTY_TABLE_U32 as *const Self;
+  const EMPTY: *const Self = &raw const EMPTY_U32 as *const Self;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -139,7 +139,7 @@ impl private::Word for u32 {
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> (Self, Self) {
+  fn seed(g: &mut impl Rng) -> (Self, Self) {
     let n = g.next_u64();
     let a = n as u32;
     let b = (n >> 32) as u32;
@@ -147,14 +147,14 @@ impl private::Word for u32 {
   }
 }
 
-static EMPTY_TABLE_U64: [u64; 3] = [0u64; 3];
+static EMPTY_U64: [u64; 3] = [0u64; 3];
 
 impl private::Word for u64 {
   const BITS: usize = 64;
 
   const ZERO: Self = 0;
 
-  const EMPTY_TABLE: *const Self = &raw const EMPTY_TABLE_U64 as *const Self;
+  const EMPTY: *const Self = &raw const EMPTY_U64 as *const Self;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -200,7 +200,7 @@ impl private::Word for u64 {
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl RngCore) -> (Self, Self) {
+  fn seed(g: &mut impl Rng) -> (Self, Self) {
     let a = g.next_u64();
     let b = g.next_u64();
     (a | 1, b | 1)
@@ -215,7 +215,7 @@ pub(crate) mod private {
 
     const ZERO: Self::Word = Self::Word::ZERO;
 
-    const EMPTY_TABLE: *const Self::Word = Self::Word::EMPTY_TABLE;
+    const EMPTY: *const Self::Word = Self::Word::EMPTY;
 
     fn into_word(_: Self) -> Self::Word;
 
@@ -234,7 +234,7 @@ pub(crate) mod private {
 
     const ZERO: Self;
 
-    const EMPTY_TABLE: *const Self;
+    const EMPTY: *const Self;
 
     fn into_usize(self) -> usize;
 
@@ -248,6 +248,6 @@ pub(crate) mod private {
 
     fn seed_nondet() -> (Self, Self);
 
-    fn seed(_: &mut impl rand_core::RngCore) -> (Self, Self);
+    fn seed(_: &mut impl rand_core::Rng) -> (Self, Self);
   }
 }

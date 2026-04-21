@@ -16,7 +16,7 @@ use core::mem::needs_drop;
 use core::ops::Index;
 use core::ptr::addr_eq;
 use core::ptr::write_bytes;
-use rand_core::RngCore;
+use rand_core::Rng;
 
 use crate::key::Key;
 use crate::key::private::Word;
@@ -164,8 +164,8 @@ impl<K: Key, V> IntMap<K, V> {
     Self {
       slack: capacity::<K>(K::BITS - 1),
       shift: K::BITS - 1,
-      head: K::EMPTY_TABLE,
-      data: K::EMPTY_TABLE.cast(),
+      head: K::EMPTY,
+      data: K::EMPTY.cast(),
       seed: m,
       seed_inverted: invert_seed(m),
     }
@@ -179,7 +179,7 @@ impl<K: Key, V> IntMap<K, V> {
 
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
-  pub fn new_seeded(rng: &mut impl RngCore) -> Self {
+  pub fn new_seeded(rng: &mut impl Rng) -> Self {
     Self::from_seed(K::Word::seed(rng))
   }
 
@@ -667,8 +667,8 @@ impl<K: Key, V> IntMap<K, V> {
     let d = ptr_diff(u.cast(), t);
     self.slack = capacity::<K>(K::BITS - 1);
     self.shift = K::BITS - 1;
-    self.head = K::EMPTY_TABLE;
-    self.data = K::EMPTY_TABLE.cast();
+    self.head = K::EMPTY;
+    self.data = K::EMPTY.cast();
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;

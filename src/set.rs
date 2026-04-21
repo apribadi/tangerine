@@ -3,7 +3,7 @@
 
 use core::fmt::Debug;
 use core::iter::ExactSizeIterator;
-use rand_core::RngCore;
+use rand_core::Rng;
 
 use crate::key::Key;
 use crate::map::IntMap;
@@ -23,7 +23,7 @@ impl<T: Key> IntSet<T> {
 
   /// Creates an empty set, seeding the hash function from the given random
   /// number generator.
-  pub fn new_seeded(rng: &mut impl RngCore) -> Self {
+  pub fn new_seeded(rng: &mut impl Rng) -> Self {
     Self { map: IntMap::new_seeded(rng) }
   }
 
