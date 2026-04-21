@@ -121,11 +121,6 @@ const unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
 }
 
 #[inline(always)]
-const fn is_dummy<K: Key>(s: usize) -> bool {
-  s == K::BITS - 1
-}
-
-#[inline(always)]
 fn capacity<K: Key>(s: usize) -> usize {
   let n = ! (! K::Word::ZERO >> 1);
   let n = n >> s;
@@ -170,7 +165,7 @@ impl<K: Key, V> IntMap<K, V> {
       slack: capacity::<K>(K::BITS - 1),
       shift: K::BITS - 1,
       head: K::EMPTY_TABLE,
-      data: K::EMPTY_TABLE.wrapping_add(3).cast(),
+      data: K::EMPTY_TABLE.cast(),
       seed: m,
       seed_inverted: invert_seed(m),
     }
@@ -413,7 +408,7 @@ impl<K: Key, V> IntMap<K, V> {
     if x == h {
       Some(unsafe { u.add(i).replace(value) })
     } else {
-      if is_dummy::<K>(s) {
+      if addr_eq(t, u) {
         let _: *mut V = self.insert_init(h, value);
       } else {
         let mut i = i;
@@ -520,7 +515,7 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(u.addr() != 0) };
     let p =
-      if is_dummy::<K>(s) {
+      if addr_eq(t, u) {
         self.insert_init(h, value)
       } else {
         let mut i = pos;
@@ -542,7 +537,6 @@ impl<K: Key, V> IntMap<K, V> {
       };
     unsafe { &mut *p }
   }
-
 
   #[inline(always)]
   unsafe fn remove_at(&mut self, pos: usize) -> V {
@@ -668,13 +662,13 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let t = self.head.cast_mut();
     let u = self.data.cast_mut();
-    if is_dummy::<K>(s) { return }
+    if addr_eq(t, u) { return }
     let n = capacity::<K>(s) - r;
     let d = ptr_diff(u.cast(), t);
     self.slack = capacity::<K>(K::BITS - 1);
     self.shift = K::BITS - 1;
     self.head = K::EMPTY_TABLE;
-    self.data = K::EMPTY_TABLE.wrapping_add(3).cast();
+    self.data = K::EMPTY_TABLE.cast();
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;
@@ -795,10 +789,8 @@ impl<K: Key, V> IntMap<K, V> {
   }
 
   fn num_slots(&self) -> usize {
-    let s = self.shift;
     let t = self.head;
     let u = self.data;
-    if is_dummy::<K>(s) { return 0 }
     ptr_diff(u.cast(), t)
   }
 
