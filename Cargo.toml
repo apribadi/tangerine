@@ -1,13 +1,26 @@
 [package]
 authors = ["Aaron Pribadi <aaron.pribadi@gmail.com>"]
 edition = "2024"
+keywords = ["hashmap"]
+categories = ["data-structures"]
 license = "Artistic-2.0"
-name = "tangerine"
+name = "tangerine-intmap"
 version = "0.1.0"
 
 [features]
 default = ["nightly"]
 nightly = []
+
+[lib]
+name = "tangerine"
+
+[[bench]]
+name = "unified"
+harness = false
+
+[[example]]
+name = "asm"
+crate-type = ["lib"]
 
 [dependencies]
 dandelion-random = { git = "https://github.com/apribadi/dandelion.git", branch = "devel", features = ["rand_core", "thread_local"] }
@@ -23,14 +36,6 @@ mimalloc = { version = "0.1.48", features = ["v3"] }
 [profile.release]
 
 [profile.dev]
-
-[[bench]]
-name = "unified"
-harness = false
-
-[[example]]
-name = "asm"
-crate-type = ["lib"]
 
 [lints.rust]
 elided_lifetimes_in_paths = "warn"
