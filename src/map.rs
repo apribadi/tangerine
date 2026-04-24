@@ -62,15 +62,19 @@ unsafe impl<K: Key + Sync, V: Sync> Sync for IntMap<K, V> {
 }
 
 #[inline(always)]
-fn prefetch_read<T>(_p: *const T) {
+fn prefetch_read<T>(_p: *const T, _i: usize) {
   #[cfg(feature = "nightly")]
-  if size_of::<T>() != 0 { core::hint::prefetch_read(_p, core::hint::Locality::L1) }
+  if size_of::<T>() != 0 {
+    core::hint::prefetch_read(_p.wrapping_add(_i), core::hint::Locality::L1)
+  }
 }
 
 #[inline(always)]
-fn prefetch_write<T>(_p: *mut T) {
+fn prefetch_write<T>(_p: *mut T, _i: usize) {
   #[cfg(feature = "nightly")]
-  if size_of::<T>() != 0 { core::hint::prefetch_write(_p, core::hint::Locality::L1) }
+  if size_of::<T>() != 0 {
+    core::hint::prefetch_write(_p.wrapping_add(_i), core::hint::Locality::L1)
+  }
 }
 
 #[inline(always)]
@@ -138,21 +142,23 @@ fn invert_seed<W: Word>(m: (W, W)) -> (W, W) {
 
 #[inline(always)]
 fn hash_word<W: Word>(x: W, m: (W, W)) -> W {
-  let x = x.wrapping_mul(m.0);
+  let a = m.0;
+  let b = m.1;
+  let x = x.wrapping_mul(a);
   let x = x.swap_bytes();
-  let x = x.wrapping_mul(m.1);
+  let x = x.wrapping_mul(b);
   x
 }
 
 #[inline(always)]
-fn hash<K: Key>(k: K, m: (K::Word, K::Word)) -> K::Word {
-  hash_word(K::into_word(k), m)
+fn hash<K: Key>(key: K, m: (K::Word, K::Word)) -> K::Word {
+  hash_word(K::into_word(key), m)
 }
 
 #[inline(always)]
 unsafe fn invert_hash<K: Key>(h: K::Word, m: (K::Word, K::Word)) -> K {
-  let k = hash_word(h, m);
-  unsafe { K::from_word(k) }
+  let x = hash_word(h, m);
+  unsafe { K::from_word(x) }
 }
 
 #[inline(always)]
@@ -233,7 +239,7 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { assert_unchecked(u.addr() != 0) };
     let h = hash(key, m);
     let k = slot(h, s);
-    prefetch_read(u.wrapping_add(k));
+    prefetch_read(u, k);
     let a = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
@@ -244,6 +250,31 @@ impl<K: Key, V> IntMap<K, V> {
     }
     let i = select_unpredictable(a > h, i, k);
     let x = select_unpredictable(a > h, x, a);
+    if x != h {
+      None
+    } else {
+      Some(unsafe { &*u.add(i) })
+    }
+  }
+
+  #[inline(always)]
+  fn get_branchy(&self, key: K) -> Option<&V> {
+    let s = self.shift;
+    let t = self.head;
+    let u = self.data;
+    let m = self.seed;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(u.addr() != 0) };
+    let h = hash(key, m);
+    let k = slot(h, s);
+    prefetch_read(u, k);
+    let mut i = k;
+    let mut x;
+    loop {
+      x = unsafe { t.add(i).read() };
+      if ! (x > h) { break }
+      i = i + 1;
+    }
     if x != h {
       None
     } else {
@@ -263,7 +294,7 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { assert_unchecked(u.addr() != 0) };
     let h = hash(key, m);
     let k = slot(h, s);
-    prefetch_write(u.wrapping_add(k));
+    prefetch_write(u, k);
     let a = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
@@ -279,6 +310,48 @@ impl<K: Key, V> IntMap<K, V> {
     } else {
       Some(unsafe { &mut *u.add(i) })
     }
+  }
+
+  /// For each key in the given array, returns a mutable reference to the
+  /// associated value, if present.
+  ///
+  /// # Panics
+  ///
+  /// Panics if any key is the same as any other key.
+  pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
+    let mut out = [const { None }; N];
+    if N == 0 { return out }
+    let keys = keys.map(K::into_word);
+    let mut is_disjoint = true;
+    for i in 0 .. N - 1 {
+      for j in i + 1 .. N {
+        is_disjoint &= keys[i] != keys[j];
+      }
+    }
+    assert!(is_disjoint);
+    let s = self.shift;
+    let t = self.head;
+    let u = self.data.cast_mut();
+    let m = self.seed;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(u.addr() != 0) };
+    for j in 0 .. N {
+      let h = hash_word(keys[j], m);
+      let k = slot(h, s);
+      prefetch_write(u, k);
+      let a = unsafe { t.add(k).read() };
+      let mut i = k;
+      let mut x;
+      loop {
+        i = i + 1;
+        x = unsafe { t.add(i).read() };
+        if ! (x > h) { break }
+      }
+      let i = select_unpredictable(a > h, i, k);
+      let x = select_unpredictable(a > h, x, a);
+      out[j] = if x != h { None } else { Some(unsafe { &mut *u.add(i) }) };
+    }
+    out
   }
 
   #[inline(never)]
@@ -317,8 +390,9 @@ impl<K: Key, V> IntMap<K, V> {
     // Remove the last slot so that the table is in a valid state, in case we
     // panic.
     let last_write_hash = unsafe { old_t.add(last_write).replace(K::ZERO) };
-    // Compute new sizes.
+    // If s == 0, then the map can hold every possible key and will never grow.
     debug_assert!(old_s != 0);
+    // Compute new sizes.
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
     let new_e =
@@ -339,11 +413,6 @@ impl<K: Key, V> IntMap<K, V> {
     let new_t = unsafe { alloc(new_l) } as *mut K::Word;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
     let new_u = unsafe { new_t.add(new_d) } as *mut V;
-    // Update struct fields.
-    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
-    self.shift = new_s;
-    self.head = new_t;
-    self.data = new_u;
     // Initialize new table.
     let mut i = new_d;
     loop {
@@ -367,6 +436,11 @@ impl<K: Key, V> IntMap<K, V> {
       j = select_unpredictable(x != K::ZERO, k + 1, j);
       if i == old_d { break }
     }
+    // Update struct fields.
+    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
+    self.shift = new_s;
+    self.head = new_t;
+    self.data = new_u;
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
     // Find the newly-inserted value. Note, this was not necessarily at last_write.
@@ -396,7 +470,7 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { assert_unchecked(u.addr() != 0) };
     let h = hash(key, m);
     let k = slot(h, s);
-    prefetch_write(u.wrapping_add(k));
+    prefetch_write(u, k);
     let a = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
@@ -446,7 +520,7 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { assert_unchecked(u.addr() != 0) };
     let h = hash(key, m);
     let k = slot(h, s);
-    prefetch_write(u.wrapping_add(k));
+    prefetch_write(u, k);
     let a = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
@@ -490,7 +564,7 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { assert_unchecked(u.addr() != 0) };
     let h = hash(key, m);
     let k = slot(h, s);
-    prefetch_write(u.wrapping_add(k));
+    prefetch_write(u, k);
     let a = unsafe { t.add(k).read() };
     let mut i = k;
     let mut x;
@@ -592,48 +666,6 @@ impl<K: Key, V> IntMap<K, V> {
       Entry::Occupied(entry) => entry.into_mut(),
       Entry::Vacant(entry) => entry.insert(V::default()),
     }
-  }
-
-  /// For each given key, retrieves a mutable reference to the associated
-  /// value, if present.
-  ///
-  /// # Panics
-  ///
-  /// Panics if any key is the same as any other key.
-  pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
-    let mut values = [const { None }; N];
-    if N == 0 { return values }
-    let keys = keys.map(K::into_word);
-    let mut is_disjoint = true;
-    for i in 0 .. N - 1 {
-      for j in i + 1 .. N {
-        is_disjoint &= keys[i] != keys[j];
-      }
-    }
-    assert!(is_disjoint);
-    let s = self.shift;
-    let t = self.head;
-    let u = self.data.cast_mut();
-    let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
-    for j in 0 .. N {
-      let h = hash_word(keys[j], m);
-      let k = slot(h, s);
-      prefetch_write(u.wrapping_add(k));
-      let a = unsafe { t.add(k).read() };
-      let mut i = k;
-      let mut x;
-      loop {
-        i = i + 1;
-        x = unsafe { t.add(i).read() };
-        if ! (x > h) { break }
-      }
-      let i = select_unpredictable(a > h, i, k);
-      let x = select_unpredictable(a > h, x, a);
-      values[j] = if x != h { None } else { Some(unsafe { &mut *u.add(i) }) };
-    }
-    values
   }
 
   /// Removes every item from the map. Retains heap-allocated memory.
@@ -1047,5 +1079,10 @@ pub mod internal {
 
   pub fn displacement_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 10] {
     t.displacement_histogram()
+  }
+
+  #[inline(always)]
+  pub fn get_branchy<K: Key, V>(t: &IntMap<K, V>, key: K) -> Option<&V> {
+    t.get_branchy(key)
   }
 }

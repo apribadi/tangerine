@@ -2,6 +2,7 @@ use std::num::NonZeroU32;
 use divan::Bencher;
 use divan::black_box;
 use crate::util::Map;
+use crate::util::BranchyIntMap;
 
 const ARGS: &'static [usize] = &[
   100,
@@ -52,8 +53,8 @@ fn key_seq(n: usize) -> NonZeroU32 {
     ahash::AHashMap<NonZeroU32, usize>,
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
+    BranchyIntMap<usize>,
   ])]
-#[inline(never)]
 fn bench_get_chained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
   let mut t: [_; 10] =
@@ -83,8 +84,8 @@ fn bench_get_chained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize
     ahash::AHashMap<NonZeroU32, usize>,
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
+    BranchyIntMap<usize>,
   ])]
-#[inline(never)]
 fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
   let mut t: [_; 10] =
@@ -117,7 +118,6 @@ fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
   ])]
-#[inline(never)]
 fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
   let mut t: [_; 10] = sizes.map(|m| (T::new(), m));
@@ -145,7 +145,6 @@ fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
   ])]
-#[inline(never)]
 fn bench_remove_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
   let mut t: [_; 10] =

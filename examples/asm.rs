@@ -35,6 +35,10 @@ pub fn get(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZero
   t.get(k)
 }
 
+pub fn get_branchy(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
+  tangerine::map::internal::get_branchy(t, k)
+}
+
 pub fn get_value(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
   match t.get(k) { None => None, Some(&y) => Some(y) }
 }
@@ -132,10 +136,6 @@ pub fn entry_dec(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
   }
 }
 
-pub fn std_clear(t: &mut std::collections::HashMap<NonZeroU32, NonZeroU64>) {
-  t.clear();
-}
-
 pub fn set_contains(t: &IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
   t.contains(k)
 }
@@ -146,4 +146,8 @@ pub fn set_insert(t: &mut IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
 
 pub fn set_remove(t: &mut IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
   t.remove(k)
+}
+
+pub fn std_clear(t: &mut std::collections::HashMap<NonZeroU32, NonZeroU64>) {
+  t.clear();
 }
