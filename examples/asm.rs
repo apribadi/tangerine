@@ -92,13 +92,19 @@ pub fn clone(t: &IntMap<NonZeroU32, NonZeroU64>) -> IntMap<NonZeroU32, NonZeroU6
   t.clone()
 }
 
-pub fn sum_fold(t: &mut IntMap<NonZeroU32, u64>) -> u64 {
-  t.values().fold(0, |x, &y| x.wrapping_add(y))
+pub fn iter_fold(t: &mut IntMap<NonZeroU32, u64>) -> u64 {
+  t.values().fold(0, |x, &y| x ^ y)
 }
 
-pub fn sum_loop(t: &mut IntMap<NonZeroU32, u64>) -> u64 {
+pub fn iter_for_each(t: &mut IntMap<NonZeroU32, u64>) -> u64 {
   let mut x = 0u64;
-  for &y in t.values() { x = x.wrapping_add(y); }
+  t.values().for_each(|&y| { x ^= y; });
+  x
+}
+
+pub fn iter_loop(t: &mut IntMap<NonZeroU32, u64>) -> u64 {
+  let mut x = 0u64;
+  for &y in t.values() { x ^= y; }
   x
 }
 
@@ -148,6 +154,36 @@ pub fn set_remove(t: &mut IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
   t.remove(k)
 }
 
-pub fn std_clear(t: &mut std::collections::HashMap<NonZeroU32, NonZeroU64>) {
+pub fn hashbrown_clear(t: &mut foldhash::HashMap<NonZeroU32, NonZeroU64>) {
   t.clear();
+}
+
+pub fn hashbrown_entry_inc(t: &mut foldhash::HashMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
+  match t.entry(key) {
+    std::collections::hash_map::Entry::Occupied(mut entry) => {
+      let value = entry.get_mut();
+      *value = (*value).saturating_add(1);
+    }
+    std::collections::hash_map::Entry::Vacant(e) => {
+      let _ = e.insert(NonZeroU64::MIN);
+    }
+  }
+}
+
+pub fn hashbrown_entry_dec(t: &mut foldhash::HashMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
+  match t.entry(key) {
+    std::collections::hash_map::Entry::Occupied(mut entry) => {
+      let value = entry.get_mut();
+      match NonZeroU64::new((*value).get() - 1) {
+        None => {
+          let _ = entry.remove();
+        }
+        Some(n) => {
+          *value = n;
+        }
+      }
+    }
+    std::collections::hash_map::Entry::Vacant(_) => {
+    }
+  }
 }

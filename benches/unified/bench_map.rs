@@ -1,6 +1,5 @@
 use std::num::NonZeroU32;
 use divan::Bencher;
-use divan::black_box;
 use crate::util::Map;
 use crate::util::BranchyIntMap;
 
@@ -101,12 +100,12 @@ fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
         for _ in 0 .. 500 {
           match t.get(key_seq(*k)) {
             None => { *k = 0; }
-            Some(&y) => { *k = *k + 1; z = y.wrapping_add(z); }
+            Some(&y) => { *k = *k + 1; z ^= y; }
           }
         }
       }
     }
-    black_box(z)
+    z
   });
 }
 
@@ -158,13 +157,47 @@ fn bench_remove_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
     for _ in 0 .. 200 {
       for &mut (ref mut t, ref mut a, ref mut b) in &mut t {
         for i in 0 .. 250 {
-          if let Some(y) = t.remove(key_seq(*a)) { z = y.wrapping_add(z); }
+          if let Some(y) = t.remove(key_seq(*a)) { z ^= y; }
           let _ = t.insert(key_seq(*b), i);
           *a = *a + 1;
           *b = *b + 1;
         }
       }
     }
-    black_box(z)
+    z
+  });
+}
+
+#[divan::bench(
+  sample_count = SAMPLE_COUNT,
+  types = [
+    ahash::AHashMap<NonZeroU32, usize>,
+    foldhash::HashMap<NonZeroU32, usize>,
+    tangerine::map::IntMap<NonZeroU32, usize>,
+  ])]
+fn bench_for_each_key<T: Map<usize>>(bencher: Bencher<'_, '_>) {
+  let mut t = T::new();
+  for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), i); }
+  bencher.bench_local(|| {
+    let mut z = 0;
+    t.for_each(|(x, _)| { z ^= x.get(); });
+    z
+  });
+}
+
+#[divan::bench(
+  sample_count = SAMPLE_COUNT,
+  types = [
+    ahash::AHashMap<NonZeroU32, usize>,
+    foldhash::HashMap<NonZeroU32, usize>,
+    tangerine::map::IntMap<NonZeroU32, usize>,
+  ])]
+fn bench_for_each_value<T: Map<usize>>(bencher: Bencher<'_, '_>) {
+  let mut t = T::new();
+  for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), i); }
+  bencher.bench_local(|| {
+    let mut z = 0;
+    t.for_each(|(_, x)| { z ^= x; });
+    z
   });
 }

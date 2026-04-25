@@ -10,6 +10,8 @@ pub(crate) trait Map<T> {
   fn insert(&mut self, _: NonZeroU32, _: T) -> Option<T>;
 
   fn remove(&mut self, _: NonZeroU32) -> Option<T>;
+
+  fn for_each<F: FnMut((NonZeroU32, &T))>(&self, f: F);
 }
 
 pub(crate) struct BranchyIntMap<T>(tangerine::map::IntMap<NonZeroU32, T>);
@@ -29,6 +31,8 @@ impl<T> Map<T> for BranchyIntMap<T> {
 
   #[inline(always)]
   fn remove(&mut self, k: NonZeroU32) -> Option<T> { self.0.remove(k) }
+
+  fn for_each<F: FnMut((NonZeroU32, &T))>(&self, f: F) { self.0.iter().for_each(f) }
 }
 
 impl<T> Map<T> for tangerine::map::IntMap<NonZeroU32, T> {
@@ -46,6 +50,8 @@ impl<T> Map<T> for tangerine::map::IntMap<NonZeroU32, T> {
 
   #[inline(always)]
   fn remove(&mut self, k: NonZeroU32) -> Option<T> { self.remove(k) }
+
+  fn for_each<F: FnMut((NonZeroU32, &T))>(&self, f: F) { self.iter().for_each(f) }
 }
 
 impl<T> Map<T> for ahash::AHashMap<NonZeroU32, T> {
@@ -66,6 +72,8 @@ impl<T> Map<T> for ahash::AHashMap<NonZeroU32, T> {
 
   #[inline(always)]
   fn remove(&mut self, k: NonZeroU32) -> Option<T> { self.remove(&k) }
+
+  fn for_each<F: FnMut((NonZeroU32, &T))>(&self, mut f: F) { self.iter().for_each(|(&x, y)| f((x, y))) }
 }
 
 impl<T> Map<T> for foldhash::HashMap<NonZeroU32, T> {
@@ -83,4 +91,6 @@ impl<T> Map<T> for foldhash::HashMap<NonZeroU32, T> {
 
   #[inline(always)]
   fn remove(&mut self, k: NonZeroU32) -> Option<T> { self.remove(&k) }
+
+  fn for_each<F: FnMut((NonZeroU32, &T))>(&self, mut f: F) { self.iter().for_each(|(&x, y)| f((x, y))) }
 }

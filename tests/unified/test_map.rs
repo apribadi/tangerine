@@ -4,6 +4,7 @@ use dandelion::Rng;
 use expect_test::expect;
 use std::fmt::Write;
 use std::num::NonZeroU64;
+use std::num::NonZeroU128;
 use std::write;
 use tangerine::map::IntMap;
 use tangerine::map::internal;
@@ -11,7 +12,7 @@ use tangerine::map::internal;
 /*
 #[test]
 fn test_lifetime() {
-  let mut g = Rng::from_u64(0);
+  let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::new_seeded(&mut g);
   let key = NonZeroU64::new(13).unwrap();
   t.insert(key, 1u64);
@@ -25,7 +26,7 @@ fn test_lifetime() {
 #[test]
 fn test_api() {
   let mut s = String::new();
-  let mut g = Rng::from_u64(0);
+  let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::new_seeded(&mut g);
 
   t.clear();
@@ -94,7 +95,7 @@ fn test_api() {
 #[test]
 fn test_empty() {
   let mut s = String::new();
-  let mut g = Rng::from_u64(0);
+  let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::<NonZeroU64, u64>::new_seeded(&mut g);
 
   let key = NonZeroU64::new(13).unwrap();
@@ -119,7 +120,7 @@ fn test_empty() {
 #[test]
 fn test_iter() {
   let mut s = String::new();
-  let mut g = Rng::from_u64(0);
+  let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::new_seeded(&mut g);
 
   for i in 1 ..= 10 {
@@ -155,7 +156,7 @@ fn test_iter() {
 #[test]
 fn test_1() {
   let mut s = String::new();
-  let mut g = Rng::from_u64(0);
+  let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::new_seeded(&mut g);
 
   for i in 1 ..= 100 {
@@ -340,7 +341,7 @@ fn test_working_set() {
 #[test]
 fn test_displacement_histogram() {
   let mut s = String::new();
-  let mut g = Rng::from_u64(0);
+  let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::new_seeded(&mut g);
 
   for i in 1 ..= 128 {
@@ -360,12 +361,12 @@ fn test_displacement_histogram() {
       num_slots = 264
       len = 128
       load_factor = 0.48484848484848486
-      0: 74
-      1: 36
-      2: 13
+      0: 79
+      1: 35
+      2: 9
       3: 3
-      4: 2
-      5: 0
+      4: 1
+      5: 1
       6: 0
       7: 0
       8: 0
