@@ -8,6 +8,9 @@ use rand_core::Rng;
 /// A sealed trait for hashable keys representable as [`NonZeroU32`] or
 /// [`NonZeroU64`]. The only way to implement this trait for additional types is
 /// to implement the [`IntoKey`] trait.
+///
+/// Types that implement this trait will usually be `Copy`, though that is not
+/// strictly required.
 #[allow(private_bounds)]
 pub trait Key: private::Key {
 }
@@ -95,7 +98,7 @@ impl private::Word for u32 {
 
   const ZERO: Self = 0;
 
-  const EMPTY: *const Self = &raw const EMPTY_U32 as *const Self;
+  const EMPTY: *const [Self; 3] = &raw const EMPTY_U32;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -154,7 +157,7 @@ impl private::Word for u64 {
 
   const ZERO: Self = 0;
 
-  const EMPTY: *const Self = &raw const EMPTY_U64 as *const Self;
+  const EMPTY: *const [Self; 3] = &raw const EMPTY_U64;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -215,7 +218,7 @@ pub(crate) mod private {
 
     const ZERO: Self::Word = Self::Word::ZERO;
 
-    const EMPTY: *const Self::Word = Self::Word::EMPTY;
+    const EMPTY: *const [Self::Word; 3] = Self::Word::EMPTY;
 
     fn into_word(_: Self) -> Self::Word;
 
@@ -234,7 +237,7 @@ pub(crate) mod private {
 
     const ZERO: Self;
 
-    const EMPTY: *const Self;
+    const EMPTY: *const [Self; 3];
 
     fn into_usize(self) -> usize;
 

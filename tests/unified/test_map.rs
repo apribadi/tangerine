@@ -13,7 +13,7 @@ use tangerine::map::internal;
 #[test]
 fn test_lifetime() {
   let mut g = Rng::new(NonZeroU128::MIN);
-  let mut t = IntMap::new_seeded(&mut g);
+  let mut t = IntMap::with_seed(&mut g);
   let key = NonZeroU64::new(13).unwrap();
   t.insert(key, 1u64);
   let mut i = t.keys();
@@ -27,7 +27,7 @@ fn test_lifetime() {
 fn test_api() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
-  let mut t = IntMap::new_seeded(&mut g);
+  let mut t = IntMap::with_seed(&mut g);
 
   t.clear();
   t.reset();
@@ -96,7 +96,7 @@ fn test_api() {
 fn test_empty() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
-  let mut t = IntMap::<NonZeroU64, u64>::new_seeded(&mut g);
+  let mut t = IntMap::<NonZeroU64, u64>::with_seed(&mut g);
 
   let key = NonZeroU64::new(13).unwrap();
 
@@ -121,7 +121,7 @@ fn test_empty() {
 fn test_iter() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
-  let mut t = IntMap::new_seeded(&mut g);
+  let mut t = IntMap::with_seed(&mut g);
 
   for i in 1 ..= 10 {
     let k = NonZeroU64::new(i).unwrap();
@@ -157,7 +157,7 @@ fn test_iter() {
 fn test_1() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
-  let mut t = IntMap::new_seeded(&mut g);
+  let mut t = IntMap::with_seed(&mut g);
 
   for i in 1 ..= 100 {
     let k = NonZeroU64::new(i).unwrap();
@@ -342,7 +342,7 @@ fn test_working_set() {
 fn test_displacement_histogram() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
-  let mut t = IntMap::new_seeded(&mut g);
+  let mut t = IntMap::with_seed(&mut g);
 
   for i in 1 ..= 128 {
     let k = NonZeroU64::new(i).unwrap();

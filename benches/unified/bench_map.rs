@@ -12,6 +12,9 @@ const ARGS: &'static [usize] = &[
   30_000,
   100_000,
   300_000,
+  1_000_000,
+  3_000_000,
+  10_000_000,
 ];
 
 const SAMPLE_COUNT: u32 = 9;
@@ -119,8 +122,16 @@ fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
   ])]
 fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
-  let mut t: [_; 10] = sizes.map(|m| (T::new(), m));
   let mut k = 0;
+  let mut t: [_; 10] =
+    sizes.map(|m| {
+      let mut t = T::new();
+      for _ in 0 .. m.saturating_sub(100_000) {
+        let _ = t.insert(key_seq(k), k);
+        k = k + 1;
+      }
+      (t, m)
+    });
   bencher.bench_local(|| {
     for _ in 0 .. 200 {
       for &mut (ref mut t, m) in &mut t {
@@ -128,8 +139,8 @@ fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
         for _ in 0 .. 500 {
           if n == m { n = 0; *t = T::new(); }
           let _ = t.insert(key_seq(k), k);
-          n = n + 1;
           k = k + 1;
+          n = n + 1;
         }
       }
     }

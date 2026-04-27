@@ -15,8 +15,8 @@ pub fn new() -> IntMap<NonZeroU32, NonZeroU64> {
   IntMap::new()
 }
 
-pub fn new_seeded(rng: &mut Rng) -> IntMap<NonZeroU32, NonZeroU64> {
-  IntMap::new_seeded(rng)
+pub fn with_seed(rng: &mut Rng) -> IntMap<NonZeroU32, NonZeroU64> {
+  IntMap::with_seed(rng)
 }
 
 pub fn len(t: &IntMap<NonZeroU32, NonZeroU64>) -> usize {
@@ -31,7 +31,17 @@ pub fn contains_key(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> bool {
   t.contains_key(k)
 }
 
+#[cfg(feature = "nightly")]
+pub fn prefetch(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) {
+  t.prefetch(k)
+}
+
 pub fn get(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
+  t.get(k)
+}
+
+pub fn foo(t: &IntMap<NonZeroU64, NonZeroU64>, k: NonZeroU64) -> Option<&NonZeroU64> {
+  t.prefetch(k);
   t.get(k)
 }
 

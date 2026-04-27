@@ -51,8 +51,8 @@ pub struct OccupiedEntry<'a, K: Key, V> {
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
   pos: usize,
-  cur: K::Word,
-  hash: K::Word,
+  other_hash: K::Word,
+  entry_hash: K::Word,
 }
 
 unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
@@ -172,7 +172,7 @@ impl<K: Key, V> IntMap<K, V> {
     Self {
       slack: capacity::<K>(K::BITS - 1),
       shift: K::BITS - 1,
-      head: K::EMPTY,
+      head: K::EMPTY.cast(),
       data: K::EMPTY.cast(),
       seed: m,
       seed_inverted: invert_seed(m),
@@ -187,7 +187,7 @@ impl<K: Key, V> IntMap<K, V> {
 
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
-  pub fn new_seeded(rng: &mut impl Rng) -> Self {
+  pub fn with_seed(rng: &mut impl Rng) -> Self {
     Self::from_seed(K::Word::seed(rng))
   }
 
@@ -225,6 +225,22 @@ impl<K: Key, V> IntMap<K, V> {
     }
     let x = select_unpredictable(a > h, x, a);
     x == h
+  }
+
+  /// Prefetchs a key.
+  #[cfg(feature = "nightly")]
+  #[inline(always)]
+  pub fn prefetch(&self, key: K) {
+    let s = self.shift;
+    let t = self.head.cast_mut();
+    let u = self.data.cast_mut();
+    let m = self.seed;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(u.addr() != 0) };
+    let h = hash(key, m);
+    let k = slot(h, s);
+    prefetch_write(t, k);
+    prefetch_write(u, k);
   }
 
   /// Returns a reference to the value associated with the given key, if
@@ -578,12 +594,12 @@ impl<K: Key, V> IntMap<K, V> {
     if x == h {
       Entry::Occupied(OccupiedEntry { map: self, pos: i })
     } else {
-      Entry::Vacant(VacantEntry { map: self, pos: i, cur: x, hash: h })
+      Entry::Vacant(VacantEntry { map: self, pos: i, other_hash: h, entry_hash: x })
     }
   }
 
   #[inline(always)]
-  unsafe fn insert_at(&mut self, pos: usize, cur: K::Word, h: K::Word, value: V) -> &mut V {
+  unsafe fn insert_at(&mut self, pos: usize, other_hash: K::Word, entry_hash: K::Word, value: V) -> &mut V {
     let r = self.slack;
     let s = self.shift;
     let t = self.head.cast_mut();
@@ -592,12 +608,12 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { assert_unchecked(u.addr() != 0) };
     let p =
       if addr_eq(t, u) {
-        self.insert_init(h, value)
+        self.insert_init(entry_hash, value)
       } else {
         let mut i = pos;
-        let mut x = cur;
+        let mut x = other_hash;
         let mut y = value;
-        unsafe { t.add(i).write(h) };
+        unsafe { t.add(i).write(entry_hash) };
         while x != K::ZERO {
           y = unsafe { u.add(i).replace(y) };
           i = i + 1;
@@ -605,7 +621,7 @@ impl<K: Key, V> IntMap<K, V> {
         }
         unsafe { u.add(i).write(y) };
         if addr_eq(unsafe { t.add(i + 1) }, u) || r == 0 {
-          self.insert_grow(h, i)
+          self.insert_grow(entry_hash, i)
         } else {
           self.slack = r - 1;
           unsafe { u.add(pos) }
@@ -737,7 +753,7 @@ impl<K: Key, V> IntMap<K, V> {
     let d = ptr_diff(u.cast(), t);
     self.slack = capacity::<K>(K::BITS - 1);
     self.shift = K::BITS - 1;
-    self.head = K::EMPTY;
+    self.head = K::EMPTY.cast();
     self.data = K::EMPTY.cast();
     if needs_drop::<V>() {
       if n != 0 {
@@ -943,7 +959,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
   /// to it.
   #[inline(always)]
   pub fn insert(self, value: V) -> &'a mut V {
-    unsafe { self.map.insert_at(self.pos, self.cur, self.hash, value) }
+    unsafe { self.map.insert_at(self.pos, self.other_hash, self.entry_hash, value) }
   }
 }
 

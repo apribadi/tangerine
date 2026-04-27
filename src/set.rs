@@ -23,8 +23,8 @@ impl<T: Key> IntSet<T> {
 
   /// Creates an empty set, seeding the hash function from the given random
   /// number generator.
-  pub fn new_seeded(rng: &mut impl Rng) -> Self {
-    Self { map: IntMap::new_seeded(rng) }
+  pub fn with_seed(rng: &mut impl Rng) -> Self {
+    Self { map: IntMap::with_seed(rng) }
   }
 
   /// Returns the number of values.
