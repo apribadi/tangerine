@@ -23,7 +23,7 @@ use crate::key::private::Word;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
 /// or [`NonZeroU64`](core::num::NonZeroU64).
-pub struct IntMap<K: Key, V> {
+pub struct NewMap<K: Key, V> {
   table: *const Slot<K, V>,
   shift: usize,
   slack: usize,
@@ -32,7 +32,7 @@ pub struct IntMap<K: Key, V> {
   seed_inverted: (K::Word, K::Word),
 }
 
-/// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
+/// A view of an entry in a map, produced by the [`NewMap::entry`] method. It
 /// may either be vacant or occupied.
 pub enum Entry<'a, K: Key, V> {
   /// An occupied entry.
@@ -43,22 +43,22 @@ pub enum Entry<'a, K: Key, V> {
 
 /// A view of an occupied entry in a map.
 pub struct OccupiedEntry<'a, K: Key, V> {
-  map: &'a mut IntMap<K, V>,
+  map: &'a mut NewMap<K, V>,
   pos: *mut Slot<K, V>,
 }
 
 /// A view of a vacant entry in a map.
 pub struct VacantEntry<'a, K: Key, V> {
-  map: &'a mut IntMap<K, V>,
+  map: &'a mut NewMap<K, V>,
   pos: *mut Slot<K, V>,
   other_hash: K::Word,
   entry_hash: K::Word,
 }
 
-unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
+unsafe impl<K: Key + Send, V: Send> Send for NewMap<K, V> {
 }
 
-unsafe impl<K: Key + Sync, V: Sync> Sync for IntMap<K, V> {
+unsafe impl<K: Key + Sync, V: Sync> Sync for NewMap<K, V> {
 }
 
 #[repr(C)]
@@ -180,7 +180,7 @@ unsafe fn slot_data<K: Key, V>(p: *mut Slot<K, V>) -> *mut V {
   unsafe { p.byte_add(offset_of!(Slot<K, V>, data)).cast() }
 }
 
-impl<K: Key, V> IntMap<K, V> {
+impl<K: Key, V> NewMap<K, V> {
   #[inline(always)]
   fn from_seed(m: (K::Word, K::Word)) -> Self {
     Self {
@@ -931,13 +931,13 @@ impl<K: Key, V> IntMap<K, V> {
   }
 }
 
-impl<K: Key, V> Drop for IntMap<K, V> {
+impl<K: Key, V> Drop for NewMap<K, V> {
   fn drop(&mut self) {
     self.reset()
   }
 }
 
-impl<K: Key, V> Index<K> for IntMap<K, V> {
+impl<K: Key, V> Index<K> for NewMap<K, V> {
   type Output = V;
 
   #[inline(always)]
@@ -960,7 +960,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
   }
 
   /// Converts itself into a mutable reference to the value in the entry, with
-  /// a lifetime from the original borrow for the call to [`IntMap::entry`].
+  /// a lifetime from the original borrow for the call to [`NewMap::entry`].
   #[inline(always)]
   pub fn into_mut(self) -> &'a mut V {
     unsafe { &mut *slot_data(self.pos) }
@@ -1047,7 +1047,7 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> ExactSizeIterator fo
   }
 }
 
-impl<K: Key, V: Clone> Clone for IntMap<K, V> {
+impl<K: Key, V: Clone> Clone for NewMap<K, V> {
   fn clone(&self) -> Self {
     let mut t = Self::new();
     self.iter().for_each(|(x, y)| { let _: Option<V> = t.insert(x, y.clone()); });
@@ -1055,7 +1055,7 @@ impl<K: Key, V: Clone> Clone for IntMap<K, V> {
   }
 }
 
-impl <K: Key + Debug + Ord, V: Debug> Debug for IntMap<K, V> {
+impl <K: Key + Debug + Ord, V: Debug> Debug for NewMap<K, V> {
   fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
     let mut a = self.iter().collect::<Box<[(K, &V)]>>();
     a.sort_by(|&(ref x, _), &(ref y, _)| x.cmp(y));
@@ -1063,13 +1063,13 @@ impl <K: Key + Debug + Ord, V: Debug> Debug for IntMap<K, V> {
   }
 }
 
-impl<K: Key, V> Default for IntMap<K, V> {
+impl<K: Key, V> Default for NewMap<K, V> {
   fn default() -> Self {
     Self::new()
   }
 }
 
-impl<K: Key, V> Extend<(K, V)> for IntMap<K, V> {
+impl<K: Key, V> Extend<(K, V)> for NewMap<K, V> {
   fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
     iter.into_iter().for_each(|(x, y)| { let _: Option<V> = self.insert(x, y); });
   }
@@ -1081,13 +1081,13 @@ impl<K: Key, V> Extend<(K, V)> for IntMap<K, V> {
   }
 }
 
-impl<const N: usize, K: Key, V> From<[(K, V); N]> for IntMap<K, V> {
+impl<const N: usize, K: Key, V> From<[(K, V); N]> for NewMap<K, V> {
   fn from(value: [(K, V); N]) -> Self {
     Self::from_iter(value)
   }
 }
 
-impl<K: Key, V> FromIterator<(K, V)> for IntMap<K, V> {
+impl<K: Key, V> FromIterator<(K, V)> for NewMap<K, V> {
   fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
     let mut t = Self::new();
     t.extend(iter);
@@ -1100,27 +1100,27 @@ pub mod internal {
 
   #![allow(missing_docs)]
 
-  use super::IntMap;
+  use super::NewMap;
   use super::Key;
 
-  pub fn num_slots<K: Key, V>(t: &IntMap<K, V>) -> usize {
+  pub fn num_slots<K: Key, V>(t: &NewMap<K, V>) -> usize {
     t.num_slots()
   }
 
-  pub fn allocation_size<K: Key, V>(t: &IntMap<K, V>) -> usize {
+  pub fn allocation_size<K: Key, V>(t: &NewMap<K, V>) -> usize {
     t.allocation_size()
   }
 
-  pub fn load_factor<K: Key, V>(t: &IntMap<K, V>) -> f64 {
+  pub fn load_factor<K: Key, V>(t: &NewMap<K, V>) -> f64 {
     t.load_factor()
   }
 
-  pub fn displacement_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 10] {
+  pub fn displacement_histogram<K: Key, V>(t: &NewMap<K, V>) -> [usize; 10] {
     t.displacement_histogram()
   }
 
   #[inline(always)]
-  pub fn get_branchy<K: Key, V>(t: &IntMap<K, V>, key: K) -> Option<&V> {
+  pub fn get_branchy<K: Key, V>(t: &NewMap<K, V>, key: K) -> Option<&V> {
     t.get_branchy(key)
   }
 }

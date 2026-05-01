@@ -5,74 +5,74 @@ use std::mem::replace;
 use std::num::NonZeroU32;
 use std::num::NonZeroU64;
 use tangerine::new::Entry;
-use tangerine::new::IntMap;
+use tangerine::new::NewMap;
 
-pub fn drop(_: IntMap<NonZeroU32, NonZeroU64>) {
+pub fn drop(_: NewMap<NonZeroU32, NonZeroU64>) {
 }
 
-pub fn new() -> IntMap<NonZeroU32, NonZeroU64> {
-  IntMap::new()
+pub fn new() -> NewMap<NonZeroU32, NonZeroU64> {
+  NewMap::new()
 }
 
-pub fn with_seed(rng: &mut Rng) -> IntMap<NonZeroU32, NonZeroU64> {
-  IntMap::with_seed(rng)
+pub fn with_seed(rng: &mut Rng) -> NewMap<NonZeroU32, NonZeroU64> {
+  NewMap::with_seed(rng)
 }
 
-pub fn len(t: &IntMap<NonZeroU32, NonZeroU64>) -> usize {
+pub fn len(t: &NewMap<NonZeroU32, NonZeroU64>) -> usize {
   t.len()
 }
 
-pub fn is_empty(t: &IntMap<NonZeroU32, NonZeroU64>) -> bool {
+pub fn is_empty(t: &NewMap<NonZeroU32, NonZeroU64>) -> bool {
   t.is_empty()
 }
 
-pub fn contains_key(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> bool {
+pub fn contains_key(t: &NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> bool {
   t.contains_key(k)
 }
 
 #[cfg(feature = "nightly")]
-pub fn prefetch(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) {
+pub fn prefetch(t: &NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) {
   t.prefetch(k)
 }
 
-pub fn get(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
+pub fn get(t: &NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
   t.get(k)
 }
 
-pub fn get_value(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
+pub fn get_value(t: &NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
   match t.get(k) { None => None, Some(&y) => Some(y) }
 }
 
-pub fn foo(t: &IntMap<NonZeroU64, NonZeroU64>, k: NonZeroU64) -> Option<&NonZeroU64> {
+pub fn foo(t: &NewMap<NonZeroU64, NonZeroU64>, k: NonZeroU64) -> Option<&NonZeroU64> {
   t.prefetch(k);
   t.get(k)
 }
 
-pub fn get_branchy(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
+pub fn get_branchy(t: &NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
   tangerine::new::internal::get_branchy(t, k)
 }
 
-pub fn get_mut(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&mut NonZeroU64> {
+pub fn get_mut(t: &mut NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&mut NonZeroU64> {
   t.get_mut(k)
 }
 
-pub fn get_disjoint_mut_0(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 0]) -> [Option<&mut NonZeroU64>; 0] {
+pub fn get_disjoint_mut_0(t: &mut NewMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 0]) -> [Option<&mut NonZeroU64>; 0] {
   t.get_disjoint_mut(ks)
 }
 
-pub fn get_disjoint_mut_4(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 4]) -> [Option<&mut NonZeroU64>; 4] {
+pub fn get_disjoint_mut_4(t: &mut NewMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 4]) -> [Option<&mut NonZeroU64>; 4] {
   t.get_disjoint_mut(ks)
 }
 
-pub fn insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU64) -> Option<NonZeroU64> {
+pub fn insert(t: &mut NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU64) -> Option<NonZeroU64> {
   t.insert(k, v)
 }
 
-pub fn remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
+pub fn remove(t: &mut NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
   t.remove(k)
 }
 
-pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
+pub fn entry_insert(t: &mut NewMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
   match t.entry(key) {
     Entry::Occupied(entry) => Some(replace(entry.into_mut(), value)),
     Entry::Vacant(entry) => { let _ = entry.insert(value); None }
@@ -81,7 +81,7 @@ pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, val
 
 /*
 pub fn entry_try_insert(
-    t: &mut IntMap<NonZeroU32, NonZeroU64>,
+    t: &mut NewMap<NonZeroU32, NonZeroU64>,
     key: NonZeroU32,
     value: NonZeroU64
   ) -> Result<&mut NonZeroU64, (&mut NonZeroU64, NonZeroU64)>
@@ -93,7 +93,7 @@ pub fn entry_try_insert(
 }
 */
 
-pub fn entry_remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Option<NonZeroU64> {
+pub fn entry_remove(t: &mut NewMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Option<NonZeroU64> {
   match t.entry(key) {
     Entry::Occupied(entry) => Some(entry.remove()),
     Entry::Vacant(_) => None,
@@ -101,39 +101,39 @@ pub fn entry_remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> 
 }
 /*
 
-pub fn clear(t: &mut IntMap<NonZeroU32, NonZeroU64>) {
+pub fn clear(t: &mut NewMap<NonZeroU32, NonZeroU64>) {
   t.clear();
 }
 
-pub fn reset(t: &mut IntMap<NonZeroU32, NonZeroU64>) {
+pub fn reset(t: &mut NewMap<NonZeroU32, NonZeroU64>) {
   t.reset();
 }
 
-pub fn clone(t: &IntMap<NonZeroU32, NonZeroU64>) -> IntMap<NonZeroU32, NonZeroU64> {
+pub fn clone(t: &NewMap<NonZeroU32, NonZeroU64>) -> NewMap<NonZeroU32, NonZeroU64> {
   t.clone()
 }
 
-pub fn iter_fold(t: &mut IntMap<NonZeroU32, u64>) -> u64 {
+pub fn iter_fold(t: &mut NewMap<NonZeroU32, u64>) -> u64 {
   t.values().fold(0, |x, &y| x ^ y)
 }
 
-pub fn iter_for_each(t: &mut IntMap<NonZeroU32, u64>) -> u64 {
+pub fn iter_for_each(t: &mut NewMap<NonZeroU32, u64>) -> u64 {
   let mut x = 0u64;
   t.values().for_each(|&y| { x ^= y; });
   x
 }
 
-pub fn iter_loop(t: &mut IntMap<NonZeroU32, u64>) -> u64 {
+pub fn iter_loop(t: &mut NewMap<NonZeroU32, u64>) -> u64 {
   let mut x = 0u64;
   for &y in t.values() { x ^= y; }
   x
 }
 
-pub fn inc(t: &mut IntMap<NonZeroU32, u64>, key: NonZeroU32) {
+pub fn inc(t: &mut NewMap<NonZeroU32, u64>, key: NonZeroU32) {
   *t.get_or_insert(key, 0) += 1;
 }
 
-pub fn entry_inc(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
+pub fn entry_inc(t: &mut NewMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
   match t.entry(key) {
     Entry::Occupied(mut entry) => {
       let value = entry.get_mut();
@@ -145,7 +145,7 @@ pub fn entry_inc(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
   }
 }
 
-pub fn entry_dec(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
+pub fn entry_dec(t: &mut NewMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
   match t.entry(key) {
     Entry::Occupied(mut entry) => {
       let value = entry.get_mut();

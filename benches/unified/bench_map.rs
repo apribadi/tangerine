@@ -55,6 +55,7 @@ fn key_seq(n: usize) -> NonZeroU32 {
     ahash::AHashMap<NonZeroU32, usize>,
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
+    tangerine::new::NewMap<NonZeroU32, usize>,
     BranchyIntMap<usize>,
   ])]
 fn bench_get_chained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -86,6 +87,7 @@ fn bench_get_chained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize
     ahash::AHashMap<NonZeroU32, usize>,
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
+    tangerine::new::NewMap<NonZeroU32, usize>,
     BranchyIntMap<usize>,
   ])]
 fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -119,6 +121,7 @@ fn bench_get_unchained<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
     ahash::AHashMap<NonZeroU32, usize>,
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
+    tangerine::new::NewMap<NonZeroU32, usize>,
   ])]
 fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
@@ -154,6 +157,7 @@ fn bench_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
     ahash::AHashMap<NonZeroU32, usize>,
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
+    tangerine::new::NewMap<NonZeroU32, usize>,
   ])]
 fn bench_remove_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usize) {
   let sizes = sizes_from_working_set(working_set);
@@ -185,6 +189,7 @@ fn bench_remove_insert<T: Map<usize>>(bencher: Bencher<'_, '_>, working_set: usi
     ahash::AHashMap<NonZeroU32, usize>,
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
+    tangerine::new::NewMap<NonZeroU32, usize>,
   ])]
 fn bench_for_each_key<T: Map<usize>>(bencher: Bencher<'_, '_>) {
   let mut t = T::new();
@@ -202,6 +207,7 @@ fn bench_for_each_key<T: Map<usize>>(bencher: Bencher<'_, '_>) {
     ahash::AHashMap<NonZeroU32, usize>,
     foldhash::HashMap<NonZeroU32, usize>,
     tangerine::map::IntMap<NonZeroU32, usize>,
+    tangerine::new::NewMap<NonZeroU32, usize>,
   ])]
 fn bench_for_each_value<T: Map<usize>>(bencher: Bencher<'_, '_>) {
   let mut t = T::new();
