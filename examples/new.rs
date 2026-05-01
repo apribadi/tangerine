@@ -39,21 +39,32 @@ pub fn get(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZero
   t.get(k)
 }
 
+pub fn get_value(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
+  match t.get(k) { None => None, Some(&y) => Some(y) }
+}
+
 pub fn foo(t: &IntMap<NonZeroU64, NonZeroU64>, k: NonZeroU64) -> Option<&NonZeroU64> {
   t.prefetch(k);
   t.get(k)
 }
 
-pub fn get_value(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
-  match t.get(k) { None => None, Some(&y) => Some(y) }
+pub fn get_branchy(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
+  tangerine::new::internal::get_branchy(t, k)
 }
 
-/*
+pub fn get_mut(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&mut NonZeroU64> {
+  t.get_mut(k)
+}
 
-pub fn get_disjoint_mut(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 4]) -> [Option<&mut NonZeroU64>; 4] {
+pub fn get_disjoint_mut_0(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 0]) -> [Option<&mut NonZeroU64>; 0] {
   t.get_disjoint_mut(ks)
 }
 
+pub fn get_disjoint_mut_4(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 4]) -> [Option<&mut NonZeroU64>; 4] {
+  t.get_disjoint_mut(ks)
+}
+
+/*
 pub fn insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU64) -> Option<NonZeroU64> {
   t.insert(k, v)
 }

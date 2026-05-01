@@ -294,30 +294,27 @@ impl<K: Key, V> IntMap<K, V> {
     }
   }
 
-  /*
-
   #[inline(always)]
   fn get_branchy(&self, key: K) -> Option<&V> {
     let s = self.shift;
-    let t = self.head;
-    let u = self.data;
+    let t = self.table.cast_mut();
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
+    unsafe { assert_unchecked(t.addr() != 0) };
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return None }
     let h = hash(key, m);
     let k = slot(h, s);
-    prefetch_read(u, k);
-    let mut i = k;
+    let mut p = unsafe { t.add(k) };
     let mut x;
     loop {
-      x = unsafe { t.add(i).read() };
+      x = unsafe { slot_hash(p).read() };
       if ! (x > h) { break }
-      i = i + 1;
+      p = unsafe { p.add(1) };
     }
     if x != h {
       None
     } else {
-      Some(unsafe { &*u.add(i) })
+      Some(unsafe { &*slot_data(p) })
     }
   }
 
@@ -326,28 +323,28 @@ impl<K: Key, V> IntMap<K, V> {
   #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let s = self.shift;
-    let t = self.head;
-    let u = self.data.cast_mut();
+    let t = self.table.cast_mut();
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
+    unsafe { assert_unchecked(t.addr() != 0) };
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return None }
     let h = hash(key, m);
     let k = slot(h, s);
-    prefetch_write(u, k);
-    let a = unsafe { t.add(k).read() };
-    let mut i = k;
+    let a = unsafe { t.add(k) };
+    let u = unsafe { slot_hash(a).read() };
+    let mut p = a;
     let mut x;
     loop {
-      i = i + 1;
-      x = unsafe { t.add(i).read() };
+      p = unsafe { p.add(1) };
+      x = unsafe { slot_hash(p).read() };
       if ! (x > h) { break }
     }
-    let i = select_unpredictable(a > h, i, k);
-    let x = select_unpredictable(a > h, x, a);
+    let p = select_unpredictable(u > h, p, a);
+    let x = select_unpredictable(u > h, x, u);
     if x != h {
       None
     } else {
-      Some(unsafe { &mut *u.add(i) })
+      Some(unsafe { &mut *slot_data(p) })
     }
   }
 
@@ -358,8 +355,14 @@ impl<K: Key, V> IntMap<K, V> {
   ///
   /// Panics if any key is the same as any other key.
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
+    let s = self.shift;
+    let t = self.table.cast_mut();
+    let m = self.seed;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    unsafe { assert_unchecked(t.addr() != 0) };
     let mut out = [const { None }; N];
     if N == 0 { return out }
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return out }
     let keys = keys.map(K::into_word);
     let mut is_disjoint = true;
     for i in 0 .. N - 1 {
@@ -368,27 +371,21 @@ impl<K: Key, V> IntMap<K, V> {
       }
     }
     assert!(is_disjoint);
-    let s = self.shift;
-    let t = self.head;
-    let u = self.data.cast_mut();
-    let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
-    for j in 0 .. N {
-      let h = hash_word(keys[j], m);
+    for i in 0 .. N {
+      let h = hash_word(keys[i], m);
       let k = slot(h, s);
-      prefetch_write(u, k);
-      let a = unsafe { t.add(k).read() };
-      let mut i = k;
+      let a = unsafe { t.add(k) };
+      let u = unsafe { slot_hash(a).read() };
+      let mut p = a;
       let mut x;
       loop {
-        i = i + 1;
-        x = unsafe { t.add(i).read() };
+        p = unsafe { p.add(1) };
+        x = unsafe { slot_hash(p).read() };
         if ! (x > h) { break }
       }
-      let i = select_unpredictable(a > h, i, k);
-      let x = select_unpredictable(a > h, x, a);
-      out[j] = if x != h { None } else { Some(unsafe { &mut *u.add(i) }) };
+      let p = select_unpredictable(u > h, p, a);
+      let x = select_unpredictable(u > h, x, u);
+      out[i] = if x != h { None } else { Some(unsafe { &mut *slot_data(p) }) };
     }
     out
   }
@@ -396,39 +393,38 @@ impl<K: Key, V> IntMap<K, V> {
   #[inline(never)]
   #[cold]
   fn insert_init(&mut self, h: K::Word, value: V) -> *mut V {
-    let w = 4 * allocation_chunk::<K, V>();
-    let e = allocation_chunk::<K, V>();
+    let w = 4 * ALLOCATION_CHUNK;
+    let e = ALLOCATION_CHUNK;
     let d = w + e;
     let s = K::BITS - ctz(w);
     assert!(d <= allocation_max_num_slots::<K, V>());
     let l = unsafe { allocation_layout::<K, V>(d) };
-    let t = unsafe { alloc(l) } as *mut K::Word;
+    let t = unsafe { alloc(l) } as *mut Slot<K, V>;
     if t.is_null() { match handle_alloc_error(l) { } }
-    let u = unsafe { t.add(d) } as *mut V;
-    unsafe { write_bytes(t, 0u8, d) };
     let k = slot(h, s);
-    unsafe { t.add(k).write(h) };
-    unsafe { u.add(k).write(value) };
+    let a = unsafe { t.add(k) };
+    unsafe { slot_hash(a).write(h) };
+    unsafe { slot_data(a).write(value) };
     self.slack = capacity::<K>(s) - 1;
     self.shift = s;
-    self.head = t;
-    self.data = u;
-    unsafe { u.add(k) }
+    self.table = t;
+    self.limit = unsafe { t.add(d - 1) };
+    unsafe { slot_data(a) }
   }
 
   #[inline(never)]
   #[cold]
-  fn insert_grow(&mut self, h: K::Word, last_write: usize) -> *mut V {
+  fn insert_grow(&mut self, h: K::Word, last_write: *mut Slot<K, V>) -> *mut V {
     let old_r = self.slack;
     let old_s = self.shift;
-    let old_t = self.head.cast_mut();
-    let old_u = self.data.cast_mut();
-    let old_d = ptr_diff(old_u.cast(), old_t);
+    let old_t = self.table.cast_mut();
+    let old_z = self.limit.cast_mut();
+    let old_d = ptr_diff(old_z.cast(), old_t) + 1;
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
     // Remove the last slot so that the table is in a valid state, in case we
     // panic.
-    let last_write_hash = unsafe { old_t.add(last_write).replace(K::ZERO) };
+    let last_write_hash = unsafe { slot_hash(last_write).replace(K::ZERO) };
     // If s == 0, then the map can hold every possible key and will never grow.
     debug_assert!(old_s != 0);
     // Compute new sizes.
@@ -437,10 +433,10 @@ impl<K: Key, V> IntMap<K, V> {
     let new_e =
       if new_s == 0 {
         0 // special case, we can store every possible key
-      } else if last_write + 1 == old_d {
+      } else if last_write == old_z {
         old_e * 2 // if we wrote in the final slot
       } else if old_e < ctz(new_w) {
-        old_e + allocation_chunk::<K, V>() // we maintain e >= log2(w)
+        old_e + ALLOCATION_CHUNK // we maintain e >= log2(w)
       } else {
         old_e
       };
@@ -449,46 +445,51 @@ impl<K: Key, V> IntMap<K, V> {
     assert!(new_d <= allocation_max_num_slots::<K, V>());
     // Allocate.
     let new_l = unsafe { allocation_layout::<K, V>(new_d) };
-    let new_t = unsafe { alloc(new_l) } as *mut K::Word;
+    let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
-    let new_u = unsafe { new_t.add(new_d) } as *mut V;
     // Initialize new table.
-    let mut i = new_d;
+    let mut p = unsafe { new_t.add(new_d) };
     loop {
-      i = i - allocation_chunk::<K, V>();
-      unsafe { write_bytes(new_t.add(i), 0u8, allocation_chunk::<K, V>()) };
-      if i == 0 { break }
+      p = unsafe { p.sub(ALLOCATION_CHUNK) };
+      for i in 0 .. ALLOCATION_CHUNK {
+        unsafe { slot_hash(p.add(i)).write(K::ZERO) };
+      }
+      if p == new_t { break }
     }
     // Re-add the last write so that we copy it to the new table.
-    unsafe { old_t.add(last_write).write(last_write_hash) };
+    unsafe { slot_hash(last_write).write(last_write_hash) };
     // Copy slots.
+    let mut p = old_t;
     let mut i = 0;
-    let mut j = 0;
     loop {
-      let x = unsafe { old_t.add(i).read() };
-      let y = unsafe { old_u.add(i).cast::<MaybeUninit<V>>().read() };
+      let x = unsafe { slot_hash(p).read() };
+      let y = unsafe { slot_data(p).cast::<MaybeUninit<V>>().read() };
       let k = slot(x, new_s);
-      let k = select_unpredictable(j > k, j, k);
-      unsafe { new_t.add(k).write(x) };
-      unsafe { new_u.add(k).cast::<MaybeUninit<V>>().write(y) };
-      i = i + 1;
-      j = select_unpredictable(x != K::ZERO, k + 1, j);
-      if i == old_d { break }
+      let k = select_unpredictable(i > k, i, k);
+      let a = unsafe { new_t.add(k) };
+      unsafe { slot_hash(a).write(x) };
+      unsafe { slot_data(a).cast::<MaybeUninit<V>>().write(y) };
+      p = unsafe { p.add(1) };
+      i = select_unpredictable(x != K::ZERO, k + 1, i);
+      if p == unsafe { old_t.add(old_d) } { break }
     }
     // Update struct fields.
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.shift = new_s;
-    self.head = new_t;
-    self.data = new_u;
+    self.table = new_t;
+    self.limit = unsafe { new_t.add(new_d - 1) };
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
     // Find the newly-inserted value. Note, this was not necessarily at last_write.
-    let mut i = slot(h, new_s);
-    while unsafe { new_t.add(i).read() } != h {
-      i = i + 1;
+    let k = slot(h, new_s);
+    let mut p = unsafe { new_t.add(k) };
+    while unsafe { slot_hash(p).read() } != h {
+      p = unsafe { p.add(1) };
     }
-    unsafe { new_u.add(i) }
+    unsafe { slot_data(p) }
   }
+
+  /*
 
   /// Inserts the given key and value into the map. Returns the previous value
   /// associated with given key, if one was present.
@@ -1099,6 +1100,8 @@ impl<K: Key, V> FromIterator<(K, V)> for IntMap<K, V> {
   }
 }
 
+*/
+
 pub mod internal {
   //! Unstable API exposing implementation details for benchmarks and tests.
 
@@ -1106,6 +1109,8 @@ pub mod internal {
 
   use super::IntMap;
   use super::Key;
+
+  /*
 
   pub fn num_slots<K: Key, V>(t: &IntMap<K, V>) -> usize {
     t.num_slots()
@@ -1122,10 +1127,10 @@ pub mod internal {
   pub fn displacement_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 10] {
     t.displacement_histogram()
   }
+  */
 
   #[inline(always)]
   pub fn get_branchy<K: Key, V>(t: &IntMap<K, V>, key: K) -> Option<&V> {
     t.get_branchy(key)
   }
 }
-*/
