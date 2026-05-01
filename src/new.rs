@@ -16,6 +16,7 @@ use core::mem::needs_drop;
 use core::mem::offset_of;
 use core::ops::Index;
 use core::ptr::addr_eq;
+use core::ptr::null_mut;
 use core::ptr::write_bytes;
 use rand_core::Rng;
 
@@ -25,9 +26,9 @@ use crate::key::private::Word;
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
 /// or [`NonZeroU64`](core::num::NonZeroU64).
 pub struct IntMap<K: Key, V> {
-  slack: usize,
-  shift: usize,
   table: *const Slot<K, V>,
+  shift: usize,
+  slack: usize,
   limit: *const Slot<K, V>,
   seed: (K::Word, K::Word),
   seed_inverted: (K::Word, K::Word),
@@ -45,13 +46,13 @@ pub enum Entry<'a, K: Key, V> {
 /// A view of an occupied entry in a map.
 pub struct OccupiedEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
-  pos: usize,
+  pos: *mut Slot<K, V>,
 }
 
 /// A view of a vacant entry in a map.
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
-  pos: usize,
+  pos: *mut Slot<K, V>,
   other_hash: K::Word,
   entry_hash: K::Word,
 }
@@ -190,9 +191,9 @@ impl<K: Key, V> IntMap<K, V> {
   #[inline(always)]
   fn from_seed(m: (K::Word, K::Word)) -> Self {
     Self {
-      slack: initial_slack::<K>(),
-      shift: initial_shift::<K>(),
       table: initial_table::<K, V>(),
+      shift: initial_shift::<K>(),
+      slack: initial_slack::<K>(),
       limit: initial_limit::<K, V>(),
       seed: m,
       seed_inverted: invert_seed(m),
@@ -229,13 +230,15 @@ impl<K: Key, V> IntMap<K, V> {
   /// Returns whether the map contains the given key.
   #[inline(always)]
   pub fn contains_key(&self, key: K) -> bool {
-    let s = self.shift;
     let t = self.table.cast_mut();
+    let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(t.addr() != 0) };
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return false }
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      return false;
+    }
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
@@ -254,11 +257,11 @@ impl<K: Key, V> IntMap<K, V> {
   #[cfg(feature = "nightly")]
   #[inline(always)]
   pub fn prefetch(&self, key: K) {
-    let s = self.shift;
     let t = self.table.cast_mut();
+    let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(t.addr() != 0) };
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
     let k = slot(h, s);
     core::hint::prefetch_write(t.wrapping_add(k), core::hint::Locality::L1)
@@ -268,13 +271,15 @@ impl<K: Key, V> IntMap<K, V> {
   /// present.
   #[inline(always)]
   pub fn get(&self, key: K) -> Option<&V> {
-    let s = self.shift;
     let t = self.table.cast_mut();
+    let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(t.addr() != 0) };
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return None }
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      return None;
+    }
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
@@ -296,13 +301,15 @@ impl<K: Key, V> IntMap<K, V> {
 
   #[inline(always)]
   fn get_branchy(&self, key: K) -> Option<&V> {
-    let s = self.shift;
     let t = self.table.cast_mut();
+    let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(t.addr() != 0) };
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return None }
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      return None;
+    }
     let k = slot(h, s);
     let mut p = unsafe { t.add(k) };
     let mut x;
@@ -322,13 +329,15 @@ impl<K: Key, V> IntMap<K, V> {
   /// if present.
   #[inline(always)]
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
-    let s = self.shift;
     let t = self.table.cast_mut();
+    let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(t.addr() != 0) };
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return None }
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      return None;
+    }
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
@@ -355,14 +364,13 @@ impl<K: Key, V> IntMap<K, V> {
   ///
   /// Panics if any key is the same as any other key.
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
-    let s = self.shift;
     let t = self.table.cast_mut();
+    let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(t.addr() != 0) };
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let mut out = [const { None }; N];
     if N == 0 { return out }
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return out }
     let keys = keys.map(K::into_word);
     let mut is_disjoint = true;
     for i in 0 .. N - 1 {
@@ -371,6 +379,9 @@ impl<K: Key, V> IntMap<K, V> {
       }
     }
     assert!(is_disjoint);
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      return out;
+    }
     for i in 0 .. N {
       let h = hash_word(keys[i], m);
       let k = slot(h, s);
@@ -390,10 +401,69 @@ impl<K: Key, V> IntMap<K, V> {
     out
   }
 
+  /// Inserts the given key and value into the map. Returns the previous value
+  /// associated with given key, if one was present.
+  ///
+  /// # Panics
+  ///
+  /// Panics if allocation fails. If that happens, it is possible for the map
+  /// to leak an arbitrary set of items, but the map will remain in a valid
+  /// state.
+  #[inline(always)]
+  pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+    let t = self.table.cast_mut();
+    let s = self.shift;
+    let m = self.seed;
+    unsafe { assert_unchecked(t.addr() != 0) };
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    let h = hash(key, m);
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      let _: *mut V = self.insert_init(h, value);
+      return None;
+    }
+    let k = slot(h, s);
+    let a = unsafe { t.add(k) };
+    let u = unsafe { slot_hash(a).read() };
+    let mut p = a;
+    let mut x;
+    loop {
+      p = unsafe { p.add(1) };
+      x = unsafe { slot_hash(p).read() };
+      if ! (x > h) { break }
+    }
+    let p = select_unpredictable(u > h, p, a);
+    let x = select_unpredictable(u > h, x, u);
+    if x == h {
+      Some(unsafe { slot_data(p).replace(value) })
+    } else {
+      if is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+        let _: *mut V = self.insert_init(h, value);
+      } else {
+        let r = self.slack;
+        let z = self.limit.cast_mut();
+        let mut p = p;
+        let mut x = x;
+        let mut y = value;
+        unsafe { slot_hash(p).write(h) };
+        while x != K::ZERO {
+          y = unsafe { slot_data(p).replace(y) };
+          p = unsafe { p.add(1) };
+          x = unsafe { slot_hash(p).replace(x) };
+        }
+        unsafe { slot_data(p).write(y) };
+        if p == unsafe { z.sub(1) } || r == 0 {
+          let _: *mut V = self.insert_grow(h, p);
+        } else {
+          self.slack = r - 1;
+        }
+      }
+      None
+    }
+  }
+
   #[inline(never)]
   #[cold]
-  fn insert_init(&mut self, key: K, value: V) -> *mut V {
-    let m = self.seed;
+  fn insert_init(&mut self, h: K::Word, value: V) -> *mut V {
     let w = 4 * ALLOCATION_CHUNK;
     let e = ALLOCATION_CHUNK;
     let d = w + e;
@@ -402,14 +472,13 @@ impl<K: Key, V> IntMap<K, V> {
     let l = unsafe { allocation_layout::<K, V>(d) };
     let t = unsafe { alloc(l) } as *mut Slot<K, V>;
     if t.is_null() { match handle_alloc_error(l) { } }
-    let h = hash(key, m);
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
     unsafe { slot_hash(a).write(h) };
     unsafe { slot_data(a).write(value) };
-    self.slack = capacity::<K>(s) - 1;
-    self.shift = s;
     self.table = t;
+    self.shift = s;
+    self.slack = capacity::<K>(s) - 1;
     self.limit = unsafe { t.add(d) };
     unsafe { slot_data(a) }
   }
@@ -417,9 +486,9 @@ impl<K: Key, V> IntMap<K, V> {
   #[inline(never)]
   #[cold]
   fn insert_grow(&mut self, h: K::Word, last_write: *mut Slot<K, V>) -> *mut V {
-    let old_r = self.slack;
-    let old_s = self.shift;
     let old_t = self.table.cast_mut();
+    let old_s = self.shift;
+    let old_r = self.slack;
     let old_z = self.limit.cast_mut();
     let old_d = ptr_diff(old_z.cast(), old_t);
     let old_w = 1 << K::BITS - old_s;
@@ -476,9 +545,9 @@ impl<K: Key, V> IntMap<K, V> {
       if p == unsafe { old_t.add(old_d) } { break }
     }
     // Update struct fields.
-    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
-    self.shift = new_s;
     self.table = new_t;
+    self.shift = new_s;
+    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.limit = unsafe { new_t.add(new_d) };
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
@@ -491,71 +560,19 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { slot_data(p) }
   }
 
-  /// Inserts the given key and value into the map. Returns the previous value
-  /// associated with given key, if one was present.
-  ///
-  /// # Panics
-  ///
-  /// Panics if allocation fails. If that happens, it is possible for the map
-  /// to leak an arbitrary set of items, but the map will remain in a valid
-  /// state.
-  #[inline(always)]
-  pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-    let r = self.slack;
-    let s = self.shift;
-    let t = self.table.cast_mut();
-    let z = self.limit.cast_mut();
-    let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(t.addr() != 0) };
-    if is_dummy::<K>(s) { let _: *mut V = self.insert_init(key, value); return None }
-    let h = hash(key, m);
-    let k = slot(h, s);
-    let a = unsafe { t.add(k) };
-    let u = unsafe { slot_hash(a).read() };
-    let mut p = a;
-    let mut x;
-    loop {
-      p = unsafe { p.add(1) };
-      x = unsafe { slot_hash(p).read() };
-      if ! (x > h) { break }
-    }
-    let p = select_unpredictable(u > h, p, a);
-    let x = select_unpredictable(u > h, x, u);
-    if x == h {
-      Some(unsafe { slot_data(p).replace(value) })
-    } else {
-      let mut p = p;
-      let mut x = x;
-      let mut y = value;
-      unsafe { slot_hash(p).write(h) };
-      while x != K::ZERO {
-        y = unsafe { slot_data(p).replace(y) };
-        p = unsafe { p.add(1) };
-        x = unsafe { slot_hash(p).replace(x) };
-      }
-      unsafe { slot_data(p).write(y) };
-      if p == unsafe { z.sub(1) } || r == 0 {
-        let _: *mut V = self.insert_grow(h, p);
-      } else {
-        self.slack = r - 1;
-      }
-      None
-    }
-  }
-
   /// Removes the given key from the map. Returns the previous value associated
   /// with the given key, if one was present.
   #[inline(always)]
   pub fn remove(&mut self, key: K) -> Option<V> {
-    let r = self.slack;
-    let s = self.shift;
     let t = self.table.cast_mut();
+    let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     unsafe { assert_unchecked(t.addr() != 0) };
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return None }
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      return None;
+    }
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
@@ -571,6 +588,7 @@ impl<K: Key, V> IntMap<K, V> {
     if x != h {
       None
     } else {
+      let r = self.slack;
       self.slack = r + 1;
       let value = unsafe { slot_data(p).read() };
       let mut i = ptr_diff(p, t);
@@ -591,92 +609,95 @@ impl<K: Key, V> IntMap<K, V> {
     }
   }
 
-  /*
-
   /// Returns a view of the entry in the map corresponding to the given key for
   /// subsequent inspection and modification.
   #[inline(always)]
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
+    let t = self.table.cast_mut();
     let s = self.shift;
-    let t = self.head;
-    let u = self.data.cast_mut();
     let m = self.seed;
+    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
     let h = hash(key, m);
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      return Entry::Vacant(VacantEntry { map: self, pos: null_mut(), other_hash: K::ZERO, entry_hash: h });
+    }
     let k = slot(h, s);
-    prefetch_write(u, k);
-    let a = unsafe { t.add(k).read() };
-    let mut i = k;
+    let a = unsafe { t.add(k) };
+    let u = unsafe { slot_hash(a).read() };
+    let mut p = a;
     let mut x;
     loop {
-      i = i + 1;
-      x = unsafe { t.add(i).read() };
+      p = unsafe { p.add(1) };
+      x = unsafe { slot_hash(p).read() };
       if ! (x > h) { break }
     }
-    let i = select_unpredictable(a > h, i, k);
-    let x = select_unpredictable(a > h, x, a);
+    let p = select_unpredictable(u > h, p, a);
+    let x = select_unpredictable(u > h, x, u);
     if x == h {
-      Entry::Occupied(OccupiedEntry { map: self, pos: i })
+      Entry::Occupied(OccupiedEntry { map: self, pos: p })
     } else {
-      Entry::Vacant(VacantEntry { map: self, pos: i, other_hash: h, entry_hash: x })
+      Entry::Vacant(VacantEntry { map: self, pos: p, other_hash: x, entry_hash: h })
     }
   }
 
   #[inline(always)]
-  unsafe fn insert_at(&mut self, pos: usize, other_hash: K::Word, entry_hash: K::Word, value: V) -> &mut V {
-    let r = self.slack;
+  unsafe fn insert_at(&mut self, pos: *mut Slot<K, V>, other_hash: K::Word, entry_hash: K::Word, value: V) -> &mut V {
+    let t = self.table.cast_mut();
     let s = self.shift;
-    let t = self.head.cast_mut();
-    let u = self.data.cast_mut();
+    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
-    let p =
-      if addr_eq(t, u) {
+    let inserted_at =
+      if is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
         self.insert_init(entry_hash, value)
       } else {
-        let mut i = pos;
+        let r = self.slack;
+        let z = self.limit.cast_mut();
+        let mut p = pos;
         let mut x = other_hash;
         let mut y = value;
-        unsafe { t.add(i).write(entry_hash) };
+        unsafe { slot_hash(p).write(entry_hash) };
         while x != K::ZERO {
-          y = unsafe { u.add(i).replace(y) };
-          i = i + 1;
-          x = unsafe { t.add(i).replace(x) };
+          y = unsafe { slot_data(p).replace(y) };
+          p = unsafe { p.add(1) };
+          x = unsafe { slot_hash(p).replace(x) };
         }
-        unsafe { u.add(i).write(y) };
-        if addr_eq(unsafe { t.add(i + 1) }, u) || r == 0 {
-          self.insert_grow(entry_hash, i)
+        unsafe { slot_data(p).write(y) };
+        if p == unsafe { z.sub(1) } || r == 0 {
+          self.insert_grow(entry_hash, p)
         } else {
           self.slack = r - 1;
-          unsafe { u.add(pos) }
+          unsafe { slot_data(pos) }
         }
       };
-    unsafe { &mut *p }
+    unsafe { &mut *inserted_at }
   }
 
   #[inline(always)]
-  unsafe fn remove_at(&mut self, pos: usize) -> V {
-    let r = self.slack;
+  unsafe fn remove_at(&mut self, pos: *mut Slot<K, V>) -> V {
+    let t = self.table.cast_mut();
     let s = self.shift;
-    let t = self.head.cast_mut();
-    let u = self.data.cast_mut();
+    let r = self.slack;
+    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
     self.slack = r + 1;
-    let value = unsafe { u.add(pos).read() };
-    let mut i = pos;
+    let value = unsafe { slot_data(pos).read() };
+    let mut i = ptr_diff(pos, t);
+    let mut p = pos;
     loop {
+      let x = unsafe { slot_hash(p.add(1)).read() };
+      if ! (slot(x, s) <= i && /* likely */ x != K::ZERO) { break }
+      let y = unsafe { slot_data(p.add(1)).read() };
+      unsafe { slot_hash(p).write(x) };
+      unsafe { slot_data(p).write(y) };
       i = i + 1;
-      let x = unsafe { t.add(i).read() };
-      if ! (slot(x, s) <= i - 1 && x != K::ZERO) { break }
-      let y = unsafe { u.add(i).read() };
-      unsafe { t.add(i - 1).write(x) };
-      unsafe { u.add(i - 1).write(y) };
+      p = unsafe { p.add(1) };
     }
-    unsafe { t.add(i - 1).write(K::ZERO) };
+    unsafe { slot_hash(p).write(K::ZERO) };
     value
   }
+
+  /*
 
   /// Ensures that there is a value associated with the given key by inserting
   /// the provided default value if the key was previously absent. Returns a
@@ -949,30 +970,32 @@ impl<K: Key, V> Index<K> for IntMap<K, V> {
   }
 }
 
+*/
+
 impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
   /// Gets a reference to the value in the entry.
   #[inline(always)]
   pub fn get(&self) -> &V {
-    unsafe { &*self.map.data.add(self.pos) }
+    unsafe { &*slot_data(self.pos) }
   }
 
   /// Gets a mutable reference to the value in the entry.
   #[inline(always)]
   pub fn get_mut(&mut self) -> &mut V {
-    unsafe { &mut *self.map.data.cast_mut().add(self.pos) }
+    unsafe { &mut *slot_data(self.pos) }
   }
 
   /// Converts itself into a mutable reference to the value in the entry, with
   /// a lifetime from the original borrow for the call to [`IntMap::entry`].
   #[inline(always)]
   pub fn into_mut(self) -> &'a mut V {
-    unsafe { &mut *self.map.data.cast_mut().add(self.pos) }
+    unsafe { &mut *slot_data(self.pos) }
   }
 
   /// Inserts the given value into the entry, and returns the previous value.
   #[inline(always)]
   pub fn insert(&mut self, value: V) -> V {
-    unsafe { self.map.data.cast_mut().add(self.pos).replace(value) }
+    unsafe { slot_data(self.pos).replace(value) }
   }
 
   /// Removes the value occupying the entry, and returns that value.
@@ -990,6 +1013,8 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     unsafe { self.map.insert_at(self.pos, self.other_hash, self.entry_hash, value) }
   }
 }
+
+/*
 
 struct Iter<K: Key, T, F: FnMut(K::Word, usize) -> T> {
   len: usize,

@@ -594,7 +594,7 @@ impl<K: Key, V> IntMap<K, V> {
     if x == h {
       Entry::Occupied(OccupiedEntry { map: self, pos: i })
     } else {
-      Entry::Vacant(VacantEntry { map: self, pos: i, other_hash: h, entry_hash: x })
+      Entry::Vacant(VacantEntry { map: self, pos: i, other_hash: x, entry_hash: h })
     }
   }
 
