@@ -465,6 +465,7 @@ impl<K: Key, V> IntMap<K, V> {
     let l = unsafe { allocation_layout::<K, V>(d) };
     let t = unsafe { alloc(l) } as *mut Slot<K, V>;
     if t.is_null() { match handle_alloc_error(l) { } }
+    for i in 0 .. d { unsafe { slot_hash(t.add(i)).write(K::ZERO) }; }
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
     unsafe { slot_hash(a).write(h) };
