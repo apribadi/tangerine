@@ -729,8 +729,6 @@ impl<K: Key, V> IntMap<K, V> {
     }
   }
 
-  /*
-
   /// Removes every item from the map. Retains heap-allocated memory.
   ///
   /// # Panics
@@ -738,13 +736,13 @@ impl<K: Key, V> IntMap<K, V> {
   /// Panics if [`drop`]ping a value panics. If that happens, the map will be in
   /// a valid but otherwise unspecified state.
   pub fn clear(&mut self) {
-    let r = self.slack;
+    let t = self.table.cast_mut();
     let s = self.shift;
-    let t = self.head.cast_mut();
-    let u = self.data.cast_mut();
+    let r = self.slack;
+    let z = self.limit.cast_mut();
     let c = capacity::<K>(s);
     let n = c - r;
-    let d = ptr_diff(u.cast(), t);
+    let d = ptr_diff(z, t);
     if needs_drop::<V>() {
       if n != 0 {
         // WARNING!
@@ -758,14 +756,14 @@ impl<K: Key, V> IntMap<K, V> {
         // Also, we update `self.slack` as we go instead of once at the end.
         let mut n = n;
         let mut r = r;
-        let mut i = d;
+        let mut p = z;
         loop {
-          i = i - 1;
-          if unsafe { t.add(i).read() } != K::ZERO {
-            unsafe { t.add(i).write(K::ZERO) };
+          p = unsafe { p.sub(1) };
+          if unsafe { slot_hash(p).read() } != K::ZERO {
+            unsafe { slot_hash(p).write(K::ZERO) };
             r = r + 1;
             self.slack = r;
-            unsafe { u.add(i).drop_in_place() };
+            unsafe { slot_data(p).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
           }
@@ -774,11 +772,13 @@ impl<K: Key, V> IntMap<K, V> {
     } else {
       if n != 0 {
         self.slack = c;
-        let mut i = d;
+        let mut p = z;
         loop {
-          i = i - allocation_chunk::<K, V>();
-          unsafe { write_bytes(t.add(i), 0u8, allocation_chunk::<K, V>()) };
-          if i == 0 { break }
+          p = unsafe { p.sub(ALLOCATION_CHUNK) };
+          for i in 0 .. ALLOCATION_CHUNK {
+            unsafe { slot_hash(p.add(i)).write(K::ZERO) };
+          }
+          if p == t { break }
         }
       }
     }
@@ -791,25 +791,25 @@ impl<K: Key, V> IntMap<K, V> {
   /// Panics if [`drop`]ping a value or deallocating memory panics. If that
   /// happens, the map will be in a valid but otherwise unspecified state.
   pub fn reset(&mut self) {
-    let r = self.slack;
+    let t = self.table.cast_mut();
     let s = self.shift;
-    let t = self.head.cast_mut();
-    let u = self.data.cast_mut();
-    if addr_eq(t, u) { return }
+    let r = self.slack;
+    let z = self.limit.cast_mut();
+    if is_dummy::<K>(s) { return }
     let n = capacity::<K>(s) - r;
-    let d = ptr_diff(u.cast(), t);
-    self.slack = capacity::<K>(K::BITS - 1);
-    self.shift = K::BITS - 1;
-    self.head = K::EMPTY.cast();
-    self.data = K::EMPTY.cast();
+    let d = ptr_diff(z, t);
+    self.table = initial_table::<K, V>();
+    self.shift = initial_shift::<K>();
+    self.slack = initial_slack::<K>();
+    self.limit = initial_limit::<K, V>();
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;
-        let mut i = d;
+        let mut p = z;
         loop {
-          i = i - 1;
-          if unsafe { t.add(i).read() } != K::ZERO {
-            unsafe { u.add(i).drop_in_place() };
+          p = unsafe { p.sub(1) };
+          if unsafe { slot_hash(p).read() } != K::ZERO {
+            unsafe { slot_data(p).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
           }
@@ -823,22 +823,21 @@ impl<K: Key, V> IntMap<K, V> {
   /// value. The iterator item type is `(K, &V)`.
   #[inline(always)]
   pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
-    let r = self.slack;
     let s = self.shift;
-    let t = self.head;
-    let u = self.data;
+    let r = self.slack;
+    let z = self.limit.cast_mut();
     let m = self.seed_inverted;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
-    let i: Iter<K, _, _> =
+    let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: ptr_diff(u.cast(), t),
-        head: t,
-        f: move |x, i| unsafe { (invert_hash(x, m), &*u.add(i)) }
+        pos: z,
+        f: move |p, x| unsafe { (invert_hash(x, m), &*slot_data(p)) }
       };
     i
   }
+
+  /*
 
   /// Returns an iterator yielding each key and a mutable reference to its
   /// associated value. The iterator item type is `(K, &mut V)`.
@@ -955,15 +954,11 @@ impl<K: Key, V> IntMap<K, V> {
   }
 }
 
-/*
-
 impl<K: Key, V> Drop for IntMap<K, V> {
   fn drop(&mut self) {
     self.reset()
   }
 }
-
-*/
 
 impl<K: Key, V> Index<K> for IntMap<K, V> {
   type Output = V;
@@ -1016,33 +1011,29 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
   }
 }
 
-/*
-
-struct Iter<K: Key, T, F: FnMut(K::Word, usize) -> T> {
+struct Iter<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> {
   len: usize,
-  pos: usize,
-  head: *const K::Word,
+  pos: *mut Slot<K, V>,
   f: F,
 }
 
-impl<K: Key, T, F: FnMut(K::Word, usize) -> T> Iterator for Iter<K, T, F> {
+impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K, V, T, F> {
   type Item = T;
 
   #[inline(always)]
   fn next(&mut self) -> Option<Self::Item> {
     let n = self.len;
     if n == 0 { return None }
-    let t = self.head;
-    let mut i = self.pos;
+    let mut p = self.pos;
     let mut x;
     loop {
-      i = i - 1;
-      x = unsafe { t.add(i).read() };
+      p = unsafe { p.sub(1) };
+      x = unsafe { slot_hash(p).read()};
       if x != K::ZERO { break }
     }
     self.len = n - 1;
-    self.pos = i;
-    Some((self.f)(x, i))
+    self.pos = p;
+    Some((self.f)(p, x))
   }
 
   #[inline(always)]
@@ -1052,18 +1043,17 @@ impl<K: Key, T, F: FnMut(K::Word, usize) -> T> Iterator for Iter<K, T, F> {
 
   #[inline(always)]
   fn fold<U, G: FnMut(U, T) -> U>(self, init: U, g: G) -> U {
-    let t = self.head;
     let mut n = self.len;
-    let mut i = self.pos;
+    let mut p = self.pos;
     let mut f = self.f;
     let mut u = init;
     let mut g = g;
     if n != 0 {
       loop {
-        i = i - 1;
-        let x = unsafe { t.add(i).read() };
+        p = unsafe { p.sub(1) };
+        let x = unsafe { slot_hash(p).read() };
         if x != K::ZERO {
-          u = g(u, f(x, i));
+          u = g(u, f(p, x));
           n = n - 1;
           if n == 0 { break }
         }
@@ -1073,12 +1063,14 @@ impl<K: Key, T, F: FnMut(K::Word, usize) -> T> Iterator for Iter<K, T, F> {
   }
 }
 
-impl<K: Key, T, F: FnMut(K::Word, usize) -> T> ExactSizeIterator for Iter<K, T, F> {
+impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> ExactSizeIterator for Iter<K, V, T, F> {
   #[inline(always)]
   fn len(&self) -> usize {
     self.len
   }
 }
+
+/*
 
 impl<K: Key, V: Clone> Clone for IntMap<K, V> {
   fn clone(&self) -> Self {
