@@ -544,52 +544,54 @@ impl<K: Key, V> IntMap<K, V> {
     }
   }
 
-  /*
-
   /// Removes the given key from the map. Returns the previous value associated
   /// with the given key, if one was present.
   #[inline(always)]
   pub fn remove(&mut self, key: K) -> Option<V> {
     let r = self.slack;
     let s = self.shift;
-    let t = self.head.cast_mut();
-    let u = self.data.cast_mut();
+    let t = self.table.cast_mut();
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
+    unsafe { assert_unchecked(t.addr() != 0) };
+    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) { return None }
     let h = hash(key, m);
     let k = slot(h, s);
-    prefetch_write(u, k);
-    let a = unsafe { t.add(k).read() };
-    let mut i = k;
+    let a = unsafe { t.add(k) };
+    let u = unsafe { slot_hash(a).read() };
+    let mut p = a;
     let mut x;
     loop {
-      i = i + 1;
-      x = unsafe { t.add(i).read() };
+      p = unsafe { p.add(1) };
+      x = unsafe { slot_hash(p).read() };
       if ! (x > h) { break }
     }
-    let i = select_unpredictable(a > h, i, k);
-    let x = select_unpredictable(a > h, x, a);
+    let p = select_unpredictable(u > h, p, a);
+    let x = select_unpredictable(u > h, x, u);
     if x != h {
       None
     } else {
       self.slack = r + 1;
-      let value = unsafe { u.add(i).read() };
-      let mut i = i;
+      let value = unsafe { slot_data(p).read() };
+      let mut i = ptr_diff(p, t);
+      let mut p = p;
       loop {
-        i = i + 1;
-        let x = unsafe { t.add(i).read() };
-        if ! (slot(x, s) <= i - 1 && /* likely */ x != K::ZERO) { break }
-        let y = unsafe { u.add(i).read() };
-        unsafe { t.add(i - 1).write(x) };
-        unsafe { u.add(i - 1).write(y) };
+        let x = unsafe { slot_hash(p.add(1)).read() };
+        if ! (slot(x, s) <= i && /* likely */ x != K::ZERO) { break }
+        let y = unsafe { slot_data(p.add(1)).read() };
+        unsafe { slot_hash(p).write(x) };
+        unsafe { slot_data(p).write(y) };
         // NOTE: We could do the loop exit test here instead, with the
         // modification that y is MaybeUninit<V>.
+        i = i + 1;
+        p = unsafe { p.add(1) };
       }
-      unsafe { t.add(i - 1).write(K::ZERO) };
+      unsafe { slot_hash(p).write(K::ZERO) };
       Some(value)
     }
   }
+
+  /*
 
   /// Returns a view of the entry in the map corresponding to the given key for
   /// subsequent inspection and modification.

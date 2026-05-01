@@ -68,6 +68,10 @@ pub fn insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU
   t.insert(k, v)
 }
 
+pub fn remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
+  t.remove(k)
+}
+
 /*
 pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
   match t.entry(key) {
@@ -85,10 +89,6 @@ pub fn entry_try_insert(
     Entry::Occupied(entry) => Err((entry.into_mut(), value)),
     Entry::Vacant(entry) => Ok(entry.insert(value)),
   }
-}
-
-pub fn remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
-  t.remove(k)
 }
 
 pub fn entry_remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Option<NonZeroU64> {
