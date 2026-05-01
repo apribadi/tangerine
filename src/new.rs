@@ -215,8 +215,8 @@ impl<K: Key, V> IntMap<K, V> {
   /// Returns the number of items.
   #[inline(always)]
   pub fn len(&self) -> usize {
-    let r = self.slack;
     let s = self.shift;
+    let r = self.slack;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     capacity::<K>(s) - r
   }
@@ -490,7 +490,7 @@ impl<K: Key, V> IntMap<K, V> {
     let old_s = self.shift;
     let old_r = self.slack;
     let old_z = self.limit.cast_mut();
-    let old_d = ptr_diff(old_z.cast(), old_t);
+    let old_d = ptr_diff(old_z, old_t);
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
     // Remove the last slot so that the table is in a valid state, in case we
@@ -518,8 +518,9 @@ impl<K: Key, V> IntMap<K, V> {
     let new_l = unsafe { allocation_layout::<K, V>(new_d) };
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
+    let new_z = unsafe { new_t.add(new_d) };
     // Initialize new table.
-    let mut p = unsafe { new_t.add(new_d) };
+    let mut p = new_z;
     loop {
       p = unsafe { p.sub(ALLOCATION_CHUNK) };
       for i in 0 .. ALLOCATION_CHUNK {
@@ -548,7 +549,7 @@ impl<K: Key, V> IntMap<K, V> {
     self.table = new_t;
     self.shift = new_s;
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
-    self.limit = unsafe { new_t.add(new_d) };
+    self.limit = new_z;
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
     // Find the newly-inserted value. Note, this was not necessarily at last_write.
@@ -697,8 +698,6 @@ impl<K: Key, V> IntMap<K, V> {
     value
   }
 
-  /*
-
   /// Ensures that there is a value associated with the given key by inserting
   /// the provided default value if the key was previously absent. Returns a
   /// mutable reference to the value in the entry.
@@ -729,6 +728,8 @@ impl<K: Key, V> IntMap<K, V> {
       Entry::Vacant(entry) => entry.insert(V::default()),
     }
   }
+
+  /*
 
   /// Removes every item from the map. Retains heap-allocated memory.
   ///
@@ -920,10 +921,12 @@ impl<K: Key, V> IntMap<K, V> {
     i
   }
 
+  */
+
   fn num_slots(&self) -> usize {
-    let t = self.head;
-    let u = self.data;
-    ptr_diff(u.cast(), t)
+    let t = self.table;
+    let z = self.limit;
+    ptr_diff(z, t)
   }
 
   fn allocation_size(&self) -> usize {
@@ -935,22 +938,21 @@ impl<K: Key, V> IntMap<K, V> {
   }
 
   fn displacement_histogram(&self) -> [usize; 10] {
+    let t = self.table.cast_mut();
     let s = self.shift;
-    let t = self.head;
-    let u = self.data;
+    let z = self.limit.cast_mut();
     let mut r = [0usize; 10];
-    let mut i = ptr_diff(u.cast(), t);
+    let mut p = z;
+    let mut i = ptr_diff(z, t);
     loop {
+      p = unsafe { p.sub(1) };
       i = i - 1;
-      let x = unsafe { t.add(i).read() };
-      if x != K::ZERO {
-        r[usize::min(9, i - slot(x, s))] += 1;
-      }
-      if i == 0 { break }
+      let x = unsafe { slot_hash(p).read() };
+      if x != K::ZERO { r[usize::min(9, i - slot(x, s))] += 1; }
+      if p == t { break }
     }
     r
   }
-  */
 }
 
 /*
@@ -961,6 +963,8 @@ impl<K: Key, V> Drop for IntMap<K, V> {
   }
 }
 
+*/
+
 impl<K: Key, V> Index<K> for IntMap<K, V> {
   type Output = V;
 
@@ -969,8 +973,6 @@ impl<K: Key, V> Index<K> for IntMap<K, V> {
     self.get(key).unwrap()
   }
 }
-
-*/
 
 impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
   /// Gets a reference to the value in the entry.
