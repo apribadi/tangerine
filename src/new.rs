@@ -15,9 +15,7 @@ use core::mem::MaybeUninit;
 use core::mem::needs_drop;
 use core::mem::offset_of;
 use core::ops::Index;
-use core::ptr::addr_eq;
 use core::ptr::null_mut;
-use core::ptr::write_bytes;
 use rand_core::Rng;
 
 use crate::key::Key;
@@ -70,7 +68,7 @@ struct Slot<K: Key, V> {
 }
 
 #[repr(align(64))]
-struct Dummy([u8; 192]);
+struct Dummy(#[allow(dead_code)] [u8; 192]);
 
 static DUMMY: Dummy = Dummy([0u8; 192]);
 
@@ -82,11 +80,6 @@ fn ptr_diff<T>(x: *const T, y: *const T) -> usize {
 #[inline(always)]
 const fn ctz(n: usize) -> usize {
   n.trailing_zeros() as usize
-}
-
-#[inline(always)]
-const fn max(x: usize, y: usize) -> usize {
-  if x > y { x } else { y }
 }
 
 #[inline(always)]
@@ -742,7 +735,6 @@ impl<K: Key, V> IntMap<K, V> {
     let z = self.limit.cast_mut();
     let c = capacity::<K>(s);
     let n = c - r;
-    let d = ptr_diff(z, t);
     if needs_drop::<V>() {
       if n != 0 {
         // WARNING!
@@ -837,25 +829,20 @@ impl<K: Key, V> IntMap<K, V> {
     i
   }
 
-  /*
-
   /// Returns an iterator yielding each key and a mutable reference to its
   /// associated value. The iterator item type is `(K, &mut V)`.
   #[inline(always)]
   pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V> {
-    let r = self.slack;
     let s = self.shift;
-    let t = self.head;
-    let u = self.data.cast_mut();
+    let r = self.slack;
+    let z = self.limit.cast_mut();
     let m = self.seed_inverted;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
-    let i: Iter<K, _, _> =
+    let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: ptr_diff(u.cast(), t),
-        head: t,
-        f: move |x, i| unsafe { (invert_hash(x, m), &mut *u.add(i)) }
+        pos: z,
+        f: move |p, x| unsafe { (invert_hash(x, m), &mut *slot_data(p)) }
       };
     i
   }
@@ -863,19 +850,16 @@ impl<K: Key, V> IntMap<K, V> {
   /// Returns an iterator yielding each key. The iterator item type is `K`.
   #[inline(always)]
   pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V> {
-    let r = self.slack;
     let s = self.shift;
-    let t = self.head;
-    let u = self.data;
+    let r = self.slack;
+    let z = self.limit.cast_mut();
     let m = self.seed_inverted;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
-    let i: Iter<K, _, _> =
+    let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: ptr_diff(u.cast(), t),
-        head: t,
-        f: move |x, _| unsafe { invert_hash(x, m) }
+        pos: z,
+        f: move |_, x| unsafe { invert_hash(x, m) }
       };
     i
   }
@@ -884,18 +868,15 @@ impl<K: Key, V> IntMap<K, V> {
   /// type is `&V`.
   #[inline(always)]
   pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, K, V> {
-    let r = self.slack;
     let s = self.shift;
-    let t = self.head;
-    let u = self.data;
+    let r = self.slack;
+    let z = self.limit.cast_mut();
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
-    let i: Iter<K, _, _> =
+    let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: ptr_diff(u.cast(), t),
-        head: t,
-        f: move |_, i| unsafe { &*u.add(i) }
+        pos: z,
+        f: move |p, _| unsafe { &*slot_data(p) }
       };
     i
   }
@@ -904,23 +885,18 @@ impl<K: Key, V> IntMap<K, V> {
   /// iterator item type is `&mut V`.
   #[inline(always)]
   pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V> {
-    let r = self.slack;
     let s = self.shift;
-    let t = self.head;
-    let u = self.data.cast_mut();
+    let r = self.slack;
+    let z = self.limit.cast_mut();
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    unsafe { assert_unchecked(u.addr() != 0) };
-    let i: Iter<K, _, _> =
+    let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: ptr_diff(u.cast(), t),
-        head: t,
-        f: move |_, i| unsafe { &mut *u.add(i) }
+        pos: z,
+        f: move |p, _| unsafe { &mut *slot_data(p) }
       };
     i
   }
-
-  */
 
   fn num_slots(&self) -> usize {
     let t = self.table;
@@ -1070,8 +1046,6 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> ExactSizeIterator fo
   }
 }
 
-/*
-
 impl<K: Key, V: Clone> Clone for IntMap<K, V> {
   fn clone(&self) -> Self {
     let mut t = Self::new();
@@ -1120,8 +1094,6 @@ impl<K: Key, V> FromIterator<(K, V)> for IntMap<K, V> {
   }
 }
 
-*/
-
 pub mod internal {
   //! Unstable API exposing implementation details for benchmarks and tests.
 
@@ -1129,8 +1101,6 @@ pub mod internal {
 
   use super::IntMap;
   use super::Key;
-
-  /*
 
   pub fn num_slots<K: Key, V>(t: &IntMap<K, V>) -> usize {
     t.num_slots()
@@ -1147,7 +1117,6 @@ pub mod internal {
   pub fn displacement_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 10] {
     t.displacement_histogram()
   }
-  */
 
   #[inline(always)]
   pub fn get_branchy<K: Key, V>(t: &IntMap<K, V>, key: K) -> Option<&V> {
