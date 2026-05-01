@@ -435,7 +435,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_e =
       if new_s == 0 {
         0 // special case, we can store every possible key
-      } else if unsafe { last_write.add(1) } == old_z {
+      } else if last_write == unsafe { old_z.sub(1) } {
         old_e * 2 // if we wrote in the final slot
       } else if old_e < ctz(new_w) {
         old_e + ALLOCATION_CHUNK // we maintain e >= log2(w)
@@ -535,7 +535,7 @@ impl<K: Key, V> IntMap<K, V> {
         x = unsafe { slot_hash(p).replace(x) };
       }
       unsafe { slot_data(p).write(y) };
-      if unsafe { p.add(1) } == z || r == 0 {
+      if p == unsafe { z.sub(1) } || r == 0 {
         let _: *mut V = self.insert_grow(h, p);
       } else {
         self.slack = r - 1;
