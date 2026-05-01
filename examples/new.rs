@@ -64,11 +64,11 @@ pub fn get_disjoint_mut_4(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU3
   t.get_disjoint_mut(ks)
 }
 
-/*
 pub fn insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU64) -> Option<NonZeroU64> {
   t.insert(k, v)
 }
 
+/*
 pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
   match t.entry(key) {
     Entry::Occupied(entry) => Some(replace(entry.into_mut(), value)),
