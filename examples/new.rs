@@ -110,24 +110,20 @@ pub fn clone(t: &NewMap<NonZeroU32, NonZeroU64>) -> NewMap<NonZeroU32, NonZeroU6
   t.clone()
 }
 
-pub fn iter_fold(t: &mut NewMap<NonZeroU32, u64>) -> u64 {
-  t.values().fold(0, |x, &y| x ^ y)
+pub fn iter_fold(t: &mut NewMap<NonZeroU32, NonZeroU64>) -> u64 {
+  t.values().fold(0, |x, &y| x ^ y.get())
 }
 
-pub fn iter_for_each(t: &mut NewMap<NonZeroU32, u64>) -> u64 {
+pub fn iter_for_each(t: &mut NewMap<NonZeroU32, NonZeroU64>) -> u64 {
   let mut x = 0u64;
-  t.values().for_each(|&y| { x ^= y; });
+  t.values().for_each(|&y| { x ^= y.get(); });
   x
 }
 
-pub fn iter_loop(t: &mut NewMap<NonZeroU32, u64>) -> u64 {
+pub fn iter_loop(t: &mut NewMap<NonZeroU32, NonZeroU64>) -> u64 {
   let mut x = 0u64;
-  for &y in t.values() { x ^= y; }
+  for &y in t.values() { x ^= y.get(); }
   x
-}
-
-pub fn inc(t: &mut NewMap<NonZeroU32, u64>, key: NonZeroU32) {
-  *t.get_or_insert(key, 0) += 1;
 }
 
 pub fn entry_inc(t: &mut NewMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
