@@ -118,14 +118,14 @@ fn initial_limit<K:Key, V>() -> *const Slot<K, V> {
 }
 
 #[inline(always)]
-fn is_dummy<K:Key>(shift: usize) -> bool {
-  shift == initial_shift::<K>()
-}
-
-#[inline(always)]
 const fn is_dummy_searchable<K: Key, V>() -> bool {
   align_of::<[Slot<K, V>; 3]>() <= align_of::<Dummy>()
     && size_of::<[Slot<K, V>; 3]>() <= size_of::<Dummy>()
+}
+
+#[inline(always)]
+fn is_dummy<K:Key>(shift: usize) -> bool {
+  shift == initial_shift::<K>()
 }
 
 #[inline(always)]
@@ -480,6 +480,10 @@ impl<K: Key, V> NewMap<K, V> {
   #[inline(never)]
   #[cold]
   fn insert_grow(&mut self, h: K::Word, last_write: *mut Slot<K, V>) -> *mut V {
+    // Remove the last slot so that the table is in a valid state, even if we
+    // panic.
+    let last_write_hash = unsafe { slot_hash(last_write).replace(K::ZERO) };
+    // Retrieve and compute values for the old table.
     let old_t = self.table.cast_mut();
     let old_s = self.shift;
     let old_r = self.slack;
@@ -487,11 +491,10 @@ impl<K: Key, V> NewMap<K, V> {
     let old_d = ptr_diff(old_z, old_t);
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
-    // Remove the last slot so that the table is in a valid state, in case we
-    // panic.
-    let last_write_hash = unsafe { slot_hash(last_write).replace(K::ZERO) };
-    // If s == 0, then the map can hold every possible key and will never grow.
-    debug_assert!(old_s != 0);
+    // If s == 0, then the map can hold every possible key and should never grow.
+    debug_assert!(0 != old_s);
+    debug_assert!(old_s <= K::BITS - 1);
+    unsafe { assert_unchecked(old_s <= K::BITS - 1) };
     // Compute new sizes.
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
@@ -515,12 +518,14 @@ impl<K: Key, V> NewMap<K, V> {
     let new_z = unsafe { new_t.add(new_d) };
     // Initialize new table.
     let mut p = new_z;
+    let mut i = new_d;
+    unsafe { assert_unchecked(i % ALLOCATION_CHUNK == 0) };
+    unsafe { assert_unchecked(i != 0) };
     loop {
-      p = unsafe { p.sub(ALLOCATION_CHUNK) };
-      for i in 0 .. ALLOCATION_CHUNK {
-        unsafe { slot_hash(p.add(i)).write(K::ZERO) };
-      }
-      if p == new_t { break }
+      p = unsafe { p.sub(1) };
+      i = i - 1;
+      unsafe { slot_hash(p).write(K::ZERO) };
+      if i == 0 { break }
     }
     // Re-add the last write so that we copy it to the new table.
     unsafe { slot_hash(last_write).write(last_write_hash) };
@@ -537,7 +542,7 @@ impl<K: Key, V> NewMap<K, V> {
       unsafe { slot_data(a).cast::<MaybeUninit<V>>().write(y) };
       p = unsafe { p.add(1) };
       i = select_unpredictable(x != K::ZERO, k + 1, i);
-      if p == unsafe { old_t.add(old_d) } { break }
+      if p == old_z { break }
     }
     // Update struct fields.
     self.table = new_t;
@@ -638,12 +643,10 @@ impl<K: Key, V> NewMap<K, V> {
 
   #[inline(always)]
   unsafe fn insert_at(&mut self, pos: *mut Slot<K, V>, other_hash: K::Word, entry_hash: K::Word, value: V) -> &mut V {
-    let t = self.table.cast_mut();
     let s = self.shift;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let inserted_at =
-      if is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      if is_dummy::<K>(s) {
         self.insert_init(entry_hash, value)
       } else {
         let r = self.slack;
@@ -766,12 +769,14 @@ impl<K: Key, V> NewMap<K, V> {
       if n != 0 {
         self.slack = c;
         let mut p = z;
+        let mut i = ptr_diff(z, t);
+        unsafe { assert_unchecked(i % ALLOCATION_CHUNK == 0) };
+        unsafe { assert_unchecked(i != 0) };
         loop {
-          p = unsafe { p.sub(ALLOCATION_CHUNK) };
-          for i in 0 .. ALLOCATION_CHUNK {
-            unsafe { slot_hash(p.add(i)).write(K::ZERO) };
-          }
-          if p == t { break }
+          p = unsafe { p.sub(1) };
+          i = i - 1;
+          unsafe { slot_hash(p).write(K::ZERO) };
+          if i == 0 { break }
         }
       }
     }
@@ -916,7 +921,9 @@ impl<K: Key, V> NewMap<K, V> {
   fn displacement_histogram(&self) -> [usize; 10] {
     let t = self.table.cast_mut();
     let s = self.shift;
+    let r = self.slack;
     let z = self.limit.cast_mut();
+    let mut n = capacity::<K>(s) - r;
     let mut r = [0usize; 10];
     let mut p = z;
     let mut i = ptr_diff(z, t);
@@ -924,8 +931,11 @@ impl<K: Key, V> NewMap<K, V> {
       p = unsafe { p.sub(1) };
       i = i - 1;
       let x = unsafe { slot_hash(p).read() };
-      if x != K::ZERO { r[usize::min(9, i - slot(x, s))] += 1; }
-      if p == t { break }
+      if x != K::ZERO {
+        r[usize::min(9, i - slot(x, s))] += 1;
+        n = n - 1;
+        if n == 0 { break }
+      }
     }
     r
   }

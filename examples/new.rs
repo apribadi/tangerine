@@ -79,7 +79,6 @@ pub fn entry_insert(t: &mut NewMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, val
   }
 }
 
-/*
 pub fn entry_try_insert(
     t: &mut NewMap<NonZeroU32, NonZeroU64>,
     key: NonZeroU32,
@@ -91,7 +90,6 @@ pub fn entry_try_insert(
     Entry::Vacant(entry) => Ok(entry.insert(value)),
   }
 }
-*/
 
 pub fn entry_remove(t: &mut NewMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Option<NonZeroU64> {
   match t.entry(key) {
@@ -99,7 +97,6 @@ pub fn entry_remove(t: &mut NewMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> 
     Entry::Vacant(_) => None,
   }
 }
-/*
 
 pub fn clear(t: &mut NewMap<NonZeroU32, NonZeroU64>) {
   t.clear();
@@ -163,6 +160,17 @@ pub fn entry_dec(t: &mut NewMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
   }
 }
 
+#[inline(never)]
+pub fn num_slots(t: &NewMap<NonZeroU32, NonZeroU64>) -> usize {
+  tangerine::new::internal::num_slots(t)
+}
+
+#[inline(never)]
+pub fn displacement_histogram(t: &NewMap<NonZeroU32, NonZeroU64>) -> [usize; 10] {
+  tangerine::new::internal::displacement_histogram(t)
+}
+
+/*
 pub fn set_contains(t: &IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
   t.contains(k)
 }
