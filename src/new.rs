@@ -494,7 +494,6 @@ impl<K: Key, V> NewMap<K, V> {
     // If s == 0, then the map can hold every possible key and should never grow.
     debug_assert!(0 != old_s);
     debug_assert!(old_s <= K::BITS - 1);
-    unsafe { assert_unchecked(old_s <= K::BITS - 1) };
     // Compute new sizes.
     let new_s = old_s - 1;
     let new_w = 1 << K::BITS - new_s;
@@ -516,6 +515,13 @@ impl<K: Key, V> NewMap<K, V> {
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
     let new_z = unsafe { new_t.add(new_d) };
+    // Update struct fields.
+    unsafe { assert_unchecked(old_s <= K::BITS - 1) };
+    unsafe { assert_unchecked(new_s <= K::BITS - 1) };
+    self.table = new_t;
+    self.shift = new_s;
+    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
+    self.limit = new_z;
     // Initialize new table.
     let mut p = new_z;
     let mut i = new_d;
@@ -544,11 +550,6 @@ impl<K: Key, V> NewMap<K, V> {
       i = select_unpredictable(x != K::ZERO, k + 1, i);
       if p == old_z { break }
     }
-    // Update struct fields.
-    self.table = new_t;
-    self.shift = new_s;
-    self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
-    self.limit = new_z;
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
     // Find the newly-inserted value. Note, this was not necessarily at last_write.

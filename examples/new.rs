@@ -52,6 +52,10 @@ pub fn get_branchy(t: &NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<
   tangerine::new::internal::get_branchy(t, k)
 }
 
+pub fn get_value_branchy(t: &NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
+  match tangerine::new::internal::get_branchy(t, k) { None => None, Some(&y) => Some(y) }
+}
+
 pub fn get_mut(t: &mut NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&mut NonZeroU64> {
   t.get_mut(k)
 }
