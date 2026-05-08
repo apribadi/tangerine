@@ -821,16 +821,16 @@ impl<K: Key, V> NewMap<K, V> {
   /// value. The iterator item type is `(K, &V)`.
   #[inline(always)]
   pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
+    let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let z = self.limit.cast_mut();
     let m = self.seed_inverted;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: z,
-        f: move |p, x| unsafe { (invert_hash(x, m), &*slot_data(p)) }
+        pos: t,
+        f: move |a, x| unsafe { (invert_hash(x, m), &*slot_data(a)) }
       };
     i
   }
@@ -839,16 +839,16 @@ impl<K: Key, V> NewMap<K, V> {
   /// associated value. The iterator item type is `(K, &mut V)`.
   #[inline(always)]
   pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V> {
+    let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let z = self.limit.cast_mut();
     let m = self.seed_inverted;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: z,
-        f: move |p, x| unsafe { (invert_hash(x, m), &mut *slot_data(p)) }
+        pos: t,
+        f: move |a, x| unsafe { (invert_hash(x, m), &mut *slot_data(a)) }
       };
     i
   }
@@ -856,15 +856,15 @@ impl<K: Key, V> NewMap<K, V> {
   /// Returns an iterator yielding each key. The iterator item type is `K`.
   #[inline(always)]
   pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V> {
+    let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let z = self.limit.cast_mut();
     let m = self.seed_inverted;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: z,
+        pos: t,
         f: move |_, x| unsafe { invert_hash(x, m) }
       };
     i
@@ -874,15 +874,15 @@ impl<K: Key, V> NewMap<K, V> {
   /// type is `&V`.
   #[inline(always)]
   pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, K, V> {
+    let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let z = self.limit.cast_mut();
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: z,
-        f: move |p, _| unsafe { &*slot_data(p) }
+        pos: t,
+        f: move |a, _| unsafe { &*slot_data(a) }
       };
     i
   }
@@ -891,15 +891,15 @@ impl<K: Key, V> NewMap<K, V> {
   /// iterator item type is `&mut V`.
   #[inline(always)]
   pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V> {
+    let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let z = self.limit.cast_mut();
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
-        pos: z,
-        f: move |p, _| unsafe { &mut *slot_data(p) }
+        pos: t,
+        f: move |a, _| unsafe { &mut *slot_data(a) }
       };
     i
   }
@@ -1012,15 +1012,17 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
     let n = self.len;
     if n == 0 { return None }
     let mut p = self.pos;
+    let mut a;
     let mut x;
     loop {
-      p = unsafe { p.sub(1) };
-      x = unsafe { slot_hash(p).read()};
+      a = p;
+      x = unsafe { slot_hash(a).read()};
+      p = unsafe { p.add(1) };
       if x != K::ZERO { break }
     }
     self.len = n - 1;
     self.pos = p;
-    Some((self.f)(p, x))
+    Some((self.f)(a, x))
   }
 
   #[inline(always)]
@@ -1037,10 +1039,11 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
     let mut g = g;
     if n != 0 {
       loop {
-        p = unsafe { p.sub(1) };
-        let x = unsafe { slot_hash(p).read() };
+        let a = p;
+        let x = unsafe { slot_hash(a).read() };
+        p = unsafe { p.add(1) };
         if x != K::ZERO {
-          u = g(u, f(p, x));
+          u = g(u, f(a, x));
           n = n - 1;
           if n == 0 { break }
         }
