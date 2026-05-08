@@ -684,13 +684,14 @@ impl<K: Key, V> NewMap<K, V> {
     let mut i = ptr_diff(pos, t);
     let mut p = pos;
     loop {
-      let x = unsafe { slot_hash(p.add(1)).read() };
+      let q = unsafe { p.add(1) };
+      let x = unsafe { slot_hash(q).read() };
       if ! (slot(x, s) <= i && /* likely */ x != K::ZERO) { break }
-      let y = unsafe { slot_data(p.add(1)).read() };
+      let y = unsafe { slot_data(q).read() };
       unsafe { slot_hash(p).write(x) };
       unsafe { slot_data(p).write(y) };
       i = i + 1;
-      p = unsafe { p.add(1) };
+      p = q;
     }
     unsafe { slot_hash(p).write(K::ZERO) };
     value
