@@ -807,9 +807,10 @@ impl<K: Key, V> NewMap<K, V> {
         let mut n = n;
         let mut p = t;
         loop {
+          let x = unsafe { slot_hash(p).read() };
           let a = p;
           p = unsafe { p.add(1) };
-          if unsafe { slot_hash(a).read() } != K::ZERO {
+          if x != K::ZERO {
             unsafe { slot_data(a).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
@@ -930,13 +931,12 @@ impl<K: Key, V> NewMap<K, V> {
     let mut p = t;
     let mut i = 0;
     loop {
-      let a = p;
-      let b = i;
+      let x = unsafe { slot_hash(p).read() };
+      let k = i;
       p = unsafe { p.add(1) };
       i = i + 1;
-      let x = unsafe { slot_hash(a).read() };
       if x != K::ZERO {
-        r[usize::min(9, b - slot(x, s))] += 1;
+        r[usize::min(9, k - slot(x, s))] += 1;
         n = n - 1;
         if n == 0 { break }
       }
@@ -1019,8 +1019,8 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
     let mut a;
     let mut x;
     loop {
+      x = unsafe { slot_hash(p).read()};
       a = p;
-      x = unsafe { slot_hash(a).read()};
       p = unsafe { p.add(1) };
       if x != K::ZERO { break }
     }
@@ -1043,8 +1043,8 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
     let mut g = g;
     if n != 0 {
       loop {
+        let x = unsafe { slot_hash(p).read() };
         let a = p;
-        let x = unsafe { slot_hash(a).read() };
         p = unsafe { p.add(1) };
         if x != K::ZERO {
           u = g(u, f(a, x));
