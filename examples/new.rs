@@ -109,6 +109,10 @@ pub fn reset(t: &mut NewMap<NonZeroU32, NonZeroU64>) {
   t.reset();
 }
 
+pub fn reset_box(t: &mut NewMap<NonZeroU32, Box<u64>>) {
+  t.reset();
+}
+
 pub fn clone(t: &NewMap<NonZeroU32, NonZeroU64>) -> NewMap<NonZeroU32, NonZeroU64> {
   t.clone()
 }

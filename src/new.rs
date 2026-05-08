@@ -522,14 +522,14 @@ impl<K: Key, V> NewMap<K, V> {
     self.slack = old_r + (capacity::<K>(new_s) - capacity::<K>(old_s)) - 1;
     self.limit = new_z;
     // Initialize new table.
-    let mut p = new_z;
+    let mut p = new_t;
     let mut i = new_d;
     unsafe { assert_unchecked(i % ALLOCATION_CHUNK == 0) };
     unsafe { assert_unchecked(i != 0) };
     loop {
-      p = unsafe { p.sub(1) };
-      i = i - 1;
       unsafe { slot_hash(p).write(K::ZERO) };
+      p = unsafe { p.add(1) };
+      i = i - 1;
       if i == 0 { break }
     }
     // Re-add the last write so that we copy it to the new table.
@@ -768,14 +768,14 @@ impl<K: Key, V> NewMap<K, V> {
     } else {
       if n != 0 {
         self.slack = c;
-        let mut p = z;
+        let mut p = t;
         let mut i = ptr_diff(z, t);
         unsafe { assert_unchecked(i % ALLOCATION_CHUNK == 0) };
         unsafe { assert_unchecked(i != 0) };
         loop {
-          p = unsafe { p.sub(1) };
-          i = i - 1;
           unsafe { slot_hash(p).write(K::ZERO) };
+          p = unsafe { p.add(1) };
+          i = i - 1;
           if i == 0 { break }
         }
       }
@@ -803,11 +803,12 @@ impl<K: Key, V> NewMap<K, V> {
     if needs_drop::<V>() {
       if n != 0 {
         let mut n = n;
-        let mut p = z;
+        let mut p = t;
         loop {
-          p = unsafe { p.sub(1) };
-          if unsafe { slot_hash(p).read() } != K::ZERO {
-            unsafe { slot_data(p).drop_in_place() };
+          let a = p;
+          p = unsafe { p.add(1) };
+          if unsafe { slot_hash(a).read() } != K::ZERO {
+            unsafe { slot_data(a).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
           }
@@ -922,17 +923,18 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let z = self.limit.cast_mut();
     let mut n = capacity::<K>(s) - r;
     let mut r = [0usize; 10];
-    let mut p = z;
-    let mut i = ptr_diff(z, t);
+    let mut p = t;
+    let mut i = 0;
     loop {
-      p = unsafe { p.sub(1) };
-      i = i - 1;
-      let x = unsafe { slot_hash(p).read() };
+      let a = p;
+      let b = i;
+      p = unsafe { p.add(1) };
+      i = i + 1;
+      let x = unsafe { slot_hash(a).read() };
       if x != K::ZERO {
-        r[usize::min(9, i - slot(x, s))] += 1;
+        r[usize::min(9, b - slot(x, s))] += 1;
         n = n - 1;
         if n == 0 { break }
       }
