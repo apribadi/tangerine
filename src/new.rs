@@ -247,7 +247,6 @@ impl<K: Key, V> NewMap<K, V> {
   }
 
   /// Prefetchs a key.
-  #[cfg(feature = "nightly")]
   #[inline(always)]
   pub fn prefetch(&self, key: K) {
     let t = self.table.cast_mut();
@@ -257,7 +256,7 @@ impl<K: Key, V> NewMap<K, V> {
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
     let k = slot(h, s);
-    core::hint::prefetch_write(t.wrapping_add(k), core::hint::Locality::L1)
+    let _: K::Word = unsafe { slot_hash(t.add(k)).read_volatile() };
   }
 
   /// Returns a reference to the value associated with the given key, if
@@ -1083,12 +1082,6 @@ impl<K: Key, V> Default for NewMap<K, V> {
 impl<K: Key, V> Extend<(K, V)> for NewMap<K, V> {
   fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
     iter.into_iter().for_each(|(x, y)| { let _: Option<V> = self.insert(x, y); });
-  }
-
-  #[cfg(feature = "nightly")]
-  #[inline(always)]
-  fn extend_one(&mut self, item: (K, V)) {
-    let _: Option<V> = self.insert(item.0, item.1);
   }
 }
 

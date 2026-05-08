@@ -75,8 +75,8 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
     }
   }
   let sizes = sizes_from_working_set(working_set);
-  let t =
-    &mut sizes.map(|m| {
+  let mut t =
+    sizes.map(|m| {
       let mut t = T::new();
       let mut k = 0;
       for _ in 0 .. m {
@@ -85,7 +85,7 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
       }
       (t, key_seq(0))
     });
-  bencher.bench_local(|| go(black_box(t)));
+  bencher.bench_local(|| go(black_box(&mut t)));
 }
 
 #[divan::bench(
@@ -116,8 +116,8 @@ fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
     z
   }
   let sizes = sizes_from_working_set(working_set);
-  let t =
-    &mut sizes.map(|m| {
+  let mut t =
+    sizes.map(|m| {
       let mut t = T::new();
       let mut k = 0;
       for _ in 0 .. m {
@@ -126,7 +126,7 @@ fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
       }
       (t, 0)
     });
-  bencher.bench_local(|| go(black_box(t)));
+  bencher.bench_local(|| go(black_box(&mut t)));
 }
 
 #[divan::bench(
@@ -142,11 +142,11 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
   #[inline(never)]
   fn go<T: Map<NonZeroU32>>(t: &mut [(T, u32, usize, usize)]) {
     for _ in 0 .. 200 {
-      for &mut (ref mut t, ref mut k, ref mut n, m) in t.iter_mut() {
+      for &mut (ref mut t, ref mut k, ref mut n, limit) in t.iter_mut() {
         for _ in 0 .. 500 {
-          if *n == m {
-            *n = 0;
+          if *n == limit {
             *t = T::new();
+            *n = 0;
           }
           let _ = t.insert(key_seq(*k), NonZeroU32::MIN);
           *k = *k + 1;
@@ -156,8 +156,8 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
     }
   }
   let sizes = sizes_from_working_set(working_set);
-  let t =
-    &mut sizes.map(|m| {
+  let mut t =
+    sizes.map(|m| {
       let mut t = T::new();
       let mut k = 0;
       for _ in 0 .. m.saturating_sub(100_000) {
@@ -167,7 +167,7 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
       let n = t.len();
       (t, k, n, m)
     });
-  bencher.bench_local(|| go(black_box(t)));
+  bencher.bench_local(|| go(black_box(&mut t)));
 }
 
 #[divan::bench(
@@ -196,8 +196,8 @@ fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
     z
   }
   let sizes = sizes_from_working_set(working_set);
-  let t =
-    &mut sizes.map(|m| {
+  let mut t =
+    sizes.map(|m| {
       let mut t = T::new();
       let mut k = 0;
       for _ in 0 .. m {
@@ -206,7 +206,7 @@ fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
       }
       (t, 0, k)
     });
-  bencher.bench_local(|| go(black_box(t)));
+  bencher.bench_local(|| go(black_box(&mut t)));
 }
 
 #[divan::bench(

@@ -30,7 +30,6 @@ pub fn contains_key(t: &NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> bool {
   t.contains_key(k)
 }
 
-#[cfg(feature = "nightly")]
 pub fn prefetch(t: &NewMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) {
   t.prefetch(k)
 }
