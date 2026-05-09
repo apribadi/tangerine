@@ -15,6 +15,7 @@ use core::mem::MaybeUninit;
 use core::mem::needs_drop;
 use core::mem::offset_of;
 use core::ops::Index;
+use core::ptr::null;
 use core::ptr::null_mut;
 use rand_core::Rng;
 
@@ -68,9 +69,9 @@ struct Slot<K: Key, V> {
 }
 
 #[repr(align(64))]
-struct Dummy(#[allow(dead_code)] [u8; 192]);
+struct EmptyTable(#[allow(dead_code)] [u8; 192]);
 
-static DUMMY: Dummy = Dummy([0u8; 192]);
+static EMPTY_TABLE: EmptyTable = EmptyTable([0u8; 192]);
 
 #[inline(always)]
 fn ptr_diff<T>(x: *const T, y: *const T) -> usize {
@@ -110,7 +111,11 @@ fn initial_shift<K: Key>() -> usize {
 }
 
 fn initial_table<K:Key, V>() -> *const Slot<K, V> {
-  &raw const DUMMY as _
+  if is_uninit_searchable::<K, V>() {
+    &raw const EMPTY_TABLE as _
+  } else {
+    null()
+  }
 }
 
 fn initial_limit<K:Key, V>() -> *const Slot<K, V> {
@@ -118,13 +123,13 @@ fn initial_limit<K:Key, V>() -> *const Slot<K, V> {
 }
 
 #[inline(always)]
-const fn is_dummy_searchable<K: Key, V>() -> bool {
-  align_of::<[Slot<K, V>; 3]>() <= align_of::<Dummy>()
-    && size_of::<[Slot<K, V>; 3]>() <= size_of::<Dummy>()
+const fn is_uninit_searchable<K: Key, V>() -> bool {
+  align_of::<[Slot<K, V>; 3]>() <= align_of::<EmptyTable>()
+    && size_of::<[Slot<K, V>; 3]>() <= size_of::<EmptyTable>()
 }
 
 #[inline(always)]
-fn is_dummy<K:Key>(shift: usize) -> bool {
+fn is_uninit<K:Key>(shift: usize) -> bool {
   shift == initial_shift::<K>()
 }
 
@@ -220,16 +225,27 @@ impl<K: Key, V> NewMap<K, V> {
     self.len() == 0
   }
 
+  /// Prefetchs a key.
+  #[inline(always)]
+  pub fn prefetch(&self, key: K) {
+    let t = self.table.cast_mut();
+    let s = self.shift;
+    let m = self.seed;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    let h = hash(key, m);
+    let k = slot(h, s);
+    let _: K::Word = unsafe { slot_hash(t.add(k)).read_volatile() };
+  }
+
   /// Returns whether the map contains the given key.
   #[inline(always)]
   pub fn contains_key(&self, key: K) -> bool {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return false;
     }
     let k = slot(h, s);
@@ -246,19 +262,6 @@ impl<K: Key, V> NewMap<K, V> {
     x == h
   }
 
-  /// Prefetchs a key.
-  #[inline(always)]
-  pub fn prefetch(&self, key: K) {
-    let t = self.table.cast_mut();
-    let s = self.shift;
-    let m = self.seed;
-    unsafe { assert_unchecked(t.addr() != 0) };
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
-    let h = hash(key, m);
-    let k = slot(h, s);
-    let _: K::Word = unsafe { slot_hash(t.add(k)).read_volatile() };
-  }
-
   /// Returns a reference to the value associated with the given key, if
   /// present.
   #[inline(always)]
@@ -266,10 +269,9 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
     let k = slot(h, s);
@@ -296,10 +298,9 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
     let k = slot(h, s);
@@ -324,10 +325,9 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
     let k = slot(h, s);
@@ -359,7 +359,6 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let mut out = [const { None }; N];
     if N == 0 { return out }
@@ -371,7 +370,7 @@ impl<K: Key, V> NewMap<K, V> {
       }
     }
     assert!(is_disjoint);
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return out;
     }
     for i in 0 .. N {
@@ -406,10 +405,9 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       let _: *mut V = self.insert_init(h, value);
       return None;
     }
@@ -428,7 +426,7 @@ impl<K: Key, V> NewMap<K, V> {
     if x == h {
       Some(unsafe { slot_data(p).replace(value) })
     } else {
-      if is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+      if is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
         let _: *mut V = self.insert_init(h, value);
       } else {
         let r = self.slack;
@@ -567,10 +565,9 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
     let k = slot(h, s);
@@ -617,10 +614,9 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
-    if ! is_dummy_searchable::<K, V>() && is_dummy::<K>(s) {
+    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return Entry::Vacant(VacantEntry { map: self, pos: null_mut(), other_hash: K::ZERO, entry_hash: h });
     }
     let k = slot(h, s);
@@ -647,7 +643,7 @@ impl<K: Key, V> NewMap<K, V> {
     let s = self.shift;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let inserted_at =
-      if is_dummy::<K>(s) {
+      if is_uninit::<K>(s) {
         self.insert_init(entry_hash, value)
       } else {
         let r = self.slack;
@@ -677,7 +673,6 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    unsafe { assert_unchecked(t.addr() != 0) };
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     self.slack = r + 1;
     let value = unsafe { slot_data(pos).read() };
@@ -795,7 +790,7 @@ impl<K: Key, V> NewMap<K, V> {
     let s = self.shift;
     let r = self.slack;
     let z = self.limit.cast_mut();
-    if is_dummy::<K>(s) { return }
+    if is_uninit::<K>(s) { return }
     let n = capacity::<K>(s) - r;
     let d = ptr_diff(z, t);
     self.table = initial_table::<K, V>();
