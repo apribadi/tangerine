@@ -600,11 +600,10 @@ impl<K: Key, V> NewMap<K, V> {
         i = i + 1;
         let x = unsafe { slot_hash(p).read() };
         if ! (slot(x, s) < i && /* likely */ x != K::ZERO) { break }
-        let y = unsafe { slot_data(p).read() };
         unsafe { slot_hash(a).write(x) };
-        unsafe { slot_data(a).write(y) };
+        unsafe { slot_data(a).write(slot_data(p).read()) };
         // NOTE: We could do the loop exit test here instead, with the
-        // modification that y is MaybeUninit<V>.
+        // modification that we read data as MaybeUninit<V>.
       }
       unsafe { slot_hash(a).write(K::ZERO) };
       Some(value)
@@ -691,9 +690,8 @@ impl<K: Key, V> NewMap<K, V> {
       i = i + 1;
       let x = unsafe { slot_hash(p).read() };
       if ! (slot(x, s) < i && /* likely */ x != K::ZERO) { break }
-      let y = unsafe { slot_data(p).read() };
       unsafe { slot_hash(a).write(x) };
-      unsafe { slot_data(a).write(y) };
+      unsafe { slot_data(a).write(slot_data(p).read()) };
     }
     unsafe { slot_hash(a).write(K::ZERO) };
     value
