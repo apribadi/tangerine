@@ -2,7 +2,7 @@
 
 mod maps;
 
-use crate::maps::BranchyIntMap;
+// use crate::maps::BranchyIntMap;
 use crate::maps::BranchyNewMap;
 use crate::maps::Map;
 use divan::Bencher;
@@ -54,21 +54,40 @@ fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
   r
 }
 
-fn key_seq(n: u32) -> NonZeroU32 {
-  let n = n | 0x8000_0000;
-  let n = n.rotate_left(16);
-  unsafe { NonZeroU32::new_unchecked(n) }
+struct KeyGen {
+  state: NonZeroU32,
+}
+
+impl KeyGen {
+  const fn new() -> Self {
+    Self { state: NonZeroU32::MIN }
+  }
+
+  fn peek(&self) -> NonZeroU32 {
+    self.state
+  }
+
+  fn next(&mut self) -> NonZeroU32 {
+    let s = self.state;
+    let x = s.get().wrapping_mul(5);
+    self.state = unsafe { NonZeroU32::new_unchecked(x) };
+    s
+  }
+
+  fn reset(&mut self) {
+    self.state = NonZeroU32::MIN;
+  }
 }
 
 #[divan::bench(
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    ahash::AHashMap<NonZeroU32, NonZeroU32>,
+    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
+    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
-    BranchyIntMap<NonZeroU32>,
+    // BranchyIntMap<NonZeroU32>,
     BranchyNewMap<NonZeroU32>,
   ])]
 fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -78,7 +97,7 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
       for &mut (ref mut t, ref mut k) in t.iter_mut() {
         for _ in 0 .. 500 {
           match t.get(*k) {
-            None => { *k = key_seq(0); }
+            None => { *k = NonZeroU32::MIN; }
             Some(&y) => { *k = y; }
           }
         }
@@ -89,12 +108,11 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   let mut t =
     sizes.map(|m| {
       let mut t = T::new();
-      let mut k = 0;
+      let mut k = KeyGen::new();
       for _ in 0 .. m {
-        let _ = t.insert(key_seq(k), key_seq(k + 1));
-        k = k + 1;
+        let _ = t.insert(k.next(), k.peek());
       }
-      (t, key_seq(0))
+      (t, NonZeroU32::MIN)
     });
   bencher.bench_local(|| go(black_box(&mut t)));
 }
@@ -103,23 +121,23 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    ahash::AHashMap<NonZeroU32, NonZeroU32>,
+    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
+    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
-    BranchyIntMap<NonZeroU32>,
+    // BranchyIntMap<NonZeroU32>,
     BranchyNewMap<NonZeroU32>,
   ])]
 fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
-  fn go<T: Map<NonZeroU32>>(t: &mut [(T, u32)]) -> u32 {
+  fn go<T: Map<NonZeroU32>>(t: &mut [(T, KeyGen)]) -> u32 {
     let mut z = 0;
     for _ in 0 .. 200 {
       for &mut (ref mut t, ref mut k) in t.iter_mut() {
         for _ in 0 .. 500 {
-          match t.get(key_seq(*k)) {
-            None => { *k = 0; }
-            Some(&y) => { *k = *k + 1; z ^= y.get(); }
+          match t.get(k.next()) {
+            None => { k.reset(); }
+            Some(&y) => { z ^= y.get(); }
           }
         }
       }
@@ -130,12 +148,11 @@ fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
   let mut t =
     sizes.map(|m| {
       let mut t = T::new();
-      let mut k = 0;
+      let mut k = KeyGen::new();
       for _ in 0 .. m {
-        let _ = t.insert(key_seq(k), key_seq(k + 1));
-        k = k + 1;
+        let _ = t.insert(k.next(), k.peek());
       }
-      (t, 0)
+      (t, KeyGen::new())
     });
   bencher.bench_local(|| go(black_box(&mut t)));
 }
@@ -144,14 +161,14 @@ fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    ahash::AHashMap<NonZeroU32, NonZeroU32>,
+    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
+    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
-  fn go<T: Map<NonZeroU32>>(t: &mut [(T, u32, usize, usize)]) {
+  fn go<T: Map<NonZeroU32>>(t: &mut [(T, KeyGen, usize, usize)]) {
     for _ in 0 .. 200 {
       for &mut (ref mut t, ref mut k, ref mut n, limit) in t.iter_mut() {
         for _ in 0 .. 500 {
@@ -159,8 +176,7 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
             *t = T::new();
             *n = 0;
           }
-          let _ = t.insert(key_seq(*k), NonZeroU32::MIN);
-          *k = *k + 1;
+          let _ = t.insert(k.next(), NonZeroU32::MIN);
           *n = *n + 1;
         }
       }
@@ -170,10 +186,9 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
   let mut t =
     sizes.map(|m| {
       let mut t = T::new();
-      let mut k = 0;
+      let mut k = KeyGen::new();
       for _ in 0 .. m.saturating_sub(100_000) {
-        let _ = t.insert(key_seq(k), NonZeroU32::MIN);
-        k = k + 1;
+        let _ = t.insert(k.next(), NonZeroU32::MIN);
       }
       let n = t.len();
       (t, k, n, m)
@@ -185,22 +200,20 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    ahash::AHashMap<NonZeroU32, NonZeroU32>,
+    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
+    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
-  fn go<T: Map<NonZeroU32>>(t: &mut [(T, u32, u32)]) -> u32 {
+  fn go<T: Map<NonZeroU32>>(t: &mut [(T, KeyGen, KeyGen)]) -> u32 {
     let mut z = 0;
     for _ in 0 .. 200 {
-      for &mut (ref mut t, ref mut i, ref mut j) in t.iter_mut() {
+      for &mut (ref mut t, ref mut a, ref mut b) in t.iter_mut() {
         for _ in 0 .. 250 {
-          if let Some(y) = t.remove(key_seq(*i)) { z ^= y.get(); }
-          let _ = t.insert(key_seq(*j), key_seq(*j));
-          *i = *i + 1;
-          *j = *j + 1;
+          if let Some(y) = t.remove(a.next()) { z ^= y.get(); }
+          let _ = t.insert(b.next(), b.peek());
         }
       }
     }
@@ -210,12 +223,11 @@ fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
   let mut t =
     sizes.map(|m| {
       let mut t = T::new();
-      let mut k = 0;
+      let mut b = KeyGen::new();
       for _ in 0 .. m {
-        let _ = t.insert(key_seq(k), key_seq(k));
-        k = k + 1;
+        let _ = t.insert(b.next(), b.peek());
       }
-      (t, 0, k)
+      (t, KeyGen::new(), b)
     });
   bencher.bench_local(|| go(black_box(&mut t)));
 }
@@ -223,12 +235,12 @@ fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
 #[divan::bench(
   sample_count = SAMPLE_COUNT,
   types = [
-    ahash::AHashMap<NonZeroU32, NonZeroU32>,
+    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
+    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
   ])]
-fn bench_for_each_key<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
+fn bench_iter_key<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
   #[inline(never)]
   fn go<T: Map<NonZeroU32>>(t: &mut T) -> u32 {
     let mut z = 0;
@@ -236,19 +248,20 @@ fn bench_for_each_key<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
     z
   }
   let mut t = T::new();
-  for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), key_seq(i)); }
+  let mut k = KeyGen::new();
+  for _ in 0 .. 1_000_000 { let _ = t.insert(k.next(), k.peek()); }
   bencher.bench_local(|| go(black_box(&mut t)));
 }
 
 #[divan::bench(
   sample_count = SAMPLE_COUNT,
   types = [
-    ahash::AHashMap<NonZeroU32, NonZeroU32>,
+    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
+    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
   ])]
-fn bench_for_each_value<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
+fn bench_iter_value<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
   #[inline(never)]
   fn go<T: Map<NonZeroU32>>(t: &mut T) -> u32 {
     let mut z = 0;
@@ -256,6 +269,7 @@ fn bench_for_each_value<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
     z
   }
   let mut t = T::new();
-  for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), key_seq(i)); }
+  let mut k = KeyGen::new();
+  for _ in 0 .. 1_000_000 { let _ = t.insert(k.next(), k.peek()); }
   bencher.bench_local(|| go(black_box(&mut t)));
 }

@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::num::NonZeroU32;
 
 pub(crate) trait Map<T> {
