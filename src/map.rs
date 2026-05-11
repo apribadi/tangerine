@@ -145,9 +145,9 @@ fn is_uninit<K:Key>(shift: usize) -> bool {
 
 #[inline(always)]
 fn capacity<K: Key>(s: usize) -> usize {
-  let n = ! (! K::Word::ZERO >> 1);
+  let n = ! (! K::ZERO >> 1);
   let n = n >> s;
-  let n = n | K::Word::asr(n, K::Word::BITS - 1);
+  let n = n | K::Word::asr(n, K::BITS - 1);
   K::Word::into_usize(n)
 }
 
