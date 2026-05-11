@@ -375,3 +375,83 @@ fn test_displacement_histogram() {
       9: 0
   "#]].assert_eq(&s.drain(..).as_str());
 }
+
+use std::num::NonZeroU32;
+
+fn key_seq(n: u32) -> NonZeroU32 {
+  let n = n | 0x8000_0000;
+  let n = n.rotate_left(16);
+  unsafe { NonZeroU32::new_unchecked(n) }
+}
+
+struct KeyGen {
+  state: NonZeroU32,
+}
+
+impl KeyGen {
+  const fn new() -> Self {
+    Self { state: NonZeroU32::MIN }
+  }
+
+  fn peek(&self) -> NonZeroU32 {
+    self.state
+  }
+
+  fn next(&mut self) -> NonZeroU32 {
+    let s = self.state;
+    let x = s.get().wrapping_mul(5);
+    self.state = unsafe { NonZeroU32::new_unchecked(x) };
+    s
+  }
+}
+
+#[test]
+fn test_foo() {
+  let mut s = String::new();
+  // let mut g = Rng::new(NonZeroU128::MIN);
+  // let mut g = Rng::new(NonZeroU128::new(2).unwrap());
+  // let mut t = IntMap::with_seed(&mut g);
+  let mut t = IntMap::new();
+
+  for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), key_seq(i)); }
+
+  for (i, &c) in internal::displacement_histogram(&t).iter().enumerate() {
+    write!(s, "{}: {}\n", i, c);
+  }
+
+  write!(s, "\n");
+
+  t.reset();
+
+  let mut k = KeyGen::new();
+  for _ in 0 .. 1_000_000 { let _ = t.insert(k.next(), k.peek()); }
+
+  for (i, &c) in internal::displacement_histogram(&t).iter().enumerate() {
+    write!(s, "{}: {}\n", i, c);
+  }
+
+  expect![[r#"
+      0: 840349
+      1: 154756
+      2: 4895
+      3: 0
+      4: 0
+      5: 0
+      6: 0
+      7: 0
+      8: 0
+      9: 0
+
+      0: 671695
+      1: 236988
+      2: 67011
+      3: 17924
+      4: 4689
+      5: 1180
+      6: 365
+      7: 93
+      8: 33
+      9: 22
+  "#]].assert_eq(&s.drain(..).as_str());
+
+}

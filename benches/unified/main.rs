@@ -231,6 +231,12 @@ fn bench_iter_key<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
   bencher.bench_local(|| go(black_box(&mut t)));
 }
 
+fn key_seq(n: u32) -> NonZeroU32 {
+  let n = n | 0x8000_0000;
+  let n = n.rotate_left(16);
+  unsafe { NonZeroU32::new_unchecked(n) }
+}
+
 #[divan::bench(
   sample_count = SAMPLE_COUNT,
   types = [
@@ -245,7 +251,8 @@ fn bench_iter_value<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
     z
   }
   let mut t = T::new();
-  let mut k = KeyGen::new();
-  for _ in 0 .. 1_000_000 { let _ = t.insert(k.next(), k.peek()); }
+  // let mut k = KeyGen::new();
+  // for _ in 0 .. 1_000_000 { let _ = t.insert(k.next(), k.peek()); }
+  for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), key_seq(i)); }
   bencher.bench_local(|| go(black_box(&mut t)));
 }

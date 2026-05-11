@@ -29,8 +29,8 @@ pub struct IntMap<K: Key, V> {
   shift: usize,
   slack: usize,
   limit: *const Slot<K, V>,
-  seed: (K::Word, K::Word),
-  seed_inverted: (K::Word, K::Word),
+  seed: <K::Word as Word>::Seed,
+  seed_inverted: <K::Word as Word>::Seed,
 }
 
 /// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
@@ -152,49 +152,20 @@ fn capacity<K: Key>(s: usize) -> usize {
 }
 
 #[inline(always)]
-fn invert_seed<W: Word>(m: (W, W)) -> (W, W) {
-  let a = m.0;
-  let b = m.1;
-  let c = W::invert(a.wrapping_mul(b));
-  (c.wrapping_mul(a), c.wrapping_mul(b))
-}
-
-#[inline(always)]
-fn hash_word<W: Word>(x: W, m: (W, W)) -> W {
-  let a = m.0;
-  let b = m.1;
-  let x = x.wrapping_mul(a);
-  let x = x.swap_bytes();
-  let x = x.wrapping_mul(b);
-  x
-}
-
-#[inline(always)]
-fn hash<K: Key>(key: K, m: (K::Word, K::Word)) -> K::Word {
-  hash_word(K::into_word(key), m)
-}
-
-#[inline(always)]
-unsafe fn invert_hash<K: Key>(h: K::Word, m: (K::Word, K::Word)) -> K {
-  let x = hash_word(h, m);
-  unsafe { K::from_word(x) }
-}
-
-#[inline(always)]
 fn slot<W: Word>(h: W, s: usize) -> usize {
   W::into_usize(! h >> s)
 }
 
 impl<K: Key, V> IntMap<K, V> {
   #[inline(always)]
-  fn from_seed(m: (K::Word, K::Word)) -> Self {
+  fn from_seed(m: <K::Word as Word>::Seed) -> Self {
     Self {
       table: initial_table::<K, V>(),
       shift: initial_shift::<K>(),
       slack: initial_slack::<K>(),
       limit: initial_limit::<K, V>(),
       seed: m,
-      seed_inverted: invert_seed(m),
+      seed_inverted: K::Word::invert_seed(m),
     }
   }
 
@@ -232,7 +203,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    let h = hash(key, m);
+    let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return
     }
@@ -248,7 +219,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    let h = hash(key, m);
+    let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return false;
     }
@@ -274,7 +245,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    let h = hash(key, m);
+    let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
@@ -305,7 +276,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    let h = hash(key, m);
+    let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
@@ -353,7 +324,7 @@ impl<K: Key, V> IntMap<K, V> {
       return out;
     }
     for i in 0 .. N {
-      let h = hash_word(keys[i], m);
+      let h = K::Word::hash(keys[i], m);
       let k = slot(h, s);
       let a = unsafe { t.add(k) };
       let u = unsafe { slot_hash(a).read() };
@@ -385,7 +356,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    let h = hash(key, m);
+    let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       let _: *mut V = self.insert_init(h, value);
       return None;
@@ -545,7 +516,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    let h = hash(key, m);
+    let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
@@ -594,7 +565,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed;
     unsafe { assert_unchecked(s <= K::BITS - 1) };
-    let h = hash(key, m);
+    let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return Entry::Vacant(VacantEntry { map: self, pos: null_mut(), other_hash: K::ZERO, entry_hash: h });
     }
@@ -808,7 +779,7 @@ impl<K: Key, V> IntMap<K, V> {
       Iter {
         len: capacity::<K>(s) - r,
         pos: t,
-        f: move |a, x| unsafe { (invert_hash(x, m), &*slot_data(a)) }
+        f: move |a, x| unsafe { (K::invert_hash(x, m), &*slot_data(a)) }
       };
     i
   }
@@ -826,7 +797,7 @@ impl<K: Key, V> IntMap<K, V> {
       Iter {
         len: capacity::<K>(s) - r,
         pos: t,
-        f: move |a, x| unsafe { (invert_hash(x, m), &mut *slot_data(a)) }
+        f: move |a, x| unsafe { (K::invert_hash(x, m), &mut *slot_data(a)) }
       };
     i
   }
@@ -843,7 +814,7 @@ impl<K: Key, V> IntMap<K, V> {
       Iter {
         len: capacity::<K>(s) - r,
         pos: t,
-        f: move |_, x| unsafe { invert_hash(x, m) }
+        f: move |_, x| unsafe { K::invert_hash(x, m) }
       };
     i
   }
