@@ -15,70 +15,9 @@ pub(crate) trait Map<T> {
   fn for_each<F: FnMut((NonZeroU32, &T))>(&self, f: F);
 }
 
-pub(crate) struct BranchyIntMap<T>(tangerine::map::IntMap<NonZeroU32, T>);
-
-impl<T> Map<T> for BranchyIntMap<T> {
-  #[inline(always)]
-  fn new() -> Self { BranchyIntMap(tangerine::map::IntMap::new()) }
-
-  #[inline(always)]
-  fn len(&self) -> usize { self.0.len() }
-
-  #[inline(always)]
-  fn get(&self, k: NonZeroU32) -> Option<&T> { tangerine::map::internal::get_branchy(&self.0, k) }
-
-  #[inline(always)]
-  fn insert(&mut self, k: NonZeroU32, v: T) -> Option<T> { self.0.insert(k, v) }
-
-  #[inline(always)]
-  fn remove(&mut self, k: NonZeroU32) -> Option<T> { self.0.remove(k) }
-
-  fn for_each<F: FnMut((NonZeroU32, &T))>(&self, f: F) { self.0.iter().for_each(f) }
-}
-
-pub(crate) struct BranchyNewMap<T>(tangerine::new::NewMap<NonZeroU32, T>);
-
-impl<T> Map<T> for BranchyNewMap<T> {
-  #[inline(always)]
-  fn new() -> Self { BranchyNewMap(tangerine::new::NewMap::new()) }
-
-  #[inline(always)]
-  fn len(&self) -> usize { self.0.len() }
-
-  #[inline(always)]
-  fn get(&self, k: NonZeroU32) -> Option<&T> { tangerine::new::internal::get_branchy(&self.0, k) }
-
-  #[inline(always)]
-  fn insert(&mut self, k: NonZeroU32, v: T) -> Option<T> { self.0.insert(k, v) }
-
-  #[inline(always)]
-  fn remove(&mut self, k: NonZeroU32) -> Option<T> { self.0.remove(k) }
-
-  fn for_each<F: FnMut((NonZeroU32, &T))>(&self, f: F) { self.0.iter().for_each(f) }
-}
-
 impl<T> Map<T> for tangerine::map::IntMap<NonZeroU32, T> {
   #[inline(always)]
   fn new() -> Self { tangerine::map::IntMap::new() }
-
-  #[inline(always)]
-  fn len(&self) -> usize { self.len() }
-
-  #[inline(always)]
-  fn get(&self, k: NonZeroU32) -> Option<&T> { self.get(k) }
-
-  #[inline(always)]
-  fn insert(&mut self, k: NonZeroU32, v: T) -> Option<T> { self.insert(k, v) }
-
-  #[inline(always)]
-  fn remove(&mut self, k: NonZeroU32) -> Option<T> { self.remove(k) }
-
-  fn for_each<F: FnMut((NonZeroU32, &T))>(&self, f: F) { self.iter().for_each(f) }
-}
-
-impl<T> Map<T> for tangerine::new::NewMap<NonZeroU32, T> {
-  #[inline(always)]
-  fn new() -> Self { tangerine::new::NewMap::new() }
 
   #[inline(always)]
   fn len(&self) -> usize { self.len() }

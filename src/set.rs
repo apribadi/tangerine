@@ -107,12 +107,6 @@ impl<T: Key> Extend<T> for IntSet<T> {
   fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
     iter.into_iter().for_each(|x| { let _: bool = self.insert(x); });
   }
-
-  #[cfg(feature = "nightly")]
-  #[inline(always)]
-  fn extend_one(&mut self, item: T) {
-    let _: bool = self.insert(item);
-  }
 }
 
 impl<const N: usize, T: Key> From<[T; N]> for IntSet<T> {

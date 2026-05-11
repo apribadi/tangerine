@@ -2,7 +2,6 @@
 
 mod maps;
 
-use crate::maps::BranchyNewMap;
 use crate::maps::Map;
 use divan::Bencher;
 use std::hint::black_box;
@@ -77,8 +76,7 @@ impl KeyGen {
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
-    BranchyNewMap<NonZeroU32>,
+    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
@@ -112,8 +110,7 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
-    BranchyNewMap<NonZeroU32>,
+    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
@@ -149,7 +146,7 @@ fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
+    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
@@ -186,7 +183,7 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
+    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
@@ -219,7 +216,7 @@ fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
+    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_iter_key<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
   #[inline(never)]
@@ -238,7 +235,7 @@ fn bench_iter_key<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
   sample_count = SAMPLE_COUNT,
   types = [
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
+    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_iter_value<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
   #[inline(never)]

@@ -91,14 +91,10 @@ unsafe impl<T: IntoKey> private::Key for T {
   }
 }
 
-static EMPTY_U32: [u32; 3] = [0u32; 3];
-
 impl private::Word for u32 {
   const BITS: usize = 32;
 
   const ZERO: Self = 0;
-
-  const EMPTY: *const [Self; 3] = &raw const EMPTY_U32;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -150,14 +146,10 @@ impl private::Word for u32 {
   }
 }
 
-static EMPTY_U64: [u64; 3] = [0u64; 3];
-
 impl private::Word for u64 {
   const BITS: usize = 64;
 
   const ZERO: Self = 0;
-
-  const EMPTY: *const [Self; 3] = &raw const EMPTY_U64;
 
   #[inline(always)]
   fn into_usize(self) -> usize {
@@ -218,8 +210,6 @@ pub(crate) mod private {
 
     const ZERO: Self::Word = Self::Word::ZERO;
 
-    const EMPTY: *const [Self::Word; 3] = Self::Word::EMPTY;
-
     fn into_word(_: Self) -> Self::Word;
 
     unsafe fn from_word(_: Self::Word) -> Self;
@@ -236,8 +226,6 @@ pub(crate) mod private {
     const BITS: usize;
 
     const ZERO: Self;
-
-    const EMPTY: *const [Self; 3];
 
     fn into_usize(self) -> usize;
 
