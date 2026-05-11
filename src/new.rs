@@ -10,7 +10,6 @@ use alloc::alloc::handle_alloc_error;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use core::hint::assert_unchecked;
-use core::hint::cold_path;
 use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
@@ -182,13 +181,7 @@ unsafe fn invert_hash<K: Key>(h: K::Word, m: (K::Word, K::Word)) -> K {
 }
 
 #[inline(always)]
-fn slot_old<W: Word>(h: W, s: usize) -> usize {
-  W::into_usize(! h >> s)
-}
-
-#[inline(always)]
-unsafe fn slot<W: Word>(h: W, s: usize) -> usize {
-  unsafe { assert_unchecked(s <= W::BITS - 1) };
+fn slot<W: Word>(h: W, s: usize) -> usize {
   W::into_usize(! h >> s)
 }
 
@@ -238,11 +231,12 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return
     }
-    let k = unsafe { slot(h, s) };
+    let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let _: K::Word = unsafe { slot_hash(a).read_volatile() };
   }
@@ -253,11 +247,12 @@ impl<K: Key, V> NewMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed;
+    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return false;
     }
-    let k = unsafe { slot(h, s) };
+    let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
     let mut p = a;
@@ -283,31 +278,6 @@ impl<K: Key, V> NewMap<K, V> {
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
-    let k = unsafe { slot(h, s) };
-    let b = unsafe { t.add(k + 1) };
-    let v = unsafe { slot_hash(b).read() };
-    let mut p;
-    let mut x;
-    if ! (v > h) {
-      let a = unsafe { t.add(k) };
-      let u = unsafe { slot_hash(a).read() };
-      p = select_unpredictable(u > h, b, a);
-      x = select_unpredictable(u > h, v, u);
-    } else {
-      cold_path();
-      p = b;
-      loop {
-        p = unsafe { p.add(1) };
-        x = unsafe { slot_hash(p).read() };
-        if ! (x > h) { break }
-      }
-    }
-    if x != h {
-      None
-    } else {
-      Some(unsafe { &*slot_data(p) })
-    }
-    /*
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
@@ -325,7 +295,6 @@ impl<K: Key, V> NewMap<K, V> {
     } else {
       Some(unsafe { &*slot_data(p) })
     }
-    */
   }
 
   #[inline(always)]
@@ -338,7 +307,7 @@ impl<K: Key, V> NewMap<K, V> {
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
-    let k = slot_old(h, s);
+    let k = slot(h, s);
     let mut p = unsafe { t.add(k) };
     let mut x;
     loop {
@@ -365,7 +334,7 @@ impl<K: Key, V> NewMap<K, V> {
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
-    let k = slot_old(h, s);
+    let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
     let mut p = a;
@@ -410,7 +379,7 @@ impl<K: Key, V> NewMap<K, V> {
     }
     for i in 0 .. N {
       let h = hash_word(keys[i], m);
-      let k = slot_old(h, s);
+      let k = slot(h, s);
       let a = unsafe { t.add(k) };
       let u = unsafe { slot_hash(a).read() };
       let mut p = a;
@@ -446,7 +415,7 @@ impl<K: Key, V> NewMap<K, V> {
       let _: *mut V = self.insert_init(h, value);
       return None;
     }
-    let k = slot_old(h, s);
+    let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
     let mut p = a;
@@ -498,7 +467,7 @@ impl<K: Key, V> NewMap<K, V> {
     let t = unsafe { alloc(l) } as *mut Slot<K, V>;
     if t.is_null() { match handle_alloc_error(l) { } }
     for i in 0 .. d { unsafe { slot_hash(t.add(i)).write(K::ZERO) }; }
-    let k = slot_old(h, s);
+    let k = slot(h, s);
     let a = unsafe { t.add(k) };
     unsafe { slot_hash(a).write(h) };
     unsafe { slot_data(a).write(value) };
@@ -573,7 +542,7 @@ impl<K: Key, V> NewMap<K, V> {
     loop {
       let x = unsafe { slot_hash(p).read() };
       let y = unsafe { slot_data(p).cast::<MaybeUninit<V>>().read() };
-      let k = slot_old(x, new_s);
+      let k = slot(x, new_s);
       let k = select_unpredictable(i > k, i, k);
       let a = unsafe { new_t.add(k) };
       unsafe { slot_hash(a).write(x) };
@@ -585,7 +554,7 @@ impl<K: Key, V> NewMap<K, V> {
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
     // Find the newly-inserted value. Note, this was not necessarily at last_write.
-    let k = slot_old(h, new_s);
+    let k = slot(h, new_s);
     let mut p = unsafe { new_t.add(k) };
     while unsafe { slot_hash(p).read() } != h {
       p = unsafe { p.add(1) };
@@ -605,7 +574,7 @@ impl<K: Key, V> NewMap<K, V> {
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
-    let k = slot_old(h, s);
+    let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
     let mut p = a;
@@ -631,7 +600,7 @@ impl<K: Key, V> NewMap<K, V> {
         p = unsafe { p.add(1) };
         i = i + 1;
         let x = unsafe { slot_hash(p).read() };
-        if ! (slot_old(x, s) < i && /* likely */ x != K::ZERO) { break }
+        if ! (slot(x, s) < i && /* likely */ x != K::ZERO) { break }
         unsafe { slot_hash(a).write(x) };
         unsafe { slot_data(a).write(slot_data(p).read()) };
         // NOTE: We could do the loop exit test here instead, with the
@@ -654,7 +623,7 @@ impl<K: Key, V> NewMap<K, V> {
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return Entry::Vacant(VacantEntry { map: self, pos: null_mut(), other_hash: K::ZERO, entry_hash: h });
     }
-    let k = slot_old(h, s);
+    let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
     let mut p = a;
@@ -719,7 +688,7 @@ impl<K: Key, V> NewMap<K, V> {
       p = unsafe { p.add(1) };
       i = i + 1;
       let x = unsafe { slot_hash(p).read() };
-      if ! (slot_old(x, s) < i && /* likely */ x != K::ZERO) { break }
+      if ! (slot(x, s) < i && /* likely */ x != K::ZERO) { break }
       unsafe { slot_hash(a).write(x) };
       unsafe { slot_data(a).write(slot_data(p).read()) };
     }
@@ -966,7 +935,7 @@ impl<K: Key, V> NewMap<K, V> {
       p = unsafe { p.add(1) };
       i = i + 1;
       if x != K::ZERO {
-        r[usize::min(9, k - slot_old(x, s))] += 1;
+        r[usize::min(9, k - slot(x, s))] += 1;
         n = n - 1;
         if n == 0 { break }
       }

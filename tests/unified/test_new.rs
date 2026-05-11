@@ -50,6 +50,7 @@ fn test_api() {
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key);
+  write!(s, "{:?} <- t.get_disjoint_mut({:?})\n", t.get_disjoint_mut([NonZeroU64::MIN, key]), [NonZeroU64::MIN, key]);
   write!(s, "{:?} <- t.remove({:?})\n", t.remove(key), key);
   write!(s, "{:?} <- t.len()\n", t.len());
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
@@ -81,6 +82,7 @@ fn test_api() {
       true <- t.contains_key(13)
       Some(42) <- t.get(13)
       Some(42) <- t.get_mut(13)
+      [None, Some(42)] <- t.get_disjoint_mut([1, 13])
       Some(42) <- t.remove(13)
       0 <- t.len()
       true <- t.is_empty()
