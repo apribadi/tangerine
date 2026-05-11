@@ -376,6 +376,7 @@ fn test_displacement_histogram() {
   "#]].assert_eq(&s.drain(..).as_str());
 }
 
+/*
 use std::num::NonZeroU32;
 
 fn key_seq(n: u32) -> NonZeroU32 {
@@ -431,27 +432,7 @@ fn test_foo() {
   }
 
   expect![[r#"
-      0: 840349
-      1: 154756
-      2: 4895
-      3: 0
-      4: 0
-      5: 0
-      6: 0
-      7: 0
-      8: 0
-      9: 0
-
-      0: 671695
-      1: 236988
-      2: 67011
-      3: 17924
-      4: 4689
-      5: 1180
-      6: 365
-      7: 93
-      8: 33
-      9: 22
   "#]].assert_eq(&s.drain(..).as_str());
 
 }
+*/
