@@ -81,9 +81,9 @@ impl KeyGen {
 fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
   fn go<T: Map<NonZeroU32>>(t: &mut [(T, NonZeroU32)]) {
-    for _ in 0 .. 200 {
+    for _ in 0 .. 1000 {
       for &mut (ref mut t, ref mut k) in t.iter_mut() {
-        for _ in 0 .. 500 {
+        for _ in 0 .. 100 {
           match t.get(*k) {
             None => { *k = NonZeroU32::MIN; }
             Some(&y) => { *k = y; }
@@ -116,9 +116,9 @@ fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
   #[inline(never)]
   fn go<T: Map<NonZeroU32>>(t: &mut [(T, KeyGen)]) -> u32 {
     let mut z = 0;
-    for _ in 0 .. 200 {
+    for _ in 0 .. 1000 {
       for &mut (ref mut t, ref mut k) in t.iter_mut() {
-        for _ in 0 .. 500 {
+        for _ in 0 .. 100 {
           match t.get(k.next()) {
             None => { *k = KeyGen::new(); }
             Some(&y) => { z ^= y.get(); }
@@ -151,9 +151,9 @@ fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
 fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
   fn go<T: Map<NonZeroU32>>(t: &mut [(T, KeyGen, usize, usize)]) {
-    for _ in 0 .. 200 {
+    for _ in 0 .. 1000 {
       for &mut (ref mut t, ref mut k, ref mut n, limit) in t.iter_mut() {
-        for _ in 0 .. 500 {
+        for _ in 0 .. 100 {
           if *n == limit {
             *t = T::new();
             *n = 0;
