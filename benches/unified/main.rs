@@ -2,7 +2,6 @@
 
 mod maps;
 
-// use crate::maps::BranchyIntMap;
 use crate::maps::BranchyNewMap;
 use crate::maps::Map;
 use divan::Bencher;
@@ -17,8 +16,6 @@ fn main() {
 }
 
 const ARGS: &'static [usize] = &[
-  100,
-  300,
   1_000,
   3_000,
   10_000,
@@ -73,21 +70,14 @@ impl KeyGen {
     self.state = unsafe { NonZeroU32::new_unchecked(x) };
     s
   }
-
-  fn reset(&mut self) {
-    self.state = NonZeroU32::MIN;
-  }
 }
 
 #[divan::bench(
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
-    // BranchyIntMap<NonZeroU32>,
     BranchyNewMap<NonZeroU32>,
   ])]
 fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -121,11 +111,8 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
-    // BranchyIntMap<NonZeroU32>,
     BranchyNewMap<NonZeroU32>,
   ])]
 fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -136,7 +123,7 @@ fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
       for &mut (ref mut t, ref mut k) in t.iter_mut() {
         for _ in 0 .. 500 {
           match t.get(k.next()) {
-            None => { k.reset(); }
+            None => { *k = KeyGen::new(); }
             Some(&y) => { z ^= y.get(); }
           }
         }
@@ -161,9 +148,7 @@ fn bench_get_unchained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -176,7 +161,7 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
             *t = T::new();
             *n = 0;
           }
-          let _ = t.insert(k.next(), NonZeroU32::MIN);
+          let _ = t.insert(k.next(), k.peek());
           *n = *n + 1;
         }
       }
@@ -188,7 +173,7 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
       let mut t = T::new();
       let mut k = KeyGen::new();
       for _ in 0 .. m.saturating_sub(100_000) {
-        let _ = t.insert(k.next(), NonZeroU32::MIN);
+        let _ = t.insert(k.next(), k.peek());
       }
       let n = t.len();
       (t, k, n, m)
@@ -200,9 +185,7 @@ fn bench_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -235,9 +218,7 @@ fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
 #[divan::bench(
   sample_count = SAMPLE_COUNT,
   types = [
-    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_iter_key<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
@@ -256,9 +237,7 @@ fn bench_iter_key<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {
 #[divan::bench(
   sample_count = SAMPLE_COUNT,
   types = [
-    // ahash::AHashMap<NonZeroU32, NonZeroU32>,
     foldhash::HashMap<NonZeroU32, NonZeroU32>,
-    // tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::new::NewMap<NonZeroU32, NonZeroU32>,
   ])]
 fn bench_iter_value<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>) {

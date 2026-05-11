@@ -10,7 +10,7 @@ use alloc::alloc::handle_alloc_error;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use core::hint::assert_unchecked;
-use core::hint::likely;
+use core::hint::cold_path;
 use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
@@ -288,12 +288,13 @@ impl<K: Key, V> NewMap<K, V> {
     let v = unsafe { slot_hash(b).read() };
     let mut p;
     let mut x;
-    if likely(! (v > h)) {
+    if ! (v > h) {
       let a = unsafe { t.add(k) };
       let u = unsafe { slot_hash(a).read() };
       p = select_unpredictable(u > h, b, a);
       x = select_unpredictable(u > h, v, u);
     } else {
+      cold_path();
       p = b;
       loop {
         p = unsafe { p.add(1) };
