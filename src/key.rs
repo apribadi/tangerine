@@ -120,7 +120,11 @@ fn invert_u64(a: u64) -> u64 {
 }
 
 unsafe impl private::Word for u32 {
-  type Seed = (u32, u32);
+  type Seed = ((u32, u32), (u32, u32));
+
+  type Seed0 = (u32, u32);
+
+  type Seed1 = (u32, u32);
 
   const BITS: usize = 32;
 
@@ -137,31 +141,38 @@ unsafe impl private::Word for u32 {
   }
 
   #[inline(always)]
+  fn seed0(m: Self::Seed) -> Self::Seed0 {
+    m.0
+  }
+
+  #[inline(always)]
+  fn seed1(m: Self::Seed) -> Self::Seed1 {
+    m.1
+  }
+
+  #[inline(always)]
   fn seed_nondet() -> Self::Seed {
     let n = dandelion::thread_local::u64();
-    let a = n as u32;
-    let b = (n >> 32) as u32;
-    (a | 1, b | 1)
+    let a = 1 | (n as u32);
+    let b = 1 | (n >> 32) as u32;
+    let x = invert_u32(a.wrapping_mul(b));
+    let c = x.wrapping_mul(a);
+    let d = x.wrapping_mul(b);
+    ((a, b), (c, d))
   }
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
-    let n = g.next_u64();
-    let a = n as u32;
-    let b = (n >> 32) as u32;
-    (a | 1, b | 1)
+    let a = 1 | g.next_u32();
+    let b = 1 | g.next_u32();
+    let x = invert_u32(a.wrapping_mul(b));
+    let c = x.wrapping_mul(a);
+    let d = x.wrapping_mul(b);
+    ((a, b), (c, d))
   }
 
   #[inline(always)]
-  fn invert_seed(m: Self::Seed) -> Self::Seed {
-    let a = m.0;
-    let b = m.1;
-    let c = invert_u32(a.wrapping_mul(b));
-    (c.wrapping_mul(a), c.wrapping_mul(b))
-  }
-
-  #[inline(always)]
-  fn hash(x: Self, m: Self::Seed) -> Self {
+  fn hash(x: Self, m: Self::Seed0) -> Self {
     let a = m.0;
     let b = m.1;
     let x = x.wrapping_mul(a);
@@ -171,13 +182,22 @@ unsafe impl private::Word for u32 {
   }
 
   #[inline(always)]
-  fn invert_hash(x: Self, m: Self::Seed) -> Self {
-    Self::hash(x, m)
+  fn invert_hash(x: Self, m: Self::Seed1) -> Self {
+    let a = m.0;
+    let b = m.1;
+    let x = x.wrapping_mul(a);
+    let x = x.swap_bytes();
+    let x = x.wrapping_mul(b);
+    x
   }
 }
 
 unsafe impl private::Word for u64 {
-  type Seed = (u64, u64);
+  type Seed = ((u64, u64), (u64, u64));
+
+  type Seed0 = (u64, u64);
+
+  type Seed1 = (u64, u64);
 
   const BITS: usize = 64;
 
@@ -194,30 +214,38 @@ unsafe impl private::Word for u64 {
   }
 
   #[inline(always)]
+  fn seed0(m: Self::Seed) -> Self::Seed0 {
+    m.0
+  }
+
+  #[inline(always)]
+  fn seed1(m: Self::Seed) -> Self::Seed1 {
+    m.1
+  }
+
+  #[inline(always)]
   fn seed_nondet() -> Self::Seed {
     let n = dandelion::thread_local::u128();
-    let a = n as u64;
-    let b = (n >> 64) as u64;
-    (a | 1, b | 1)
+    let a = 1 | (n as u64);
+    let b = 1 | (n >> 64) as u64;
+    let x = invert_u64(a.wrapping_mul(b));
+    let c = x.wrapping_mul(a);
+    let d = x.wrapping_mul(b);
+    ((a, b), (c, d))
   }
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
-    let a = g.next_u64();
-    let b = g.next_u64();
-    (a | 1, b | 1)
+    let a = 1 | g.next_u64();
+    let b = 1 | g.next_u64();
+    let x = invert_u64(a.wrapping_mul(b));
+    let c = x.wrapping_mul(a);
+    let d = x.wrapping_mul(b);
+    ((a, b), (c, d))
   }
 
   #[inline(always)]
-  fn invert_seed(m: Self::Seed) -> Self::Seed {
-    let a = m.0;
-    let b = m.1;
-    let c = invert_u64(a.wrapping_mul(b));
-    (c.wrapping_mul(a), c.wrapping_mul(b))
-  }
-
-  #[inline(always)]
-  fn hash(x: Self, m: Self::Seed) -> Self {
+  fn hash(x: Self, m: Self::Seed0) -> Self {
     let a = m.0;
     let b = m.1;
     let x = x.wrapping_mul(a);
@@ -227,8 +255,13 @@ unsafe impl private::Word for u64 {
   }
 
   #[inline(always)]
-  fn invert_hash(x: Self, m: Self::Seed) -> Self {
-    Self::hash(x, m)
+  fn invert_hash(x: Self, m: Self::Seed1) -> Self {
+    let a = m.0;
+    let b = m.1;
+    let x = x.wrapping_mul(a);
+    let x = x.swap_bytes();
+    let x = x.wrapping_mul(b);
+    x
   }
 }
 
@@ -245,12 +278,12 @@ pub(crate) mod private {
     unsafe fn from_word(_: Self::Word) -> Self;
 
     #[inline(always)]
-    fn hash(x: Self, m: <Self::Word as Word>::Seed) -> Self::Word {
+    fn hash(x: Self, m: <Self::Word as Word>::Seed0) -> Self::Word {
       Self::Word::hash(Self::into_word(x), m)
     }
 
     #[inline(always)]
-    unsafe fn invert_hash(x: Self::Word, m: <Self::Word as Word>::Seed) -> Self {
+    unsafe fn invert_hash(x: Self::Word, m: <Self::Word as Word>::Seed1) -> Self {
       unsafe { Self::from_word(Self::Word::invert_hash(x, m)) }
     }
   }
@@ -265,6 +298,10 @@ pub(crate) mod private {
   {
     type Seed: Copy;
 
+    type Seed0: Copy;
+
+    type Seed1: Copy;
+
     const BITS: usize;
 
     const ZERO: Self;
@@ -273,14 +310,16 @@ pub(crate) mod private {
 
     fn asr(_: Self, _: usize) -> Self;
 
+    fn seed0(_: Self::Seed) -> Self::Seed0;
+
+    fn seed1(_: Self::Seed) -> Self::Seed1;
+
     fn seed_nondet() -> Self::Seed;
 
     fn seed(_: &mut impl rand_core::Rng) -> Self::Seed;
 
-    fn invert_seed(_: Self::Seed) -> Self::Seed;
+    fn hash(_: Self, _: Self::Seed0) -> Self;
 
-    fn hash(_: Self, _: Self::Seed) -> Self;
-
-    fn invert_hash(_: Self, _: Self::Seed) -> Self;
+    fn invert_hash(_: Self, _: Self::Seed1) -> Self;
   }
 }

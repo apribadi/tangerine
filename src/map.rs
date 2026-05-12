@@ -30,7 +30,6 @@ pub struct IntMap<K: Key, V> {
   slack: usize,
   limit: *const Slot<K, V>,
   seed: <K::Word as Word>::Seed,
-  seed_inverted: <K::Word as Word>::Seed,
 }
 
 /// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
@@ -165,7 +164,6 @@ impl<K: Key, V> IntMap<K, V> {
       slack: initial_slack::<K>(),
       limit: initial_limit::<K, V>(),
       seed: m,
-      seed_inverted: K::Word::invert_seed(m),
     }
   }
 
@@ -201,7 +199,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn prefetch(&self, key: K) {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed;
+    let m = K::Word::seed0(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
@@ -217,7 +215,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn contains_key(&self, key: K) -> bool {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed;
+    let m = K::Word::seed0(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
@@ -243,7 +241,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get(&self, key: K) -> Option<&V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed;
+    let m = K::Word::seed0(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
@@ -274,7 +272,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed;
+    let m = K::Word::seed0(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
@@ -308,7 +306,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed;
+    let m = K::Word::seed0(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let mut out = [const { None }; N];
     if N == 0 { return out }
@@ -354,7 +352,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed;
+    let m = K::Word::seed0(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
@@ -514,7 +512,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn remove(&mut self, key: K) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed;
+    let m = K::Word::seed0(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
@@ -563,7 +561,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed;
+    let m = K::Word::seed0(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
@@ -773,7 +771,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.seed_inverted;
+    let m = K::Word::seed1(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
@@ -791,7 +789,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.seed_inverted;
+    let m = K::Word::seed1(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
@@ -808,7 +806,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.seed_inverted;
+    let m = K::Word::seed1(self.seed);
     unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
