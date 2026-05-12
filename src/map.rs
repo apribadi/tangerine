@@ -20,6 +20,7 @@ use core::ptr::null_mut;
 use rand_core::Rng;
 
 use crate::key::Key;
+use crate::key::private::Hash;
 use crate::key::private::Word;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
@@ -29,7 +30,7 @@ pub struct IntMap<K: Key, V> {
   shift: usize,
   slack: usize,
   limit: *const Slot<K, V>,
-  seed: <K::Word as Word>::Seed,
+  seed: <K::Word as Hash>::Seed,
 }
 
 /// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
@@ -157,7 +158,7 @@ fn slot<W: Word>(h: W, s: usize) -> usize {
 
 impl<K: Key, V> IntMap<K, V> {
   #[inline(always)]
-  fn from_seed(m: <K::Word as Word>::Seed) -> Self {
+  fn from_seed(m: <K::Word as Hash>::Seed) -> Self {
     Self {
       table: initial_table::<K, V>(),
       shift: initial_shift::<K>(),

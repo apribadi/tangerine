@@ -1,6 +1,7 @@
 //! This module provides traits for hashable keys representable as [`NonZeroU32`]
 //! or [`NonZeroU64`].
 
+use core::cfg_select;
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 use rand_core::Rng;
@@ -119,26 +120,12 @@ fn invert_u64(a: u64) -> u64 {
   x
 }
 
-unsafe impl private::Word for u32 {
+unsafe impl private::Hash for u32 {
   type Seed = ((u32, u32), (u32, u32));
 
   type Seed0 = (u32, u32);
 
   type Seed1 = (u32, u32);
-
-  const BITS: usize = 32;
-
-  const ZERO: Self = 0;
-
-  #[inline(always)]
-  fn into_usize(self) -> usize {
-    self as usize
-  }
-
-  #[inline(always)]
-  fn asr(x: Self, s: usize) -> Self {
-    ((x as i32) >> s) as u32
-  }
 
   #[inline(always)]
   fn seed0(m: Self::Seed) -> Self::Seed0 {
@@ -192,26 +179,12 @@ unsafe impl private::Word for u32 {
   }
 }
 
-unsafe impl private::Word for u64 {
+unsafe impl private::Hash for u64 {
   type Seed = ((u64, u64), (u64, u64));
 
   type Seed0 = (u64, u64);
 
   type Seed1 = (u64, u64);
-
-  const BITS: usize = 64;
-
-  const ZERO: Self = 0;
-
-  #[inline(always)]
-  fn into_usize(self) -> usize {
-    self as usize
-  }
-
-  #[inline(always)]
-  fn asr(x: Self, s: usize) -> Self {
-    ((x as i64) >> s) as u64
-  }
 
   #[inline(always)]
   fn seed0(m: Self::Seed) -> Self::Seed0 {
@@ -265,6 +238,38 @@ unsafe impl private::Word for u64 {
   }
 }
 
+unsafe impl private::Word for u32 {
+  const BITS: usize = 32;
+
+  const ZERO: Self = 0;
+
+  #[inline(always)]
+  fn into_usize(self) -> usize {
+    self as usize
+  }
+
+  #[inline(always)]
+  fn asr(x: Self, s: usize) -> Self {
+    ((x as i32) >> s) as u32
+  }
+}
+
+unsafe impl private::Word for u64 {
+  const BITS: usize = 64;
+
+  const ZERO: Self = 0;
+
+  #[inline(always)]
+  fn into_usize(self) -> usize {
+    self as usize
+  }
+
+  #[inline(always)]
+  fn asr(x: Self, s: usize) -> Self {
+    ((x as i64) >> s) as u64
+  }
+}
+
 pub(crate) mod private {
   pub(crate) unsafe trait Key: Sized {
     type Word: Word;
@@ -278,37 +283,22 @@ pub(crate) mod private {
     unsafe fn from_word(_: Self::Word) -> Self;
 
     #[inline(always)]
-    fn hash(x: Self, m: <Self::Word as Word>::Seed0) -> Self::Word {
+    fn hash(x: Self, m: <Self::Word as Hash>::Seed0) -> Self::Word {
       Self::Word::hash(Self::into_word(x), m)
     }
 
     #[inline(always)]
-    unsafe fn invert_hash(x: Self::Word, m: <Self::Word as Word>::Seed1) -> Self {
+    unsafe fn invert_hash(x: Self::Word, m: <Self::Word as Hash>::Seed1) -> Self {
       unsafe { Self::from_word(Self::Word::invert_hash(x, m)) }
     }
   }
 
-  pub(crate) unsafe trait Word:
-    Copy
-    + Ord
-    + core::ops::Add<Self, Output = Self>
-    + core::ops::BitOr<Self, Output = Self>
-    + core::ops::Not<Output = Self>
-    + core::ops::Shr<usize, Output = Self>
-  {
+  pub(crate) unsafe trait Hash {
     type Seed: Copy;
 
     type Seed0: Copy;
 
     type Seed1: Copy;
-
-    const BITS: usize;
-
-    const ZERO: Self;
-
-    fn into_usize(self) -> usize;
-
-    fn asr(_: Self, _: usize) -> Self;
 
     fn seed0(_: Self::Seed) -> Self::Seed0;
 
@@ -321,5 +311,23 @@ pub(crate) mod private {
     fn hash(_: Self, _: Self::Seed0) -> Self;
 
     fn invert_hash(_: Self, _: Self::Seed1) -> Self;
+  }
+
+  pub(crate) unsafe trait Word:
+    Copy
+    + Ord
+    + core::ops::Add<Self, Output = Self>
+    + core::ops::BitOr<Self, Output = Self>
+    + core::ops::Not<Output = Self>
+    + core::ops::Shr<usize, Output = Self>
+    + Hash
+  {
+    const BITS: usize;
+
+    const ZERO: Self;
+
+    fn into_usize(self) -> usize;
+
+    fn asr(_: Self, _: usize) -> Self;
   }
 }
