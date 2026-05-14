@@ -364,7 +364,6 @@ fn test_hash() {
 }
 */
 
-/*
 fn key_seq(n: u32) -> NonZeroU32 {
   let n = n | 0x8000_0000;
   let n = n.rotate_left(16);
@@ -421,4 +420,3 @@ fn test_foo() {
   "#]].assert_eq(&s.drain(..).as_str());
 
 }
-*/

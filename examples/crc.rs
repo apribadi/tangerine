@@ -17,11 +17,6 @@ fn vmull_p64(x: u64, y: u64) -> u128 {
 }
 
 #[inline(never)]
-fn clmul32(x: u32, y: u32) -> u64 {
-  vmull_p64(x as u64, y as u64) as u64
-}
-
-#[inline(never)]
 fn uncrc32w(x: u32) -> u32 {
   crc32cd(0, vmull_p64(x as u64, 0xc915_ea3b) as u64)
 }
