@@ -362,9 +362,9 @@ fn test_hash() {
       0x54cdd1e3
   "#]].assert_eq(&s.drain(..).as_str());
 }
+*/
 
-use std::num::NonZeroU32;
-
+/*
 fn key_seq(n: u32) -> NonZeroU32 {
   let n = n | 0x8000_0000;
   let n = n.rotate_left(16);

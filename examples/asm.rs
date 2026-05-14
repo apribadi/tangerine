@@ -109,17 +109,23 @@ pub fn clone(t: &IntMap<NonZeroU32, NonZeroU64>) -> IntMap<NonZeroU32, NonZeroU6
   t.clone()
 }
 
-pub fn iter_fold(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
+pub fn iter_keys_loop(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u32 {
+  let mut x = 0u32;
+  for y in t.keys() { x ^= y.get(); }
+  x
+}
+
+pub fn iter_values_fold(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
   t.values().fold(0, |x, &y| x ^ y.get())
 }
 
-pub fn iter_for_each(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
+pub fn iter_values_for_each(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
   let mut x = 0u64;
   t.values().for_each(|&y| { x ^= y.get(); });
   x
 }
 
-pub fn iter_loop(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
+pub fn iter_values_loop(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
   let mut x = 0u64;
   for &y in t.values() { x ^= y.get(); }
   x
