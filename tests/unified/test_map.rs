@@ -3,7 +3,7 @@
 use dandelion::Rng;
 use expect_test::expect;
 use std::fmt::Write;
-use std::num::NonZeroU64;
+use std::num::NonZeroU32;
 use std::num::NonZeroU128;
 use std::write;
 use tangerine::map::IntMap;
@@ -14,7 +14,7 @@ use tangerine::map::internal;
 fn test_lifetime() {
   let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::with_seed(&mut g);
-  let key = NonZeroU64::new(13).unwrap();
+  let key = NonZeroU32::new(13).unwrap();
   t.insert(key, 1u64);
   let mut i = t.keys();
   let _ = i.next();
@@ -32,7 +32,7 @@ fn test_api() {
   t.clear();
   t.reset();
 
-  let key = NonZeroU64::new(13).unwrap();
+  let key = NonZeroU32::new(13).unwrap();
 
   write!(s, "{:?} <- t.len()\n", t.len());
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
@@ -50,7 +50,7 @@ fn test_api() {
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key);
-  write!(s, "{:?} <- t.get_disjoint_mut({:?})\n", t.get_disjoint_mut([NonZeroU64::MIN, key]), [NonZeroU64::MIN, key]);
+  write!(s, "{:?} <- t.get_disjoint_mut({:?})\n", t.get_disjoint_mut([NonZeroU32::MIN, key]), [NonZeroU32::MIN, key]);
   write!(s, "{:?} <- t.remove({:?})\n", t.remove(key), key);
   write!(s, "{:?} <- t.len()\n", t.len());
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
@@ -90,7 +90,7 @@ fn test_api() {
       None <- t.get(13)
       20 <- internal::num_slots(&t))
       0.0 <- internal::load_factor(&t))
-      320 <- internal::allocation_size(&t))
+      160 <- internal::allocation_size(&t))
   "#]].assert_eq(s.drain(..).as_str());
 }
 
@@ -98,9 +98,9 @@ fn test_api() {
 fn test_empty() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
-  let mut t = IntMap::<NonZeroU64, u64>::with_seed(&mut g);
+  let mut t = IntMap::<NonZeroU32, u64>::with_seed(&mut g);
 
-  let key = NonZeroU64::new(13).unwrap();
+  let key = NonZeroU32::new(13).unwrap();
 
   write!(s, "{:?} <- t.len()\n", t.len());
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
@@ -126,7 +126,7 @@ fn test_iter() {
   let mut t = IntMap::with_seed(&mut g);
 
   for i in 1 ..= 10 {
-    let k = NonZeroU64::new(i).unwrap();
+    let k = NonZeroU32::new(i).unwrap();
     let _ = t.insert(k, 10 * i);
   }
 
@@ -135,7 +135,7 @@ fn test_iter() {
   write!(s, "allocation_size = {}\n", internal::allocation_size(&t));
 
   let values = t.values();
-  let _ = t.get(NonZeroU64::new(1).unwrap());
+  let _ = t.get(NonZeroU32::MIN);
   let mut values = values.collect::<Box<[_]>>();
   values.sort();
 
@@ -144,7 +144,7 @@ fn test_iter() {
   expect![[r#"
       num_slots = 40
       load = 0.25
-      allocation_size = 640
+      allocation_size = 320
       [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
   "#]].assert_eq(&s.drain(..).as_str());
 
@@ -162,7 +162,7 @@ fn test_1() {
   let mut t = IntMap::with_seed(&mut g);
 
   for i in 1 ..= 100 {
-    let k = NonZeroU64::new(i).unwrap();
+    let k = NonZeroU32::new(i).unwrap();
     let _ = t.insert(k, 10 * i);
   }
 
@@ -174,13 +174,13 @@ fn test_1() {
   write!(s, "allocation_size = {}\n", internal::allocation_size(&t));
 
   for i in 1 ..= 100 {
-    let k = NonZeroU64::new(i).unwrap();
+    let k = NonZeroU32::new(i).unwrap();
     assert!(t.contains_key(k));
   }
 
   for i in 1 ..= 100 {
     if i & 1 == 0 {
-      let k = NonZeroU64::new(i).unwrap();
+      let k = NonZeroU32::new(i).unwrap();
       assert!(t.remove(k).is_some());
     }
   }
@@ -191,7 +191,7 @@ fn test_1() {
   write!(s, "allocation_size = {}\n", internal::allocation_size(&t));
 
   for i in 1 ..= 100 {
-    let k = NonZeroU64::new(i).unwrap();
+    let k = NonZeroU32::new(i).unwrap();
     write!(s, "{}: {:?}\n", k, t.get(k));
   }
 
@@ -199,11 +199,11 @@ fn test_1() {
       len = 100
       num_slots = 264
       load = 0.3787878787878788
-      allocation_size = 4224
+      allocation_size = 2112
       len = 50
       num_slots = 264
       load = 0.1893939393939394
-      allocation_size = 4224
+      allocation_size = 2112
       1: Some(10)
       2: None
       3: Some(30)
@@ -307,39 +307,6 @@ fn test_1() {
   "#]].assert_eq(&s);
 }
 
-fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
-  let n: [usize; 10] = [
-    500,
-    535,
-    574,
-    615,
-    659,
-    707,
-    757,
-    812,
-    870,
-    933,
-  ];
-  let mut a = 0;
-  for &n in &n { a += n; }
-  let mut r = [0; 10];
-  let mut b = 0;
-  for i in 0 .. 9 { r[i] = n[i] * working_set / a; b += r[i]; }
-  r[9] = working_set - b;
-  r
-}
-
-#[test]
-fn test_working_set() {
-  let mut s = String::new();
-  write!(s, "{:?}\n", sizes_from_working_set(10_000));
-  write!(s, "{:?}\n", sizes_from_working_set(10_000).iter().sum::<usize>());
-  expect![[r#"
-      [718, 768, 824, 883, 946, 1015, 1087, 1166, 1249, 1344]
-      10000
-  "#]].assert_eq(&s.drain(..).as_str());
-}
-
 #[test]
 fn test_displacement_histogram() {
   let mut s = String::new();
@@ -347,7 +314,7 @@ fn test_displacement_histogram() {
   let mut t = IntMap::with_seed(&mut g);
 
   for i in 1 ..= 128 {
-    let k = NonZeroU64::new(i).unwrap();
+    let k = NonZeroU32::new(i).unwrap();
     let _ = t.insert(k, ());
   }
 
@@ -363,8 +330,8 @@ fn test_displacement_histogram() {
       num_slots = 264
       len = 128
       load_factor = 0.48484848484848486
-      0: 87
-      1: 32
+      0: 90
+      1: 29
       2: 8
       3: 1
       4: 0
@@ -377,6 +344,25 @@ fn test_displacement_histogram() {
 }
 
 /*
+#[test]
+fn test_hash() {
+  let mut s = String::new();
+  let mut g = Rng::new(NonZeroU128::MIN);
+
+  let m = tangerine::key::internal::seed32(&mut g);
+  write!(s, "{:#x}\n", tangerine::key::internal::hash32(0, m));
+  write!(s, "{:#x}\n", tangerine::key::internal::hash32(1, m));
+  write!(s, "{:#x}\n", tangerine::key::internal::hash32(2, m));
+  write!(s, "{:#x}\n", tangerine::key::internal::hash32(3, m));
+
+  expect![[r#"
+      0x0
+      0x72e4aa68
+      0x4905ce7b
+      0x54cdd1e3
+  "#]].assert_eq(&s.drain(..).as_str());
+}
+
 use std::num::NonZeroU32;
 
 fn key_seq(n: u32) -> NonZeroU32 {

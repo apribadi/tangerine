@@ -92,6 +92,7 @@ unsafe impl<T: IntoKey> private::Key for T {
   }
 }
 
+#[allow(dead_code)]
 #[inline(always)]
 fn invert_u32(a: u32) -> u32 {
   // https://jeffhurchalla.com/2022/04/25/a-faster-multiplicative-inverse-mod-a-power-of-2/
@@ -105,6 +106,7 @@ fn invert_u32(a: u32) -> u32 {
   x
 }
 
+#[allow(dead_code)]
 #[inline(always)]
 fn invert_u64(a: u64) -> u64 {
   // https://arxiv.org/abs/2204.04342
@@ -120,62 +122,126 @@ fn invert_u64(a: u64) -> u64 {
   x
 }
 
-unsafe impl private::Hash for u32 {
-  type Seed = ((u32, u32), (u32, u32));
+cfg_select! {
+  all(target_arch = "aarch64", target_feature = "crc") => {
+    #[inline(always)]
+    fn crc32cw(a: u32, x: u32) -> u32 {
+      unsafe { core::arch::aarch64::__crc32cw(a, x) }
+    }
 
-  type Seed0 = (u32, u32);
+    #[inline(always)]
+    fn crc32cd(a: u32, x: u64) -> u32 {
+      unsafe { core::arch::aarch64::__crc32cd(a, x) }
+    }
 
-  type Seed1 = (u32, u32);
+    #[inline(always)]
+    fn vmull_p64(x: u64, y: u64) -> u128 {
+      // NOTE: not supported by Miri
+      unsafe { core::arch::aarch64::vmull_p64(x, y) }
+    }
 
-  #[inline(always)]
-  fn seed0(m: Self::Seed) -> Self::Seed0 {
-    m.0
+    unsafe impl private::Hash for u32 {
+      type Seed = (u32, u32);
+
+      type Seed0 = u32;
+
+      type Seed1 = u32;
+
+      #[inline(always)]
+      fn seed0(m: Self::Seed) -> Self::Seed0 {
+        m.0
+      }
+
+      #[inline(always)]
+      fn seed1(m: Self::Seed) -> Self::Seed1 {
+        m.1
+      }
+
+      #[inline(always)]
+      fn seed_nondet() -> Self::Seed {
+        let a = 1 | dandelion::thread_local::u32();
+        let b = invert_u32(a);
+        (a, b)
+      }
+
+      #[inline(always)]
+      fn seed(g: &mut impl Rng) -> Self::Seed {
+        let a = 1 | g.next_u32();
+        let b = invert_u32(a);
+        (a, b)
+      }
+
+      #[inline(always)]
+      fn hash(x: Self, m: Self::Seed0) -> Self {
+        crc32cw(0, x).wrapping_mul(m)
+      }
+
+      #[inline(always)]
+      fn invert_hash(x: Self, m: Self::Seed1) -> Self {
+        crc32cd(0, vmull_p64(x.wrapping_mul(m) as u64, 0xc915_ea3b) as u64)
+      }
+    }
   }
+  _ => {
+    unsafe impl private::Hash for u32 {
+      type Seed = ((u32, u32), (u32, u32));
 
-  #[inline(always)]
-  fn seed1(m: Self::Seed) -> Self::Seed1 {
-    m.1
-  }
+      type Seed0 = (u32, u32);
 
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    let n = dandelion::thread_local::u64();
-    let a = 1 | (n as u32);
-    let b = 1 | (n >> 32) as u32;
-    let x = invert_u32(a.wrapping_mul(b));
-    let c = x.wrapping_mul(a);
-    let d = x.wrapping_mul(b);
-    ((a, b), (c, d))
-  }
+      type Seed1 = (u32, u32);
 
-  #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
-    let a = 1 | g.next_u32();
-    let b = 1 | g.next_u32();
-    let x = invert_u32(a.wrapping_mul(b));
-    let c = x.wrapping_mul(a);
-    let d = x.wrapping_mul(b);
-    ((a, b), (c, d))
-  }
+      #[inline(always)]
+      fn seed0(m: Self::Seed) -> Self::Seed0 {
+        m.0
+      }
 
-  #[inline(always)]
-  fn hash(x: Self, m: Self::Seed0) -> Self {
-    let a = m.0;
-    let b = m.1;
-    let x = x.wrapping_mul(a);
-    let x = x.swap_bytes();
-    let x = x.wrapping_mul(b);
-    x
-  }
+      #[inline(always)]
+      fn seed1(m: Self::Seed) -> Self::Seed1 {
+        m.1
+      }
 
-  #[inline(always)]
-  fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-    let a = m.0;
-    let b = m.1;
-    let x = x.wrapping_mul(a);
-    let x = x.swap_bytes();
-    let x = x.wrapping_mul(b);
-    x
+      #[inline(always)]
+      fn seed_nondet() -> Self::Seed {
+        let n = dandelion::thread_local::u64();
+        let a = 1 | (n as u32);
+        let b = 1 | (n >> 32) as u32;
+        let x = invert_u32(a.wrapping_mul(b));
+        let c = x.wrapping_mul(a);
+        let d = x.wrapping_mul(b);
+        ((a, b), (c, d))
+      }
+
+      #[inline(always)]
+      fn seed(g: &mut impl Rng) -> Self::Seed {
+        let n = g.next_u64();
+        let a = 1 | (n as u32);
+        let b = 1 | (n >> 32) as u32;
+        let x = invert_u32(a.wrapping_mul(b));
+        let c = x.wrapping_mul(a);
+        let d = x.wrapping_mul(b);
+        ((a, b), (c, d))
+      }
+
+      #[inline(always)]
+      fn hash(x: Self, m: Self::Seed0) -> Self {
+        let a = m.0;
+        let b = m.1;
+        let x = x.wrapping_mul(a);
+        let x = x.swap_bytes();
+        let x = x.wrapping_mul(b);
+        x
+      }
+
+      #[inline(always)]
+      fn invert_hash(x: Self, m: Self::Seed1) -> Self {
+        let a = m.0;
+        let b = m.1;
+        let x = x.wrapping_mul(a);
+        let x = x.swap_bytes();
+        let x = x.wrapping_mul(b);
+        x
+      }
+    }
   }
 }
 
@@ -244,13 +310,13 @@ unsafe impl private::Word for u32 {
   const ZERO: Self = 0;
 
   #[inline(always)]
-  fn into_usize(self) -> usize {
-    self as usize
+  fn asr(x: Self, s: usize) -> Self {
+    ((x as i32) >> s) as u32
   }
 
   #[inline(always)]
-  fn asr(x: Self, s: usize) -> Self {
-    ((x as i32) >> s) as u32
+  fn into_usize(self) -> usize {
+    self as usize
   }
 }
 
@@ -260,19 +326,19 @@ unsafe impl private::Word for u64 {
   const ZERO: Self = 0;
 
   #[inline(always)]
-  fn into_usize(self) -> usize {
-    self as usize
+  fn asr(x: Self, s: usize) -> Self {
+    ((x as i64) >> s) as u64
   }
 
   #[inline(always)]
-  fn asr(x: Self, s: usize) -> Self {
-    ((x as i64) >> s) as u64
+  fn into_usize(self) -> usize {
+    self as usize
   }
 }
 
 pub(crate) mod private {
   pub(crate) unsafe trait Key: Sized {
-    type Word: Word;
+    type Word: Hash + Word;
 
     const BITS: usize = Self::Word::BITS;
 
@@ -320,14 +386,33 @@ pub(crate) mod private {
     + core::ops::BitOr<Self, Output = Self>
     + core::ops::Not<Output = Self>
     + core::ops::Shr<usize, Output = Self>
-    + Hash
   {
     const BITS: usize;
 
     const ZERO: Self;
 
-    fn into_usize(self) -> usize;
-
     fn asr(_: Self, _: usize) -> Self;
+
+    fn into_usize(self) -> usize;
+  }
+}
+
+pub mod internal {
+  //! Unstable API exposing implementation details for benchmarks and tests.
+
+  #![allow(missing_docs)]
+
+  use super::Rng;
+  use super::private::Hash;
+
+  #[derive(Clone, Copy)]
+  pub struct Seed32(<u32 as Hash>::Seed0);
+
+  pub fn seed32(g: &mut impl Rng) -> Seed32 {
+    Seed32(<u32 as Hash>::seed0(<u32 as Hash>::seed(g)))
+  }
+
+  pub fn hash32(x: u32, m: Seed32) -> u32 {
+    <u32 as Hash>::hash(x, m.0)
   }
 }
