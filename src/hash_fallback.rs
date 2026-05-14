@@ -1,0 +1,54 @@
+use rand_core::Rng;
+use crate::key::private::Hash;
+use crate::util::invert_u32;
+
+unsafe impl Hash for u32 {
+  type Seed = ((u32, u32), (u32, u32));
+
+  type Seed0 = (u32, u32);
+
+  type Seed1 = (u32, u32);
+
+  #[inline(always)]
+  fn seed0(m: Self::Seed) -> Self::Seed0 {
+    m.0
+  }
+
+  #[inline(always)]
+  fn seed1(m: Self::Seed) -> Self::Seed1 {
+    m.1
+  }
+
+  #[inline(always)]
+  fn seed_nondet() -> Self::Seed {
+    let n = dandelion::thread_local::u64();
+    let a = 1 | (n as u32);
+    let b = 1 | (n >> 32) as u32;
+    let x = invert_u32(a.wrapping_mul(b));
+    let c = x.wrapping_mul(a);
+    let d = x.wrapping_mul(b);
+    ((a, b), (c, d))
+  }
+
+  #[inline(always)]
+  fn seed(g: &mut impl Rng) -> Self::Seed {
+    let n = g.next_u64();
+    let a = 1 | (n as u32);
+    let b = 1 | (n >> 32) as u32;
+    let x = invert_u32(a.wrapping_mul(b));
+    let c = x.wrapping_mul(a);
+    let d = x.wrapping_mul(b);
+    ((a, b), (c, d))
+  }
+
+  #[inline(always)]
+  fn hash(x: Self, m: Self::Seed0) -> Self {
+    let a = m.0;
+    let b = m.1;
+    let x = x ^ x.rotate_left(7) ^ x.rotate_left(23);
+    let x = x.wrapping_mul(a);
+    let x = x.swap_bytes();
+    let x = x.wrapping_mul(b);
+    x
+  }
+

@@ -1,10 +1,10 @@
 //! This module provides traits for hashable keys representable as [`NonZeroU32`]
 //! or [`NonZeroU64`].
 
-use core::cfg_select;
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 use rand_core::Rng;
+use crate::util::invert_u64;
 
 /// A sealed trait for hashable keys representable as [`NonZeroU32`] or
 /// [`NonZeroU64`]. The only way to implement this trait for additional types is
@@ -89,165 +89,6 @@ unsafe impl<T: IntoKey> private::Key for T {
   #[inline(always)]
   unsafe fn from_word(x: Self::Word) -> Self {
     unsafe { T::project(<T::Key as private::Key>::from_word(x)) }
-  }
-}
-
-#[allow(dead_code)]
-#[inline(always)]
-fn invert_u32(a: u32) -> u32 {
-  // https://jeffhurchalla.com/2022/04/25/a-faster-multiplicative-inverse-mod-a-power-of-2/
-  let x = a.wrapping_mul(3) ^ 2;
-  let y = 1u32.wrapping_sub(a.wrapping_mul(x));
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  x
-}
-
-#[allow(dead_code)]
-#[inline(always)]
-fn invert_u64(a: u64) -> u64 {
-  // https://arxiv.org/abs/2204.04342
-  let x = a.wrapping_mul(3) ^ 2;
-  let y = 1u64.wrapping_sub(a.wrapping_mul(x));
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  let y = y.wrapping_mul(y);
-  let x = x.wrapping_mul(y.wrapping_add(1));
-  x
-}
-
-cfg_select! {
-  all(target_arch = "aarch64", target_feature = "crc") => {
-    #[inline(always)]
-    fn crc32cw(a: u32, x: u32) -> u32 {
-      unsafe { core::arch::aarch64::__crc32cw(a, x) }
-    }
-
-    #[inline(always)]
-    fn crc32cd(a: u32, x: u64) -> u32 {
-      unsafe { core::arch::aarch64::__crc32cd(a, x) }
-    }
-
-    #[inline(always)]
-    fn vmull_p64(x: u64, y: u64) -> u128 {
-      // NOTE: not currently supported by Miri
-      unsafe { core::arch::aarch64::vmull_p64(x, y) }
-    }
-
-    unsafe impl private::Hash for u32 {
-      type Seed = (u32, u32);
-
-      type Seed0 = u32;
-
-      type Seed1 = u32;
-
-      #[inline(always)]
-      fn seed0(m: Self::Seed) -> Self::Seed0 {
-        m.0
-      }
-
-      #[inline(always)]
-      fn seed1(m: Self::Seed) -> Self::Seed1 {
-        m.1
-      }
-
-      #[inline(always)]
-      fn seed_nondet() -> Self::Seed {
-        let a = 1 | dandelion::thread_local::u32();
-        let b = invert_u32(a);
-        (a, b)
-      }
-
-      #[inline(always)]
-      fn seed(g: &mut impl Rng) -> Self::Seed {
-        let a = 1 | g.next_u32();
-        let b = invert_u32(a);
-        (a, b)
-      }
-
-      #[inline(always)]
-      fn hash(x: Self, m: Self::Seed0) -> Self {
-        let x = crc32cw(0, x);
-        let x = x.wrapping_mul(m);
-        x
-      }
-
-      #[inline(always)]
-      fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-        let x = x.wrapping_mul(m);
-        let x = crc32cd(0, vmull_p64(x as u64, 0xc915_ea3b) as u64);
-        x
-      }
-    }
-  }
-  _ => {
-    unsafe impl private::Hash for u32 {
-      type Seed = ((u32, u32), (u32, u32));
-
-      type Seed0 = (u32, u32);
-
-      type Seed1 = (u32, u32);
-
-      #[inline(always)]
-      fn seed0(m: Self::Seed) -> Self::Seed0 {
-        m.0
-      }
-
-      #[inline(always)]
-      fn seed1(m: Self::Seed) -> Self::Seed1 {
-        m.1
-      }
-
-      #[inline(always)]
-      fn seed_nondet() -> Self::Seed {
-        let n = dandelion::thread_local::u64();
-        let a = 1 | (n as u32);
-        let b = 1 | (n >> 32) as u32;
-        let x = invert_u32(a.wrapping_mul(b));
-        let c = x.wrapping_mul(a);
-        let d = x.wrapping_mul(b);
-        ((a, b), (c, d))
-      }
-
-      #[inline(always)]
-      fn seed(g: &mut impl Rng) -> Self::Seed {
-        let n = g.next_u64();
-        let a = 1 | (n as u32);
-        let b = 1 | (n >> 32) as u32;
-        let x = invert_u32(a.wrapping_mul(b));
-        let c = x.wrapping_mul(a);
-        let d = x.wrapping_mul(b);
-        ((a, b), (c, d))
-      }
-
-      #[inline(always)]
-      fn hash(x: Self, m: Self::Seed0) -> Self {
-        let a = m.0;
-        let b = m.1;
-        let x = x ^ x.rotate_left(7) ^ x.rotate_left(23);
-        let x = x.wrapping_mul(a);
-        let x = x.swap_bytes();
-        let x = x.wrapping_mul(b);
-        x
-      }
-
-      #[inline(always)]
-      fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-        let a = m.0;
-        let b = m.1;
-        let x = x.wrapping_mul(a);
-        let x = x.swap_bytes();
-        let x = x.wrapping_mul(b);
-        let x = x ^ x.rotate_left(7) ^ x.rotate_left(23);
-        x
-      }
-    }
   }
 }
 

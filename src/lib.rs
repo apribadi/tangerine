@@ -3,3 +3,20 @@
 pub mod key;
 pub mod map;
 pub mod set;
+
+mod util;
+
+cfg_select! {
+  all(
+      target_arch = "aarch64",
+      target_feature = "aes",
+      target_feature = "crc",
+      target_feature = "neon",
+    ) =>
+  {
+    mod hash_aarch64;
+  }
+  _ => {
+    mod hash_fallback;
+  }
+}
