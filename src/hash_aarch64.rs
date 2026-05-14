@@ -14,8 +14,10 @@ fn crc32cd(a: u32, x: u64) -> u32 {
 
 #[inline(always)]
 fn vmull_p64(x: u64, y: u64) -> u128 {
-  // NOTE: not currently supported by Miri
+  #[cfg(not(miri))]
   unsafe { core::arch::aarch64::vmull_p64(x, y) }
+  #[cfg(miri)]
+  x.widening_carryless_mul(y)
 }
 
 unsafe impl Hash for u32 {

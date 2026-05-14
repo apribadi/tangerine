@@ -30,3 +30,9 @@ assert!(t.get(NonZeroU32::MAX) == None);
 # Insertion and Removal
 
 # Hashing (and Universal Hashing)
+
+
+# References
+
+- On the k-Independence Required by Linear Probing and Minwise
+  Independence (Mikkel Thorup)
