@@ -15,6 +15,8 @@ fn main() {
 }
 
 const ARGS: &'static [usize] = &[
+  100,
+  300,
   1_000,
   3_000,
   10_000,
@@ -51,23 +53,27 @@ fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
 }
 
 struct KeyGen {
-  state: NonZeroU32,
+  state: u64,
 }
 
 impl KeyGen {
+  const ROL: u32 = 25;
+
   const fn new() -> Self {
-    Self { state: NonZeroU32::MIN }
+    Self { state: 1 }
   }
 
   fn peek(&self) -> NonZeroU32 {
-    self.state
+    let s = self.state;
+    let x = unsafe { NonZeroU32::new_unchecked((s as u32).rotate_left(Self::ROL)) };
+    x
   }
 
   fn next(&mut self) -> NonZeroU32 {
     let s = self.state;
-    let x = s.get().wrapping_mul(5);
-    self.state = unsafe { NonZeroU32::new_unchecked(x) };
-    s
+    let x = unsafe { NonZeroU32::new_unchecked((s as u32).rotate_left(Self::ROL)) };
+    self.state = s.wrapping_add(2);
+    x
   }
 }
 
@@ -111,7 +117,7 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   types = [
     std::collections::HashMap<NonZeroU32, u32, ahash::RandomState>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
-    std::collections::HashMap<NonZeroU32, u32, fxhash::FxBuildHasher>,
+    std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
     tangerine::map::IntMap<NonZeroU32, u32>,
   ])]
 fn bench_get_unchained<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
