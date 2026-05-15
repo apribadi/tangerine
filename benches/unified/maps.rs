@@ -34,31 +34,9 @@ impl<T> Map<T> for tangerine::map::IntMap<NonZeroU32, T> {
   fn for_each<F: FnMut((NonZeroU32, &T))>(&self, f: F) { self.iter().for_each(f) }
 }
 
-impl<T> Map<T> for ahash::AHashMap<NonZeroU32, T> {
+impl<T, S: Default + std::hash::BuildHasher> Map<T> for std::collections::HashMap<NonZeroU32, T, S> {
   #[inline(always)]
-  fn new() -> Self { ahash::AHashMap::new() }
-
-  #[inline(always)]
-  fn len(&self) -> usize {
-    let t: &std::collections::HashMap<_, _, _> = &self;
-    t.len()
-  }
-
-  #[inline(always)]
-  fn get(&self, k: NonZeroU32) -> Option<&T> { self.get(&k) }
-
-  #[inline(always)]
-  fn insert(&mut self, k: NonZeroU32, v: T) -> Option<T> { self.insert(k, v) }
-
-  #[inline(always)]
-  fn remove(&mut self, k: NonZeroU32) -> Option<T> { self.remove(&k) }
-
-  fn for_each<F: FnMut((NonZeroU32, &T))>(&self, mut f: F) { self.iter().for_each(|(&x, y)| f((x, y))) }
-}
-
-impl<T> Map<T> for foldhash::HashMap<NonZeroU32, T> {
-  #[inline(always)]
-  fn new() -> Self { <foldhash::HashMap<_, _> as foldhash::HashMapExt>::new() }
+  fn new() -> Self { std::collections::HashMap::with_hasher(S::default()) }
 
   #[inline(always)]
   fn len(&self) -> usize { self.len() }
