@@ -344,26 +344,6 @@ fn test_displacement_histogram() {
 }
 
 /*
-#[test]
-fn test_hash() {
-  let mut s = String::new();
-  let mut g = Rng::new(NonZeroU128::MIN);
-
-  let m = tangerine::key::internal::seed32(&mut g);
-  write!(s, "{:#x}\n", tangerine::key::internal::hash32(0, m));
-  write!(s, "{:#x}\n", tangerine::key::internal::hash32(1, m));
-  write!(s, "{:#x}\n", tangerine::key::internal::hash32(2, m));
-  write!(s, "{:#x}\n", tangerine::key::internal::hash32(3, m));
-
-  expect![[r#"
-      0x0
-      0x72e4aa68
-      0x4905ce7b
-      0x54cdd1e3
-  "#]].assert_eq(&s.drain(..).as_str());
-}
-*/
-/*
 
 fn key_seq(n: u32) -> NonZeroU32 {
   let n = n | 0x8000_0000;

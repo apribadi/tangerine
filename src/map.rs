@@ -19,9 +19,9 @@ use core::ptr::null;
 use core::ptr::null_mut;
 use rand_core::Rng;
 
+use crate::hash::Hash;
 use crate::key::Key;
-use crate::key::private::Hash;
-use crate::key::private::Word;
+use crate::word::Word;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
 /// or [`NonZeroU64`](core::num::NonZeroU64).
@@ -248,6 +248,27 @@ impl<K: Key, V> IntMap<K, V> {
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
       return None;
     }
+    /*
+    let k = slot(h, s);
+    let b = unsafe { t.add(k + 1) };
+    let v = unsafe { slot_hash(b).read() };
+    let mut p;
+    let mut x;
+    if ! (v > h) {
+      let a = unsafe { t.add(k) };
+      let u = unsafe { slot_hash(a).read() };
+      p = select_unpredictable(u > h, b, a);
+      x = select_unpredictable(u > h, v, u);
+    } else {
+      core::hint::cold_path();
+      p = b;
+      loop {
+        p = unsafe { p.add(1) };
+        x = unsafe { slot_hash(p).read() };
+        if ! (x > h) { break }
+      }
+    }
+    */
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };

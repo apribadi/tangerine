@@ -1,5 +1,6 @@
 use rand_core::Rng;
-use crate::key::private::Hash;
+
+use crate::hash::Hash;
 use crate::util::invert_u32;
 
 unsafe impl Hash for u32 {
