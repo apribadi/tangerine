@@ -4,17 +4,17 @@ use crate::hash::Hash;
 use crate::util::invert_u32;
 
 #[inline(always)]
-fn crc32c_32(a: u32, x: u32) -> u32 {
+fn crc32c_u32(a: u32, x: u32) -> u32 {
   unsafe { core::arch::aarch64::__crc32cw(a, x) }
 }
 
 #[inline(always)]
-fn crc32c_64(a: u32, x: u64) -> u32 {
+fn crc32c_u64(a: u32, x: u64) -> u32 {
   unsafe { core::arch::aarch64::__crc32cd(a, x) }
 }
 
 #[inline(always)]
-fn widening_carryless_mul_32(x: u32, y: u32) -> u64 {
+fn widening_carryless_mul_u32(x: u32, y: u32) -> u64 {
   #[cfg(not(miri))]
   unsafe { core::arch::aarch64::vmull_p64(x as u64, y as u64) as u64 }
   #[cfg(miri)]
@@ -54,7 +54,7 @@ unsafe impl Hash for u32 {
 
   #[inline(always)]
   fn hash(x: Self, m: Self::Seed0) -> Self {
-    let x = crc32c_32(0, x);
+    let x = crc32c_u32(0, x);
     let x = x.wrapping_mul(m);
     x
   }
@@ -62,7 +62,7 @@ unsafe impl Hash for u32 {
   #[inline(always)]
   fn invert_hash(x: Self, m: Self::Seed1) -> Self {
     let x = x.wrapping_mul(m);
-    let x = crc32c_64(0, widening_carryless_mul_32(x, 0xc915_ea3b));
+    let x = crc32c_u64(0, widening_carryless_mul_u32(x, 0xc915_ea3b));
     x
   }
 }

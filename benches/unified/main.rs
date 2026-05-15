@@ -63,13 +63,13 @@ impl KeyGen {
     Self { state: 1 }
   }
 
-  fn peek(&self) -> NonZeroU32 {
+  fn peek_nzu32(&self) -> NonZeroU32 {
     let s = self.state;
     let x = unsafe { NonZeroU32::new_unchecked((s as u32).rotate_left(Self::ROL)) };
     x
   }
 
-  fn next(&mut self) -> NonZeroU32 {
+  fn next_nzu32(&mut self) -> NonZeroU32 {
     let s = self.state;
     let x = unsafe { NonZeroU32::new_unchecked((s as u32).rotate_left(Self::ROL)) };
     self.state = s.wrapping_add(2);
@@ -104,7 +104,7 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
       let mut t = T::new();
       let mut k = KeyGen::new();
       for _ in 0 .. m {
-        let _ = t.insert(k.next(), k.peek());
+        let _ = t.insert(k.next_nzu32(), k.peek_nzu32());
       }
       (t, NonZeroU32::MIN)
     });
@@ -127,7 +127,7 @@ fn bench_get_unchained<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize
     for _ in 0 .. 1000 {
       for &mut (ref mut t, ref mut k) in t.iter_mut() {
         for _ in 0 .. 100 {
-          match t.get(k.next()) {
+          match t.get(k.next_nzu32()) {
             None => { *k = KeyGen::new(); }
             Some(&y) => { z ^= y; }
           }
@@ -142,7 +142,7 @@ fn bench_get_unchained<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize
       let mut t = T::new();
       let mut k = KeyGen::new();
       for _ in 0 .. m {
-        let _ = t.insert(k.next(), k.peek().get());
+        let _ = t.insert(k.next_nzu32(), k.peek_nzu32().get());
       }
       (t, KeyGen::new())
     });
@@ -167,7 +167,7 @@ fn bench_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
             *t = T::new();
             *n = 0;
           }
-          let _ = t.insert(k.next(), k.peek().get());
+          let _ = t.insert(k.next_nzu32(), k.peek_nzu32().get());
           *n = *n + 1;
         }
       }
@@ -179,7 +179,7 @@ fn bench_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
       let mut t = T::new();
       let mut k = KeyGen::new();
       for _ in 0 .. m.saturating_sub(100_000) {
-        let _ = t.insert(k.next(), k.peek().get());
+        let _ = t.insert(k.next_nzu32(), k.peek_nzu32().get());
       }
       let n = t.len();
       (t, k, n, m)
@@ -201,8 +201,8 @@ fn bench_remove_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize
     for _ in 0 .. 200 {
       for &mut (ref mut t, ref mut a, ref mut b) in t.iter_mut() {
         for _ in 0 .. 250 {
-          if let Some(y) = t.remove(a.next()) { z ^= y; }
-          let _ = t.insert(b.next(), b.peek().get());
+          if let Some(y) = t.remove(a.next_nzu32()) { z ^= y; }
+          let _ = t.insert(b.next_nzu32(), b.peek_nzu32().get());
         }
       }
     }
@@ -214,7 +214,7 @@ fn bench_remove_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize
       let mut t = T::new();
       let mut b = KeyGen::new();
       for _ in 0 .. m {
-        let _ = t.insert(b.next(), b.peek().get());
+        let _ = t.insert(b.next_nzu32(), b.peek_nzu32().get());
       }
       (t, KeyGen::new(), b)
     });
@@ -236,7 +236,7 @@ fn bench_iter_key<T: Map<u32>>(bencher: Bencher<'_, '_>) {
   }
   let mut t = T::new();
   let mut k = KeyGen::new();
-  for _ in 0 .. 1_000_000 { let _ = t.insert(k.next(), k.peek().get()); }
+  for _ in 0 .. 1_000_000 { let _ = t.insert(k.next_nzu32(), k.peek_nzu32().get()); }
   bencher.bench_local(|| go(black_box(&mut t)));
 }
 
@@ -260,8 +260,8 @@ fn bench_iter_value<T: Map<u32>>(bencher: Bencher<'_, '_>) {
     z
   }
   let mut t = T::new();
-  // let mut k = KeyGen::new();
-  // for _ in 0 .. 1_000_000 { let _ = t.insert(k.next(), k.peek()); }
-  for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), key_seq(i).get()); }
+  let mut k = KeyGen::new();
+  for _ in 0 .. 1_000_000 { let _ = t.insert(k.next_nzu32(), k.peek_nzu32().get()); }
+  // for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), key_seq(i).get()); }
   bencher.bench_local(|| go(black_box(&mut t)));
 }
