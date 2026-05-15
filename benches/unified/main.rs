@@ -15,8 +15,6 @@ fn main() {
 }
 
 const ARGS: &'static [usize] = &[
-  100,
-  300,
   1_000,
   3_000,
   10_000,
@@ -53,11 +51,11 @@ fn sizes_from_working_set(working_set: usize) -> [usize; 10] {
 }
 
 struct KeyGen {
-  state: u64,
+  state: u32,
 }
 
 impl KeyGen {
-  const ROL: u32 = 25;
+  const ROL: u32 = 16;
 
   const fn new() -> Self {
     Self { state: 1 }
@@ -65,13 +63,13 @@ impl KeyGen {
 
   fn peek_nzu32(&self) -> NonZeroU32 {
     let s = self.state;
-    let x = unsafe { NonZeroU32::new_unchecked((s as u32).rotate_left(Self::ROL)) };
+    let x = unsafe { NonZeroU32::new_unchecked(s.rotate_left(Self::ROL)) };
     x
   }
 
   fn next_nzu32(&mut self) -> NonZeroU32 {
     let s = self.state;
-    let x = unsafe { NonZeroU32::new_unchecked((s as u32).rotate_left(Self::ROL)) };
+    let x = unsafe { NonZeroU32::new_unchecked(s.rotate_left(Self::ROL)) };
     self.state = s.wrapping_add(2);
     x
   }
@@ -117,7 +115,7 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   types = [
     std::collections::HashMap<NonZeroU32, u32, ahash::RandomState>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
-    std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
+    // std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
     tangerine::map::IntMap<NonZeroU32, u32>,
   ])]
 fn bench_get_unchained<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -240,12 +238,6 @@ fn bench_iter_key<T: Map<u32>>(bencher: Bencher<'_, '_>) {
   bencher.bench_local(|| go(black_box(&mut t)));
 }
 
-fn key_seq(n: u32) -> NonZeroU32 {
-  let n = n | 0x8000_0000;
-  let n = n.rotate_left(16);
-  unsafe { NonZeroU32::new_unchecked(n) }
-}
-
 #[divan::bench(
   sample_count = SAMPLE_COUNT,
   types = [
@@ -262,6 +254,5 @@ fn bench_iter_value<T: Map<u32>>(bencher: Bencher<'_, '_>) {
   let mut t = T::new();
   let mut k = KeyGen::new();
   for _ in 0 .. 1_000_000 { let _ = t.insert(k.next_nzu32(), k.peek_nzu32().get()); }
-  // for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), key_seq(i).get()); }
   bencher.bench_local(|| go(black_box(&mut t)));
 }
