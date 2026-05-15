@@ -101,7 +101,7 @@ unsafe impl Hash for u64 {
 
   #[inline(always)]
   fn hash(x: Self, m: Self::Seed0) -> Self {
-    let a = x as u32
+    let a = x as u32;
     let b = crc32c_u64(0, x);
     let x = (a as u64) ^ ((b as u64) << 32);
     let x = x.wrapping_mul(m);
