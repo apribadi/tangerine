@@ -92,11 +92,6 @@ unsafe impl Word for u32 {
   fn asr(x: Self, s: usize) -> Self {
     ((x as i32) >> s) as u32
   }
-
-  #[inline(always)]
-  fn into_usize(self) -> usize {
-    self as usize
-  }
 }
 
 unsafe impl Word for u64 {
@@ -107,11 +102,6 @@ unsafe impl Word for u64 {
   #[inline(always)]
   fn asr(x: Self, s: usize) -> Self {
     ((x as i64) >> s) as u64
-  }
-
-  #[inline(always)]
-  fn into_usize(self) -> usize {
-    self as usize
   }
 }
 
