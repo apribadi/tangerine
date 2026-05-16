@@ -1,13 +1,12 @@
 #![cfg_attr(miri, feature(uint_carryless_mul))]
 #![doc = include_str!("../README.md")]
 
-pub mod key;
 pub mod map;
 pub mod set;
+pub mod key;
 
-mod hash;
+mod private_trait;
 mod util;
-mod word;
 
 cfg_select! {
   all(

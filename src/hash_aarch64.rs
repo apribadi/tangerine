@@ -1,6 +1,6 @@
 use rand_core::Rng;
 
-use crate::hash::Hash;
+use crate::private_trait::Hash;
 use crate::util::invert_u32;
 use crate::util::invert_u64;
 
