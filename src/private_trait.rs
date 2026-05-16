@@ -135,4 +135,3 @@ pub(crate) unsafe trait Hash {
 
   fn invert_hash(_: Self, _: Self::Seed1) -> Self;
 }
-
