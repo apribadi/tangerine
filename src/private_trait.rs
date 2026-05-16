@@ -118,15 +118,15 @@ unsafe impl Word for u64 {
 }
 
 pub(crate) unsafe trait Hash {
-  type Seed: Copy;
+  type Seed;
 
   type Seed0: Copy;
 
   type Seed1: Copy;
 
-  fn seed0(_: Self::Seed) -> Self::Seed0;
+  fn seed0(_: &Self::Seed) -> Self::Seed0;
 
-  fn seed1(_: Self::Seed) -> Self::Seed1;
+  fn seed1(_: &Self::Seed) -> Self::Seed1;
 
   fn seed_nondet() -> Self::Seed;
 

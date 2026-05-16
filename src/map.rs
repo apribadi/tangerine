@@ -147,9 +147,14 @@ fn is_uninit<K:Key>(shift: usize) -> bool {
 }
 
 #[inline(always)]
+fn is_short_circuit<K:Key, V>(shift: usize) -> bool {
+  ! is_uninit_searchable::<K, V>() && is_uninit::<K>(shift)
+}
+
+#[inline(always)]
 fn capacity<K: Key>(s: usize) -> usize {
-  let n = into::<u64>(! (K::Word::MAX >> 1));
-  let n = n >> s;
+  let n = ! (K::Word::MAX >> 1);
+  let n = into::<u64>(n) >> s;
   let n = K::Word::from_u64(n) | K::Word::asr(K::Word::from_u64(n), K::BITS - 1);
   into::<u64>(n) as usize
 }
@@ -157,6 +162,28 @@ fn capacity<K: Key>(s: usize) -> usize {
 #[inline(always)]
 fn slot<W: Word>(h: W, s: usize) -> usize {
   (into::<u64>(h) >> s) as usize
+}
+
+#[inline(always)]
+unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
+  unsafe { assert_unchecked(s <= K::BITS - 1) };
+  let k = slot(h, s);
+  let mut p = unsafe { t.add(k + 1) };
+  let mut x = unsafe { slot_hash(p).read() };
+  if ! (x < h) {
+    let a = unsafe { t.add(k) };
+    let u = unsafe { slot_hash(a).read() };
+    p = select_unpredictable(u < h, p, a);
+    x = select_unpredictable(u < h, x, u);
+  } else {
+    cold_path();
+    loop {
+      p = unsafe { p.add(1) };
+      x = unsafe { slot_hash(p).read() };
+      if ! (x < h) { break }
+    }
+  }
+  (p, x)
 }
 
 impl<K: Key, V> IntMap<K, V> {
@@ -202,14 +229,10 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn prefetch(&self, key: K) {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(self.seed);
+    let m = K::Word::seed0(&self.seed);
     let h = K::hash(key, m);
-    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
-      return;
-    }
-    let k = slot(h, s);
-    let a = unsafe { t.add(k) };
-    let _: K::Word = unsafe { slot_hash(a).read_volatile() };
+    if is_short_circuit::<K, V>(s) { return }
+    let _: K::Word = unsafe { slot_hash(t.add(slot(h, s))).read_volatile() };
   }
 
   /// Returns whether the map contains the given key.
@@ -217,27 +240,10 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn contains_key(&self, key: K) -> bool {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(self.seed);
+    let m = K::Word::seed0(&self.seed);
     let h = K::hash(key, m);
-    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
-      return false;
-    }
-    let k = slot(h, s);
-    let mut p = unsafe { t.add(k + 1) };
-    let mut x = unsafe { slot_hash(p).read() };
-    if ! (x < h) {
-      let a = unsafe { t.add(k) };
-      let u = unsafe { slot_hash(a).read() };
-      x = select_unpredictable(u < h, x, u);
-    } else {
-      cold_path();
-      loop {
-        p = unsafe { p.add(1) };
-        x = unsafe { slot_hash(p).read() };
-        if ! (x < h) { break }
-      }
-    }
-    x == h
+    if is_short_circuit::<K, V>(s) { return false }
+    unsafe { search(t, s, h) }.1 == h
   }
 
   /// Returns a reference to the value associated with the given key, if
@@ -246,32 +252,11 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get(&self, key: K) -> Option<&V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(self.seed);
-    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
-      return None;
-    }
+    let m = K::Word::seed0(&self.seed);
+    if is_short_circuit::<K, V>(s) { return None }
     let h = K::hash(key, m);
-    let k = slot(h, s);
-    let mut p = unsafe { t.add(k + 1) };
-    let mut x = unsafe { slot_hash(p).read() };
-    if ! (x < h) {
-      let a = unsafe { t.add(k) };
-      let u = unsafe { slot_hash(a).read() };
-      p = select_unpredictable(u < h, p, a);
-      x = select_unpredictable(u < h, x, u);
-    } else {
-      cold_path();
-      loop {
-        p = unsafe { p.add(1) };
-        x = unsafe { slot_hash(p).read() };
-        if ! (x < h) { break }
-      }
-    }
-    if x != h {
-      None
-    } else {
-      Some(unsafe { &*slot_data(p) })
-    }
+    let (p, x) = unsafe { search(t, s, h) };
+    if x != h { None } else { Some(unsafe { &*slot_data(p) }) }
   }
 
   /// Returns a mutable reference to the value associated with the given key,
@@ -280,32 +265,11 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(self.seed);
+    let m = K::Word::seed0(&self.seed);
+    if is_short_circuit::<K, V>(s) { return None }
     let h = K::hash(key, m);
-    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
-      return None;
-    }
-    let k = slot(h, s);
-    let mut p = unsafe { t.add(k + 1) };
-    let mut x = unsafe { slot_hash(p).read() };
-    if ! (x < h) {
-      let a = unsafe { t.add(k) };
-      let u = unsafe { slot_hash(a).read() };
-      p = select_unpredictable(u < h, p, a);
-      x = select_unpredictable(u < h, x, u);
-    } else {
-      cold_path();
-      loop {
-        p = unsafe { p.add(1) };
-        x = unsafe { slot_hash(p).read() };
-        if ! (x < h) { break }
-      }
-    }
-    if x != h {
-      None
-    } else {
-      Some(unsafe { &mut *slot_data(p) })
-    }
+    let (p, x) = unsafe { search(t, s, h) };
+    if x != h { None } else { Some(unsafe { &mut *slot_data(p) }) }
   }
 
   /// For each key in the given array, returns a mutable reference to the
@@ -317,7 +281,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(self.seed);
+    let m = K::Word::seed0(&self.seed);
     let mut out = [const { None }; N];
     if N == 0 { return out }
     let keys = keys.map(K::into_word);
@@ -328,27 +292,10 @@ impl<K: Key, V> IntMap<K, V> {
       }
     }
     assert!(is_disjoint);
-    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
-      return out;
-    }
+    if is_short_circuit::<K, V>(s) { return out }
     for i in 0 .. N {
       let h = K::Word::hash(keys[i], m);
-      let k = slot(h, s);
-      let mut p = unsafe { t.add(k + 1) };
-      let mut x = unsafe { slot_hash(p).read() };
-      if ! (x < h) {
-        let a = unsafe { t.add(k) };
-        let u = unsafe { slot_hash(a).read() };
-        p = select_unpredictable(u < h, p, a);
-        x = select_unpredictable(u < h, x, u);
-      } else {
-        cold_path();
-        loop {
-          p = unsafe { p.add(1) };
-          x = unsafe { slot_hash(p).read() };
-          if ! (x < h) { break }
-        }
-      }
+      let (p, x) = unsafe { search(t, s, h) };
       out[i] = if x != h { None } else { Some(unsafe { &mut *slot_data(p) }) };
     }
     out
@@ -366,32 +313,19 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(self.seed);
+    let m = K::Word::seed0(&self.seed);
     let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
+      cold_path();
       let _: *mut V = self.insert_init(h, value);
       return None;
     }
-    let k = slot(h, s);
-    let mut p = unsafe { t.add(k + 1) };
-    let mut x = unsafe { slot_hash(p).read() };
-    if ! (x < h) {
-      let a = unsafe { t.add(k) };
-      let u = unsafe { slot_hash(a).read() };
-      p = select_unpredictable(u < h, p, a);
-      x = select_unpredictable(u < h, x, u);
-    } else {
-      cold_path();
-      loop {
-        p = unsafe { p.add(1) };
-        x = unsafe { slot_hash(p).read() };
-        if ! (x < h) { break }
-      }
-    }
+    let (p, x) = unsafe { search(t, s, h) };
     if x == h {
       Some(unsafe { slot_data(p).replace(value) })
     } else {
       if is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
+        cold_path();
         let _: *mut V = self.insert_init(h, value);
       } else {
         let r = self.slack;
@@ -407,6 +341,7 @@ impl<K: Key, V> IntMap<K, V> {
         }
         unsafe { slot_data(p).write(y) };
         if unsafe { z.offset_from_unsigned(p) } == 1 || r == 0 {
+          cold_path();
           let _: *mut V = self.insert_grow(h, p);
         } else {
           self.slack = r - 1;
@@ -527,28 +462,10 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn remove(&mut self, key: K) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(self.seed);
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
+    let m = K::Word::seed0(&self.seed);
     let h = K::hash(key, m);
-    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
-      return None;
-    }
-    let k = slot(h, s);
-    let mut p = unsafe { t.add(k + 1) };
-    let mut x = unsafe { slot_hash(p).read() };
-    if ! (x < h) {
-      let a = unsafe { t.add(k) };
-      let u = unsafe { slot_hash(a).read() };
-      p = select_unpredictable(u < h, p, a);
-      x = select_unpredictable(u < h, x, u);
-    } else {
-      cold_path();
-      loop {
-        p = unsafe { p.add(1) };
-        x = unsafe { slot_hash(p).read() };
-        if ! (x < h) { break }
-      }
-    }
+    if is_short_circuit::<K, V>(s) { return None }
+    let (p, x) = unsafe { search(t, s, h) };
     if x != h {
       None
     } else {
@@ -580,31 +497,35 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(self.seed);
+    let m = K::Word::seed0(&self.seed);
     let h = K::hash(key, m);
-    if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
-      return Entry::Vacant(VacantEntry { map: self, pos: null_mut(), other_hash: K::MAX, entry_hash: h });
+    if is_short_circuit::<K, V>(s) {
+      return Entry::Vacant(
+        VacantEntry {
+          map: self,
+          pos: null_mut(),
+          other_hash: K::MAX,
+          entry_hash: h
+        }
+      )
     }
-    let k = slot(h, s);
-    let mut p = unsafe { t.add(k + 1) };
-    let mut x = unsafe { slot_hash(p).read() };
-    if ! (x < h) {
-      let a = unsafe { t.add(k) };
-      let u = unsafe { slot_hash(a).read() };
-      p = select_unpredictable(u < h, p, a);
-      x = select_unpredictable(u < h, x, u);
-    } else {
-      cold_path();
-      loop {
-        p = unsafe { p.add(1) };
-        x = unsafe { slot_hash(p).read() };
-        if ! (x < h) { break }
-      }
-    }
+    let (p, x) = unsafe { search(t, s, h) };
     if x == h {
-      Entry::Occupied(OccupiedEntry { map: self, pos: p })
+      Entry::Occupied(
+        OccupiedEntry {
+          map: self,
+          pos: p
+        }
+      )
     } else {
-      Entry::Vacant(VacantEntry { map: self, pos: p, other_hash: x, entry_hash: h })
+      Entry::Vacant(
+        VacantEntry {
+          map: self,
+          pos: p,
+          other_hash: x,
+          entry_hash: h
+        }
+      )
     }
   }
 
@@ -613,6 +534,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let inserted_at =
       if is_uninit::<K>(s) {
+        cold_path();
         self.insert_init(entry_hash, value)
       } else {
         let r = self.slack;
@@ -628,6 +550,7 @@ impl<K: Key, V> IntMap<K, V> {
         }
         unsafe { slot_data(p).write(y) };
         if p == unsafe { z.sub(1) } || r == 0 {
+          cold_path();
           self.insert_grow(entry_hash, p)
         } else {
           self.slack = r - 1;
@@ -642,7 +565,6 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     self.slack = r + 1;
     let value = unsafe { slot_data(pos).read() };
     let mut p = pos;
@@ -792,14 +714,12 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = K::Word::seed1(self.seed);
-    let i: Iter<K, _, _, _> =
-      Iter {
-        len: capacity::<K>(s) - r,
-        pos: t,
-        f: move |a, x| unsafe { (K::invert_hash(x, m), &*slot_data(a)) }
-      };
-    i
+    let m = K::Word::seed1(&self.seed);
+    Iter {
+      len: capacity::<K>(s) - r,
+      pos: t,
+      f: move |a, x| unsafe { (K::invert_hash(x, m), &*slot_data(a)) }
+    }
   }
 
   /// Returns an iterator yielding each key and a mutable reference to its
@@ -809,14 +729,12 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = K::Word::seed1(self.seed);
-    let i: Iter<K, _, _, _> =
-      Iter {
-        len: capacity::<K>(s) - r,
-        pos: t,
-        f: move |a, x| unsafe { (K::invert_hash(x, m), &mut *slot_data(a)) }
-      };
-    i
+    let m = K::Word::seed1(&self.seed);
+    Iter {
+      len: capacity::<K>(s) - r,
+      pos: t,
+      f: move |a, x| unsafe { (K::invert_hash(x, m), &mut *slot_data(a)) }
+    }
   }
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
@@ -825,14 +743,12 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = K::Word::seed1(self.seed);
-    let i: Iter<K, _, _, _> =
-      Iter {
-        len: capacity::<K>(s) - r,
-        pos: t,
-        f: move |_, x| unsafe { K::invert_hash(x, m) }
-      };
-    i
+    let m = K::Word::seed1(&self.seed);
+    Iter {
+      len: capacity::<K>(s) - r,
+      pos: t,
+      f: move |_, x| unsafe { K::invert_hash(x, m) }
+    }
   }
 
   /// Returns an iterator yielding a reference to each value. The iterator item
@@ -842,13 +758,11 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let i: Iter<K, _, _, _> =
-      Iter {
-        len: capacity::<K>(s) - r,
-        pos: t,
-        f: move |a, _| unsafe { &*slot_data(a) }
-      };
-    i
+    Iter {
+      len: capacity::<K>(s) - r,
+      pos: t,
+      f: move |a, _| unsafe { &*slot_data(a) }
+    }
   }
 
   /// Returns an iterator yielding a mutable reference to each value. The
@@ -858,13 +772,11 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let i: Iter<K, _, _, _> =
-      Iter {
-        len: capacity::<K>(s) - r,
-        pos: t,
-        f: move |a, _| unsafe { &mut *slot_data(a) }
-      };
-    i
+    Iter {
+      len: capacity::<K>(s) - r,
+      pos: t,
+      f: move |a, _| unsafe { &mut *slot_data(a) }
+    }
   }
 
   fn num_slots(&self) -> usize {

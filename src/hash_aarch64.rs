@@ -30,12 +30,12 @@ unsafe impl Hash for u32 {
   type Seed1 = u32;
 
   #[inline(always)]
-  fn seed0(m: Self::Seed) -> Self::Seed0 {
+  fn seed0(m: &Self::Seed) -> Self::Seed0 {
     m.0
   }
 
   #[inline(always)]
-  fn seed1(m: Self::Seed) -> Self::Seed1 {
+  fn seed1(m: &Self::Seed) -> Self::Seed1 {
     m.1
   }
 
@@ -76,12 +76,12 @@ unsafe impl Hash for u64 {
   type Seed1 = u64;
 
   #[inline(always)]
-  fn seed0(m: Self::Seed) -> Self::Seed0 {
+  fn seed0(m: &Self::Seed) -> Self::Seed0 {
     m.0
   }
 
   #[inline(always)]
-  fn seed1(m: Self::Seed) -> Self::Seed1 {
+  fn seed1(m: &Self::Seed) -> Self::Seed1 {
     m.1
   }
 
@@ -104,8 +104,7 @@ unsafe impl Hash for u64 {
     let a = x as u32;
     let b = crc32c_u64(0, x);
     let x = (a as u64) ^ ((b as u64) << 32);
-    let x = x.wrapping_mul(m);
-    let x = x.wrapping_sub(1);
+    let x = x.wrapping_mul(m).wrapping_sub(1);
     x
   }
 

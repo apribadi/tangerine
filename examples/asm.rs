@@ -22,6 +22,10 @@ pub fn len(t: &IntMap<NonZeroU32, NonZeroU64>) -> usize {
   t.len()
 }
 
+pub fn len_64(t: &IntMap<NonZeroU64, NonZeroU64>) -> usize {
+  t.len()
+}
+
 pub fn is_empty(t: &IntMap<NonZeroU32, NonZeroU64>) -> bool {
   t.is_empty()
 }

@@ -330,9 +330,9 @@ fn test_displacement_histogram() {
       num_slots = 264
       len = 128
       load_factor = 0.48484848484848486
-      0: 90
+      0: 84
       1: 29
-      2: 8
+      2: 14
       3: 1
       4: 0
       5: 0
@@ -342,8 +342,6 @@ fn test_displacement_histogram() {
       9: 0
   "#]].assert_eq(&s.drain(..).as_str());
 }
-
-/*
 
 fn key_seq(n: u32) -> NonZeroU32 {
   let n = n | 0x8000_0000;
@@ -401,4 +399,3 @@ fn test_foo() {
   "#]].assert_eq(&s.drain(..).as_str());
 
 }
-*/
