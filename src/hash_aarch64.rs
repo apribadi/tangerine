@@ -56,13 +56,13 @@ unsafe impl Hash for u32 {
   #[inline(always)]
   fn hash(x: Self, m: Self::Seed0) -> Self {
     let x = crc32c_u32(0, x);
-    let x = x.wrapping_mul(m);
+    let x = x.wrapping_mul(m).wrapping_sub(1);
     x
   }
 
   #[inline(always)]
   fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-    let x = x.wrapping_mul(m);
+    let x = x.wrapping_mul(m).wrapping_add(m);
     let x = crc32c_u64(0, widening_carryless_mul_u32(x, 0xc915_ea3b));
     x
   }
@@ -105,6 +105,7 @@ unsafe impl Hash for u64 {
     let b = crc32c_u64(0, x);
     let x = (a as u64) ^ ((b as u64) << 32);
     let x = x.wrapping_mul(m);
+    let x = x.wrapping_sub(1);
     x
   }
 

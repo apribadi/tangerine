@@ -8,7 +8,7 @@ pub(crate) unsafe trait Key: Sized {
 
   const BITS: usize = Self::Word::BITS;
 
-  const ZERO: Self::Word = Self::Word::ZERO;
+  const MAX: Self::Word = Self::Word::MAX;
 
   fn into_word(_: Self) -> Self::Word;
 
@@ -70,6 +70,7 @@ unsafe impl<T: IntoKey> Key for T {
 pub(crate) unsafe trait Word:
   Copy
   + Ord
+  + Into<u64>
   + core::ops::Add<Self, Output = Self>
   + core::ops::BitOr<Self, Output = Self>
   + core::ops::Not<Output = Self>
@@ -77,17 +78,15 @@ pub(crate) unsafe trait Word:
 {
   const BITS: usize;
 
-  const ZERO: Self;
+  const MAX: Self;
 
   fn asr(_: Self, _: usize) -> Self;
-
-  fn into_usize(self) -> usize;
 }
 
 unsafe impl Word for u32 {
   const BITS: usize = 32;
 
-  const ZERO: Self = 0;
+  const MAX: Self = u32::MAX;
 
   #[inline(always)]
   fn asr(x: Self, s: usize) -> Self {
@@ -103,7 +102,7 @@ unsafe impl Word for u32 {
 unsafe impl Word for u64 {
   const BITS: usize = 64;
 
-  const ZERO: Self = 0;
+  const MAX: Self = u64::MAX;
 
   #[inline(always)]
   fn asr(x: Self, s: usize) -> Self {

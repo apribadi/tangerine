@@ -30,6 +30,10 @@ pub fn contains_key(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> bool {
   t.contains_key(k)
 }
 
+pub fn contains_key_64(t: &IntMap<NonZeroU64, NonZeroU64>, k: NonZeroU64) -> bool {
+  t.contains_key(k)
+}
+
 pub fn prefetch(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) {
   t.prefetch(k)
 }
