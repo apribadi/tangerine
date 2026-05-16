@@ -27,3 +27,8 @@ pub(crate) fn invert_u64(a: u64) -> u64 {
   let x = x.wrapping_mul(y.wrapping_add(1));
   x
 }
+
+#[inline(always)]
+pub(crate) fn into<T>(x: impl Into<T>) -> T {
+  x.into()
+}

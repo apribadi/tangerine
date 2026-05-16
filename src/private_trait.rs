@@ -81,6 +81,8 @@ pub(crate) unsafe trait Word:
   const MAX: Self;
 
   fn asr(_: Self, _: usize) -> Self;
+
+  fn from_u64(_: u64) -> Self;
 }
 
 unsafe impl Word for u32 {
@@ -92,6 +94,11 @@ unsafe impl Word for u32 {
   fn asr(x: Self, s: usize) -> Self {
     ((x as i32) >> s) as u32
   }
+
+  #[inline(always)]
+  fn from_u64(x: u64) -> Self {
+    x as Self
+  }
 }
 
 unsafe impl Word for u64 {
@@ -102,6 +109,11 @@ unsafe impl Word for u64 {
   #[inline(always)]
   fn asr(x: Self, s: usize) -> Self {
     ((x as i64) >> s) as u64
+  }
+
+  #[inline(always)]
+  fn from_u64(x: u64) -> Self {
+    x
   }
 }
 

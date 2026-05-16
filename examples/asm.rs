@@ -50,7 +50,7 @@ pub fn get_value_64(t: &IntMap<NonZeroU64, NonZeroU64>, k: NonZeroU64) -> Option
   match t.get(k) { None => None, Some(&y) => Some(y) }
 }
 
-pub fn foo(t: &IntMap<NonZeroU64, NonZeroU64>, k: NonZeroU64) -> Option<&NonZeroU64> {
+pub fn foo(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
   t.prefetch(k);
   t.get(k)
 }

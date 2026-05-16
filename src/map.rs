@@ -23,6 +23,7 @@ use rand_core::Rng;
 use crate::key::Key;
 use crate::private_trait::Hash;
 use crate::private_trait::Word;
+use crate::util::into;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
 /// or [`NonZeroU64`](core::num::NonZeroU64).
@@ -147,15 +148,15 @@ fn is_uninit<K:Key>(shift: usize) -> bool {
 
 #[inline(always)]
 fn capacity<K: Key>(s: usize) -> usize {
-  let n = ! (K::Word::MAX >> 1);
+  let n = into::<u64>(! (K::Word::MAX >> 1));
   let n = n >> s;
-  let n = n | K::Word::asr(n, K::BITS - 1);
-  Into::<u64>::into(n) as usize
+  let n = K::Word::from_u64(n) | K::Word::asr(K::Word::from_u64(n), K::BITS - 1);
+  into::<u64>(n) as usize
 }
 
 #[inline(always)]
 fn slot<W: Word>(h: W, s: usize) -> usize {
-  (Into::<u64>::into(h) >> s) as usize
+  (into::<u64>(h) >> s) as usize
 }
 
 impl<K: Key, V> IntMap<K, V> {
@@ -187,7 +188,6 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn len(&self) -> usize {
     let s = self.shift;
     let r = self.slack;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     capacity::<K>(s) - r
   }
 
@@ -205,7 +205,7 @@ impl<K: Key, V> IntMap<K, V> {
     let m = K::Word::seed0(self.seed);
     let h = K::hash(key, m);
     if ! is_uninit_searchable::<K, V>() && is_uninit::<K>(s) {
-      return
+      return;
     }
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
@@ -406,7 +406,7 @@ impl<K: Key, V> IntMap<K, V> {
           x = unsafe { slot_hash(p).replace(x) };
         }
         unsafe { slot_data(p).write(y) };
-        if p == unsafe { z.sub(1) } || r == 0 {
+        if unsafe { z.offset_from_unsigned(p) } == 1 || r == 0 {
           let _: *mut V = self.insert_grow(h, p);
         } else {
           self.slack = r - 1;
@@ -793,7 +793,6 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let r = self.slack;
     let m = K::Word::seed1(self.seed);
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -811,7 +810,6 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let r = self.slack;
     let m = K::Word::seed1(self.seed);
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -828,7 +826,6 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let r = self.slack;
     let m = K::Word::seed1(self.seed);
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -845,7 +842,6 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
@@ -862,7 +858,6 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    unsafe { assert_unchecked(s <= K::BITS - 1) };
     let i: Iter<K, _, _, _> =
       Iter {
         len: capacity::<K>(s) - r,
