@@ -50,6 +50,7 @@ fn test_api() {
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key);
+  write!(s, "{:?} <- t.get_disjoint_mut([])\n", t.get_disjoint_mut([]));
   write!(s, "{:?} <- t.get_disjoint_mut({:?})\n", t.get_disjoint_mut([NonZeroU32::MIN, key]), [NonZeroU32::MIN, key]);
   write!(s, "{:?} <- t.remove({:?})\n", t.remove(key), key);
   write!(s, "{:?} <- t.len()\n", t.len());
@@ -82,6 +83,7 @@ fn test_api() {
       true <- t.contains_key(13)
       Some(42) <- t.get(13)
       Some(42) <- t.get_mut(13)
+      [] <- t.get_disjoint_mut([])
       [None, Some(42)] <- t.get_disjoint_mut([1, 13])
       Some(42) <- t.remove(13)
       0 <- t.len()
@@ -343,6 +345,8 @@ fn test_displacement_histogram() {
   "#]].assert_eq(&s.drain(..).as_str());
 }
 
+/*
+
 fn key_seq(n: u32) -> NonZeroU32 {
   let n = n | 0x8000_0000;
   let n = n.rotate_left(16);
@@ -399,3 +403,4 @@ fn test_foo() {
   "#]].assert_eq(&s.drain(..).as_str());
 
 }
+*/

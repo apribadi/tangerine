@@ -57,6 +57,20 @@ unsafe impl<K: Key, T: IntoKey<Key = K>> Key for T {
   }
 }
 
+pub(crate) unsafe trait Hash {
+  type Seed0: Copy;
+
+  type Seed1: Copy;
+
+  fn seed_nondet() -> (Self::Seed0, Self::Seed1);
+
+  fn seed(_: &mut impl Rng) -> (Self::Seed0, Self::Seed1);
+
+  fn hash(_: Self, _: Self::Seed0) -> Self;
+
+  fn invert_hash(_: Self, _: Self::Seed1) -> Self;
+}
+
 pub(crate) unsafe trait Word:
   Copy
   + Ord
@@ -108,18 +122,4 @@ unsafe impl Word for u64 {
   fn asr(x: Self, s: usize) -> Self {
     (x as i64 >> s) as u64
   }
-}
-
-pub(crate) unsafe trait Hash {
-  type Seed0: Copy;
-
-  type Seed1: Copy;
-
-  fn seed_nondet() -> (Self::Seed0, Self::Seed1);
-
-  fn seed(_: &mut impl Rng) -> (Self::Seed0, Self::Seed1);
-
-  fn hash(_: Self, _: Self::Seed0) -> Self;
-
-  fn invert_hash(_: Self, _: Self::Seed1) -> Self;
 }
