@@ -5,7 +5,7 @@ pub mod map;
 pub mod set;
 pub mod key;
 
-mod private_trait;
+mod internal_trait;
 mod util;
 
 cfg_select! {

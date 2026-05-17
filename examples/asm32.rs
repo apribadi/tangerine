@@ -22,19 +22,11 @@ pub fn len(t: &IntMap<NonZeroU32, NonZeroU64>) -> usize {
   t.len()
 }
 
-pub fn len_64(t: &IntMap<NonZeroU64, NonZeroU64>) -> usize {
-  t.len()
-}
-
 pub fn is_empty(t: &IntMap<NonZeroU32, NonZeroU64>) -> bool {
   t.is_empty()
 }
 
 pub fn contains_key(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> bool {
-  t.contains_key(k)
-}
-
-pub fn contains_key_64(t: &IntMap<NonZeroU64, NonZeroU64>, k: NonZeroU64) -> bool {
   t.contains_key(k)
 }
 
@@ -50,11 +42,7 @@ pub fn get_value(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<No
   match t.get(k) { None => None, Some(&y) => Some(y) }
 }
 
-pub fn get_value_64(t: &IntMap<NonZeroU64, NonZeroU64>, k: NonZeroU64) -> Option<NonZeroU64> {
-  match t.get(k) { None => None, Some(&y) => Some(y) }
-}
-
-pub fn foo(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
+pub fn prefetch_get(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
   t.prefetch(k);
   t.get(k)
 }
@@ -79,33 +67,11 @@ pub fn remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<N
   t.remove(k)
 }
 
-pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
-  match t.entry(key) {
-    Entry::Occupied(entry) => Some(replace(entry.into_mut(), value)),
-    Entry::Vacant(entry) => { let _ = entry.insert(value); None }
-  }
-}
-
-pub fn entry_try_insert(
-    t: &mut IntMap<NonZeroU32, NonZeroU64>,
-    key: NonZeroU32,
-    value: NonZeroU64
-  ) -> Result<&mut NonZeroU64, (&mut NonZeroU64, NonZeroU64)>
-{
-  match t.entry(key) {
-    Entry::Occupied(entry) => Err((entry.into_mut(), value)),
-    Entry::Vacant(entry) => Ok(entry.insert(value)),
-  }
-}
-
-pub fn entry_remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Option<NonZeroU64> {
-  match t.entry(key) {
-    Entry::Occupied(entry) => Some(entry.remove()),
-    Entry::Vacant(_) => None,
-  }
-}
-
 pub fn clear(t: &mut IntMap<NonZeroU32, NonZeroU64>) {
+  t.clear();
+}
+
+pub fn clear_needs_drop(t: &mut IntMap<NonZeroU32, Box<u64>>) {
   t.clear();
 }
 
@@ -113,7 +79,7 @@ pub fn reset(t: &mut IntMap<NonZeroU32, NonZeroU64>) {
   t.reset();
 }
 
-pub fn reset_box(t: &mut IntMap<NonZeroU32, Box<u64>>) {
+pub fn reset_needs_drop(t: &mut IntMap<NonZeroU32, Box<u64>>) {
   t.reset();
 }
 
@@ -141,6 +107,42 @@ pub fn iter_values_loop(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
   let mut x = 0u64;
   for &y in t.values() { x ^= y.get(); }
   x
+}
+
+#[inline(never)]
+pub fn num_slots(t: &IntMap<NonZeroU32, NonZeroU64>) -> usize {
+  tangerine::map::internal::num_slots(t)
+}
+
+#[inline(never)]
+pub fn displacement_histogram(t: &IntMap<NonZeroU32, NonZeroU64>) -> [usize; 10] {
+  tangerine::map::internal::displacement_histogram(t)
+}
+
+pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
+  match t.entry(key) {
+    Entry::Occupied(entry) => Some(replace(entry.into_mut(), value)),
+    Entry::Vacant(entry) => { let _ = entry.insert(value); None }
+  }
+}
+
+pub fn entry_try_insert(
+    t: &mut IntMap<NonZeroU32, NonZeroU64>,
+    key: NonZeroU32,
+    value: NonZeroU64
+  ) -> Result<&mut NonZeroU64, (&mut NonZeroU64, NonZeroU64)>
+{
+  match t.entry(key) {
+    Entry::Occupied(entry) => Err((entry.into_mut(), value)),
+    Entry::Vacant(entry) => Ok(entry.insert(value)),
+  }
+}
+
+pub fn entry_remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Option<NonZeroU64> {
+  match t.entry(key) {
+    Entry::Occupied(entry) => Some(entry.remove()),
+    Entry::Vacant(_) => None,
+  }
 }
 
 pub fn entry_inc(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
@@ -172,61 +174,3 @@ pub fn entry_dec(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
     }
   }
 }
-
-#[inline(never)]
-pub fn num_slots(t: &IntMap<NonZeroU32, NonZeroU64>) -> usize {
-  tangerine::map::internal::num_slots(t)
-}
-
-#[inline(never)]
-pub fn displacement_histogram(t: &IntMap<NonZeroU32, NonZeroU64>) -> [usize; 10] {
-  tangerine::map::internal::displacement_histogram(t)
-}
-
-/*
-pub fn set_contains(t: &IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
-  t.contains(k)
-}
-
-pub fn set_insert(t: &mut IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
-  t.insert(k)
-}
-
-pub fn set_remove(t: &mut IntSet<NonZeroU32>, k: NonZeroU32) -> bool {
-  t.remove(k)
-}
-
-pub fn hashbrown_clear(t: &mut foldhash::HashMap<NonZeroU32, NonZeroU64>) {
-  t.clear();
-}
-
-pub fn hashbrown_entry_inc(t: &mut foldhash::HashMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
-  match t.entry(key) {
-    std::collections::hash_map::Entry::Occupied(mut entry) => {
-      let value = entry.get_mut();
-      *value = (*value).saturating_add(1);
-    }
-    std::collections::hash_map::Entry::Vacant(e) => {
-      let _ = e.insert(NonZeroU64::MIN);
-    }
-  }
-}
-
-pub fn hashbrown_entry_dec(t: &mut foldhash::HashMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
-  match t.entry(key) {
-    std::collections::hash_map::Entry::Occupied(mut entry) => {
-      let value = entry.get_mut();
-      match NonZeroU64::new((*value).get() - 1) {
-        None => {
-          let _ = entry.remove();
-        }
-        Some(n) => {
-          *value = n;
-        }
-      }
-    }
-    std::collections::hash_map::Entry::Vacant(_) => {
-    }
-  }
-}
-*/

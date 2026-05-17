@@ -3,7 +3,7 @@
 
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
-use crate::private_trait;
+use crate::internal_trait;
 
 /// A sealed trait for hashable keys representable as [`NonZeroU32`] or
 /// [`NonZeroU64`]. The only way to implement this trait for additional types is
@@ -12,7 +12,7 @@ use crate::private_trait;
 /// Types that implement this trait will usually be `Copy`, though that is not
 /// strictly required.
 #[allow(private_bounds)]
-pub trait Key: private_trait::Key {
+pub trait Key: internal_trait::Key {
 }
 
 impl Key for NonZeroU32 {

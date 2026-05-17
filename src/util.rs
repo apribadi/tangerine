@@ -29,6 +29,6 @@ pub(crate) fn invert_u64(a: u64) -> u64 {
 }
 
 #[inline(always)]
-pub(crate) fn into<T>(x: impl Into<T>) -> T {
-  x.into()
+pub(crate) fn ptr_diff<T>(x: *const T, y: *const T) -> usize {
+  x.addr().wrapping_sub(y.addr()) / size_of::<T>()
 }

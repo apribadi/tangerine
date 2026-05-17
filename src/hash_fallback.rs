@@ -1,6 +1,6 @@
 use rand_core::Rng;
 
-use crate::private_trait::Hash;
+use crate::internal_trait::Hash;
 use crate::util::invert_u32;
 use crate::util::invert_u64;
 
@@ -25,7 +25,7 @@ unsafe impl Hash for u32 {
   fn seed_nondet() -> Self::Seed {
     let n = dandelion::thread_local::u64();
     let a = 1 | (n as u32);
-    let b = 1 | (n >> 32) as u32;
+    let b = 1 | ((n >> 32) as u32);
     let x = invert_u32(a.wrapping_mul(b));
     let c = x.wrapping_mul(a);
     let d = x.wrapping_mul(b);
@@ -36,7 +36,7 @@ unsafe impl Hash for u32 {
   fn seed(g: &mut impl Rng) -> Self::Seed {
     let n = g.next_u64();
     let a = 1 | (n as u32);
-    let b = 1 | (n >> 32) as u32;
+    let b = 1 | ((n >> 32) as u32);
     let x = invert_u32(a.wrapping_mul(b));
     let c = x.wrapping_mul(a);
     let d = x.wrapping_mul(b);
@@ -87,7 +87,7 @@ unsafe impl Hash for u64 {
   fn seed_nondet() -> Self::Seed {
     let n = dandelion::thread_local::u128();
     let a = 1 | (n as u64);
-    let b = 1 | (n >> 64) as u64;
+    let b = 1 | ((n >> 64) as u64);
     let x = invert_u64(a.wrapping_mul(b));
     let c = x.wrapping_mul(a);
     let d = x.wrapping_mul(b);

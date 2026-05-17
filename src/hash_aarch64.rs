@@ -1,6 +1,6 @@
 use rand_core::Rng;
 
-use crate::private_trait::Hash;
+use crate::internal_trait::Hash;
 use crate::util::invert_u32;
 use crate::util::invert_u64;
 
@@ -23,31 +23,19 @@ fn widening_carryless_mul_u32(x: u32, y: u32) -> u64 {
 }
 
 unsafe impl Hash for u32 {
-  type Seed = (u32, u32);
-
   type Seed0 = u32;
 
   type Seed1 = u32;
 
   #[inline(always)]
-  fn seed0(m: &Self::Seed) -> Self::Seed0 {
-    m.0
-  }
-
-  #[inline(always)]
-  fn seed1(m: &Self::Seed) -> Self::Seed1 {
-    m.1
-  }
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
+  fn seed_nondet() -> (Self::Seed0, Self::Seed1) {
     let a = 1 | dandelion::thread_local::u32();
     let b = invert_u32(a);
     (a, b)
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
+  fn seed(g: &mut impl Rng) -> (Self::Seed0, Self::Seed1) {
     let a = 1 | g.next_u32();
     let b = invert_u32(a);
     (a, b)
@@ -69,31 +57,19 @@ unsafe impl Hash for u32 {
 }
 
 unsafe impl Hash for u64 {
-  type Seed = (u64, u64);
-
   type Seed0 = u64;
 
   type Seed1 = u64;
 
   #[inline(always)]
-  fn seed0(m: &Self::Seed) -> Self::Seed0 {
-    m.0
-  }
-
-  #[inline(always)]
-  fn seed1(m: &Self::Seed) -> Self::Seed1 {
-    m.1
-  }
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
+  fn seed_nondet() -> (Self::Seed0, Self::Seed1) {
     let a = 1 | dandelion::thread_local::u64();
     let b = invert_u64(a);
     (a, b)
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
+  fn seed(g: &mut impl Rng) -> (Self::Seed0, Self::Seed1) {
     let a = 1 | g.next_u64();
     let b = invert_u64(a);
     (a, b)
