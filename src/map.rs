@@ -183,7 +183,7 @@ fn capacity<K: Key, V>(s: usize) -> usize {
 }
 
 #[inline(always)]
-unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (K::Word, *mut Slot<K, V>) {
+unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
   unsafe { assert_unchecked(s <= K::Word::BITS - 1) };
   let k = slot(h, s);
   let b = unsafe { t.add(k + 1) };
@@ -193,7 +193,7 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (K::Wor
     let u = unsafe { slot_hash(a).read() };
     let p = select_unpredictable(u < h, b, a);
     let x = select_unpredictable(u < h, v, u);
-    (x, p)
+    (p, x)
   } else {
     cold_path();
     let mut p = b;
@@ -203,7 +203,7 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (K::Wor
       x = unsafe { slot_hash(p).read() };
       if ! (x < h) { break }
     }
-    (x, p)
+    (p, x)
   }
 }
 
@@ -267,7 +267,7 @@ impl<K: Key, V> IntMap<K, V> {
     let m = self.seed0;
     let h = hash(key, m);
     if is_initial_null_table(t) { return false }
-    unsafe { search(t, s, h) }.0 == h
+    unsafe { search(t, s, h) }.1 == h
   }
 
   /// Returns a reference to the value associated with the given key, if
@@ -279,11 +279,11 @@ impl<K: Key, V> IntMap<K, V> {
     let m = self.seed0;
     if is_initial_null_table(t) { return None }
     let h = hash(key, m);
-    let a = unsafe { search(t, s, h) };
-    if a.0 != h {
+    let p = unsafe { search(t, s, h) };
+    if p.1 != h {
       None
     } else {
-      Some(unsafe { &*slot_data(a.1) })
+      Some(unsafe { &*slot_data(p.0) })
     }
   }
 
@@ -296,11 +296,11 @@ impl<K: Key, V> IntMap<K, V> {
     let m = self.seed0;
     let h = hash(key, m);
     if is_initial_null_table(t) { return None }
-    let a = unsafe { search(t, s, h) };
-    if a.0 != h {
+    let p = unsafe { search(t, s, h) };
+    if p.1 != h {
       None
     } else {
-      Some(unsafe { &mut *slot_data(a.1) })
+      Some(unsafe { &mut *slot_data(p.0) })
     }
   }
 
@@ -326,12 +326,12 @@ impl<K: Key, V> IntMap<K, V> {
     if is_initial_null_table(t) { return out }
     for i in 0 .. N {
       let h = K::Word::hash(words[i], m);
-      let a = unsafe { search(t, s, h) };
+      let p = unsafe { search(t, s, h) };
       out[i] =
-        if a.0 != h {
+        if p.1 != h {
           None
         } else {
-          Some(unsafe { &mut *slot_data(a.1) })
+          Some(unsafe { &mut *slot_data(p.0) })
         };
     }
     out
@@ -356,9 +356,9 @@ impl<K: Key, V> IntMap<K, V> {
       let _: *mut V = self.insert_init(h, value);
       None
     } else {
-      let a = unsafe { search(t, s, h) };
-      if a.0 == h {
-        Some(unsafe { slot_data(a.1).replace(value) })
+      let p = unsafe { search(t, s, h) };
+      if p.1 == h {
+        Some(unsafe { slot_data(p.0).replace(value) })
       } else {
         if is_initial_fake_table(t, s) {
           cold_path();
@@ -366,9 +366,9 @@ impl<K: Key, V> IntMap<K, V> {
         } else {
           let r = self.slack;
           let z = self.limit.cast_mut();
-          let mut p = a.1;
-          let mut x = a.0;
+          let mut x = p.1;
           let mut y = value;
+          let mut p = p.0;
           unsafe { slot_hash(p).write(h) };
           while x != K::MAX {
             y = unsafe { slot_data(p).replace(y) };
@@ -502,16 +502,16 @@ impl<K: Key, V> IntMap<K, V> {
     let m = self.seed0;
     let h = hash(key, m);
     if is_initial_null_table(t) { return None }
-    let (x, p) = unsafe { search(t, s, h) };
-    if x != h {
+    let p = unsafe { search(t, s, h) };
+    if p.1 != h {
       None
     } else {
       let r = self.slack;
       self.slack = r + 1;
-      let value = unsafe { slot_data(p).read() };
-      let mut p = p;
+      let mut p = p.0;
       let mut a;
       let mut i = ptr_diff(p, t);
+      let value = unsafe { slot_data(p).read() };
       loop {
         a = p;
         p = unsafe { p.add(1) };
@@ -546,20 +546,20 @@ impl<K: Key, V> IntMap<K, V> {
         }
       )
     } else {
-      let a = unsafe { search(t, s, h) };
-      if a.0 == h {
+      let p = unsafe { search(t, s, h) };
+      if p.1 == h {
         Entry::Occupied(
           OccupiedEntry {
             map: self,
-            pos: a.1
+            pos: p.0
           }
         )
       } else {
         Entry::Vacant(
           VacantEntry {
             map: self,
-            pos: a.1,
-            other: a.0,
+            pos: p.0,
+            other: p.1,
             entry: h
           }
         )
