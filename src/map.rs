@@ -139,12 +139,12 @@ const fn is_fake_table_ok<K: Key, V>() -> bool {
 }
 
 #[inline(always)]
-fn is_initial_null_table<K:Key, V>(table: *mut Slot<K, V>) -> bool {
+fn is_uninit_null_table<K:Key, V>(table: *mut Slot<K, V>, _: usize) -> bool {
   ! is_fake_table_ok::<K, V>() && table.is_null()
 }
 
 #[inline(always)]
-fn is_initial_fake_table<K:Key, V>(_: *mut Slot<K, V>, shift: usize) -> bool {
+fn is_uninit_fake_table<K:Key, V>(_: *mut Slot<K, V>, shift: usize) -> bool {
   is_fake_table_ok::<K, V>() && shift == initial_shift::<K, V>()
 }
 
@@ -207,6 +207,27 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut S
   }
 }
 
+#[inline(always)]
+unsafe fn remove_at<K: Key, V>(p: *mut Slot<K, V>, s: usize, i: usize) -> V {
+  let value = unsafe { slot_data(p).read() };
+  let mut p = p;
+  let mut a;
+  let mut i = i;
+  loop {
+    a = p;
+    p = unsafe { p.add(1) };
+    i = i + 1;
+    let x = unsafe { slot_hash(p).read() };
+    if ! (slot(x, s) < i && /* likely */ x != K::MAX) { break }
+    unsafe { slot_hash(a).write(x) };
+    unsafe { slot_data(a).write(slot_data(p).read()) };
+    // NOTE: We could do the loop exit test here instead, with the modification
+    // that we read data as MaybeUninit<V>.
+  }
+  unsafe { slot_hash(a).write(K::MAX) };
+  value
+}
+
 impl<K: Key, V> IntMap<K, V> {
   #[inline(always)]
   fn from_seed(m: (<K::Word as Hash>::Seed0, <K::Word as Hash>::Seed1)) -> Self {
@@ -253,7 +274,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_initial_null_table(t) { return }
+    if is_uninit_null_table(t, s) { return }
     let k = slot(h, s);
     let _ = unsafe { slot_hash(t.add(k)).read_volatile() };
     let _ = unsafe { slot_hash(t.add(k + 1)).read_volatile() };
@@ -266,7 +287,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_initial_null_table(t) { return false }
+    if is_uninit_null_table(t, s) { return false }
     unsafe { search(t, s, h) }.1 == h
   }
 
@@ -277,7 +298,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed0;
-    if is_initial_null_table(t) { return None }
+    if is_uninit_null_table(t, s) { return None }
     let h = hash(key, m);
     let p = unsafe { search(t, s, h) };
     if p.1 != h {
@@ -295,7 +316,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_initial_null_table(t) { return None }
+    if is_uninit_null_table(t, s) { return None }
     let p = unsafe { search(t, s, h) };
     if p.1 != h {
       None
@@ -311,21 +332,21 @@ impl<K: Key, V> IntMap<K, V> {
   ///
   /// Panics if any key is the same as any other key.
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
-    let words = keys.map(K::into_word);
+    let t = self.table.cast_mut();
+    let s = self.shift;
+    let m = self.seed0;
+    let hs = keys.map(|key| hash(key, m));
     let mut is_disjoint = true;
     for i in 0 .. N {
       for j in 0 .. i {
-        is_disjoint &= words[i] != words[j];
+        is_disjoint &= hs[i] != hs[j];
       }
     }
     assert!(is_disjoint);
     let mut out = [const { None }; N];
-    let t = self.table.cast_mut();
-    let s = self.shift;
-    let m = self.seed0;
-    if is_initial_null_table(t) { return out }
+    if is_uninit_null_table(t, s) { return out }
     for i in 0 .. N {
-      let h = K::Word::hash(words[i], m);
+      let h = hs[i];
       let p = unsafe { search(t, s, h) };
       out[i] =
         if p.1 != h {
@@ -351,7 +372,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_initial_null_table(t) {
+    if is_uninit_null_table(t, s) {
       cold_path();
       let _: *mut V = self.insert_init(h, value);
       None
@@ -360,7 +381,7 @@ impl<K: Key, V> IntMap<K, V> {
       if p.1 == h {
         Some(unsafe { slot_data(p.0).replace(value) })
       } else {
-        if is_initial_fake_table(t, s) {
+        if is_uninit_fake_table(t, s) {
           cold_path();
           let _: *mut V = self.insert_init(h, value);
         } else {
@@ -501,29 +522,13 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_initial_null_table(t) { return None }
+    if is_uninit_null_table(t, s) { return None }
     let p = unsafe { search(t, s, h) };
     if p.1 != h {
       None
     } else {
-      let r = self.slack;
-      self.slack = r + 1;
-      let mut p = p.0;
-      let mut a;
-      let mut i = ptr_diff(p, t);
-      let value = unsafe { slot_data(p).read() };
-      loop {
-        a = p;
-        p = unsafe { p.add(1) };
-        i = i + 1;
-        let x = unsafe { slot_hash(p).read() };
-        if ! (slot(x, s) < i && /* likely */ x != K::MAX) { break }
-        unsafe { slot_hash(a).write(x) };
-        unsafe { slot_data(a).write(slot_data(p).read()) };
-        // NOTE: We could do the loop exit test here instead, with the
-        // modification that we read data as MaybeUninit<V>.
-      }
-      unsafe { slot_hash(a).write(K::MAX) };
+      self.slack = self.slack + 1;
+      let value = unsafe { remove_at(p.0, s, p.0.offset_from_unsigned(t)) };
       Some(value)
     }
   }
@@ -536,7 +541,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_initial_null_table(t) {
+    if is_uninit_null_table(t, s) {
       Entry::Vacant(
         VacantEntry {
           map: self,
