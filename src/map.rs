@@ -1,12 +1,11 @@
 //! This module provides a fast hash map keyed by types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
-extern crate alloc;
-
 use alloc::alloc::Layout;
 use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use core::hint::assert_unchecked;
@@ -20,8 +19,8 @@ use core::ptr::null;
 use core::ptr::null_mut;
 use rand_core::Rng;
 
-use crate::key::Key;
 use crate::hash::Hash;
+use crate::key::Key;
 use crate::word::Word;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
@@ -555,7 +554,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// Ensures that there is a value associated with the given key by inserting
   /// the result of calling the provided default function if the key was
   /// previously absent. Returns a mutable reference to the value in the entry.
-  pub fn get_or_insert_with<F: FnOnce() -> V>(&mut self, key: K, default: F) -> &mut V {
+  pub fn get_or_insert_with(&mut self, key: K, default: impl FnOnce() -> V) -> &mut V {
     match self.entry(key) {
       Entry::Occupied(entry) => entry.into_mut(),
       Entry::Vacant(entry) => entry.insert(default()),

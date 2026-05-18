@@ -1,6 +1,7 @@
 //! This module provides a fast hash set containing types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
+use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::iter::ExactSizeIterator;
 use rand_core::Rng;

@@ -75,6 +75,7 @@ impl KeyGen {
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
+    intmap::IntMap<NonZeroU32, NonZeroU32>,
     std::collections::HashMap<NonZeroU32, NonZeroU32, foldhash::fast::RandomState>,
     std::collections::HashMap<NonZeroU32, NonZeroU32, rustc_hash::FxBuildHasher>,
     tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
@@ -110,6 +111,7 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
+    intmap::IntMap<NonZeroU32, u32>,
     std::collections::HashMap<NonZeroU32, u32, ahash::RandomState>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
     std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
@@ -148,6 +150,7 @@ fn bench_get_unchained<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
+    intmap::IntMap<NonZeroU32, u32>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
     std::collections::HashMap<NonZeroU32, u32, ahash::RandomState>,
     std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
@@ -187,6 +190,7 @@ fn bench_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
+    intmap::IntMap<NonZeroU32, u32>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
     std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
     tangerine::map::IntMap<NonZeroU32, u32>,
@@ -242,6 +246,7 @@ fn bench_iter_key<T: Map<u32>>(bencher: Bencher<'_, '_>) {
 #[divan::bench(
   sample_count = SAMPLE_COUNT,
   types = [
+    intmap::IntMap<NonZeroU32, u32>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
     tangerine::map::IntMap<NonZeroU32, u32>,
   ])]

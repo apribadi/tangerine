@@ -1,5 +1,8 @@
+#![no_std]
 #![cfg_attr(miri, feature(uint_carryless_mul))]
 #![doc = include_str!("../README.md")]
+
+extern crate alloc;
 
 pub mod map;
 pub mod set;

@@ -36,6 +36,7 @@ foldhash = "0.2.0"
 rustc-hash = "2.1.2"
 mimalloc = "0.1.50"
 # probemap = "0.1.10"
+intmap = "3.1.3"
 
 [profile.release]
 
