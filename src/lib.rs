@@ -5,8 +5,9 @@ pub mod map;
 pub mod set;
 pub mod key;
 
-mod internal_trait;
+mod hash;
 mod util;
+mod word;
 
 cfg_select! {
   all(

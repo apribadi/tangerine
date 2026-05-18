@@ -21,8 +21,8 @@ use core::ptr::null_mut;
 use rand_core::Rng;
 
 use crate::key::Key;
-use crate::internal_trait::Hash;
-use crate::internal_trait::Word;
+use crate::hash::Hash;
+use crate::word::Word;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
 /// or [`NonZeroU64`](core::num::NonZeroU64).
