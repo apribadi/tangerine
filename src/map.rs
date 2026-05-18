@@ -57,8 +57,8 @@ pub struct OccupiedEntry<'a, K: Key, V> {
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
   pos: *mut Slot<K, V>,
-  other: K::Word,
-  entry: K::Word,
+  cur: K::Word,
+  key: K::Word,
 }
 
 unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
@@ -139,18 +139,18 @@ const fn is_fake_table_ok<K: Key, V>() -> bool {
 }
 
 #[inline(always)]
-fn is_uninit_null_table<K:Key, V>(table: *mut Slot<K, V>, _: usize) -> bool {
+fn is_uninit_null<K:Key, V>(table: *mut Slot<K, V>, _: usize) -> bool {
   ! is_fake_table_ok::<K, V>() && table.is_null()
 }
 
 #[inline(always)]
-fn is_uninit_fake_table<K:Key, V>(_: *mut Slot<K, V>, shift: usize) -> bool {
+fn is_uninit_stub<K:Key, V>(_: *mut Slot<K, V>, shift: usize) -> bool {
   is_fake_table_ok::<K, V>() && shift == initial_shift::<K, V>()
 }
 
 #[inline(always)]
-fn is_uninit<K:Key, V>(shift: usize) -> bool {
-  shift == initial_shift::<K, V>()
+fn is_uninit<K:Key, V>(table: *mut Slot<K, V>, shift: usize) -> bool {
+  is_uninit_null(table, shift) || is_uninit_stub(table, shift)
 }
 
 #[inline(always)]
@@ -208,11 +208,11 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut S
 }
 
 #[inline(always)]
-unsafe fn remove_at<K: Key, V>(p: *mut Slot<K, V>, s: usize, i: usize) -> V {
+unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>) -> V {
   let value = unsafe { slot_data(p).read() };
   let mut p = p;
   let mut a;
-  let mut i = i;
+  let mut i = unsafe { p.offset_from_unsigned(t) };
   loop {
     a = p;
     p = unsafe { p.add(1) };
@@ -226,6 +226,21 @@ unsafe fn remove_at<K: Key, V>(p: *mut Slot<K, V>, s: usize, i: usize) -> V {
   }
   unsafe { slot_hash(a).write(K::MAX) };
   value
+}
+
+#[inline(always)]
+unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::Word, h: K::Word, value: V) -> *mut Slot<K, V> {
+  let mut p = p;
+  let mut x = x;
+  let mut y = value;
+  unsafe { slot_hash(p).write(h) };
+  while x != K::MAX {
+    y = unsafe { slot_data(p).replace(y) };
+    p = unsafe { p.add(1) };
+    x = unsafe { slot_hash(p).replace(x) };
+  }
+  unsafe { slot_data(p).write(y) };
+  p
 }
 
 impl<K: Key, V> IntMap<K, V> {
@@ -274,7 +289,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_uninit_null_table(t, s) { return }
+    if is_uninit_null(t, s) { return }
     let k = slot(h, s);
     let _ = unsafe { slot_hash(t.add(k)).read_volatile() };
     let _ = unsafe { slot_hash(t.add(k + 1)).read_volatile() };
@@ -287,7 +302,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_uninit_null_table(t, s) { return false }
+    if is_uninit_null(t, s) { return false }
     unsafe { search(t, s, h) }.1 == h
   }
 
@@ -298,7 +313,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let m = self.seed0;
-    if is_uninit_null_table(t, s) { return None }
+    if is_uninit_null(t, s) { return None }
     let h = hash(key, m);
     let p = unsafe { search(t, s, h) };
     if p.1 != h {
@@ -316,7 +331,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_uninit_null_table(t, s) { return None }
+    if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
     if p.1 != h {
       None
@@ -344,7 +359,7 @@ impl<K: Key, V> IntMap<K, V> {
     }
     assert!(is_disjoint);
     let mut out = [const { None }; N];
-    if is_uninit_null_table(t, s) { return out }
+    if is_uninit_null(t, s) { return out }
     for i in 0 .. N {
       let h = hs[i];
       let p = unsafe { search(t, s, h) };
@@ -372,8 +387,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_uninit_null_table(t, s) {
-      cold_path();
+    if is_uninit_null(t, s) {
       let _: *mut V = self.insert_init(h, value);
       None
     } else {
@@ -381,24 +395,13 @@ impl<K: Key, V> IntMap<K, V> {
       if p.1 == h {
         Some(unsafe { slot_data(p.0).replace(value) })
       } else {
-        if is_uninit_fake_table(t, s) {
-          cold_path();
+        if is_uninit_stub(t, s) {
           let _: *mut V = self.insert_init(h, value);
         } else {
           let r = self.slack;
           let z = self.limit.cast_mut();
-          let mut x = p.1;
-          let mut y = value;
-          let mut p = p.0;
-          unsafe { slot_hash(p).write(h) };
-          while x != K::MAX {
-            y = unsafe { slot_data(p).replace(y) };
-            p = unsafe { p.add(1) };
-            x = unsafe { slot_hash(p).replace(x) };
-          }
-          unsafe { slot_data(p).write(y) };
+          let p = unsafe { insert_at(p.0, p.1, h, value) };
           if unsafe { z.offset_from_unsigned(p) } == 1 || r == 0 {
-            cold_path();
             let _: *mut V = self.insert_grow(h, p);
           } else {
             self.slack = r - 1;
@@ -522,13 +525,13 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_uninit_null_table(t, s) { return None }
+    if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
     if p.1 != h {
       None
     } else {
       self.slack = self.slack + 1;
-      Some(unsafe { remove_at(p.0, s, p.0.offset_from_unsigned(t)) })
+      Some(unsafe { remove_at(t, s, p.0) })
     }
   }
 
@@ -540,66 +543,16 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let m = self.seed0;
     let h = hash(key, m);
-    if is_uninit_null_table(t, s) {
-      Entry::Vacant(
-        VacantEntry {
-          map: self,
-          pos: null_mut(),
-          other: K::MAX,
-          entry: h
-        }
-      )
+    if is_uninit_null(t, s) {
+      Entry::Vacant(VacantEntry { map: self, pos: null_mut(), cur: K::MAX, key: h })
     } else {
       let p = unsafe { search(t, s, h) };
       if p.1 == h {
-        Entry::Occupied(
-          OccupiedEntry {
-            map: self,
-            pos: p.0
-          }
-        )
+        Entry::Occupied(OccupiedEntry { map: self, pos: p.0 })
       } else {
-        Entry::Vacant(
-          VacantEntry {
-            map: self,
-            pos: p.0,
-            other: p.1,
-            entry: h
-          }
-        )
+        Entry::Vacant(VacantEntry { map: self, pos: p.0, cur: p.1, key: h })
       }
     }
-  }
-
-  #[inline(always)]
-  unsafe fn insert_at(&mut self, pos: *mut Slot<K, V>, other: K::Word, entry: K::Word, value: V) -> &mut V {
-    let s = self.shift;
-    let inserted_at =
-      if is_uninit::<K, V>(s) {
-        cold_path();
-        self.insert_init(entry, value)
-      } else {
-        let r = self.slack;
-        let z = self.limit.cast_mut();
-        let mut p = pos;
-        let mut x = other;
-        let mut y = value;
-        unsafe { slot_hash(p).write(entry) };
-        while x != K::MAX {
-          y = unsafe { slot_data(p).replace(y) };
-          p = unsafe { p.add(1) };
-          x = unsafe { slot_hash(p).replace(x) };
-        }
-        unsafe { slot_data(p).write(y) };
-        if p == unsafe { z.sub(1) } || r == 0 {
-          cold_path();
-          self.insert_grow(entry, p)
-        } else {
-          self.slack = r - 1;
-          unsafe { slot_data(pos) }
-        }
-      };
-    unsafe { &mut *inserted_at }
   }
 
   /// Ensures that there is a value associated with the given key by inserting
@@ -700,7 +653,7 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let r = self.slack;
     let z = self.limit.cast_mut();
-    if is_uninit::<K, V>(s) { return }
+    if is_uninit(t, s) { return }
     let n = capacity::<K, V>(s) - r;
     let d = ptr_diff(z, t);
     self.table = initial_table::<K, V>();
@@ -883,7 +836,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     let s = self.map.shift;
     let p = self.pos;
     self.map.slack = self.map.slack + 1;
-    unsafe { remove_at(p, s, p.offset_from_unsigned(t)) }
+    unsafe { remove_at(t, s, p) }
   }
 }
 
@@ -892,7 +845,27 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
   /// to it.
   #[inline(always)]
   pub fn insert(self, value: V) -> &'a mut V {
-    unsafe { self.map.insert_at(self.pos, self.other, self.entry, value) }
+    let t = self.map.table.cast_mut();
+    let s = self.map.shift;
+    let p = self.pos;
+    let x = self.cur;
+    let h = self.key;
+    let a = p;
+    let inserted_at =
+      if is_uninit(t, s) {
+        self.map.insert_init(h, value)
+      } else {
+        let r = self.map.slack;
+        let z = self.map.limit.cast_mut();
+        let p = unsafe { insert_at(p, x, h, value) };
+        if unsafe { z.offset_from_unsigned(p) } == 1 || r == 0 {
+          self.map.insert_grow(h, p)
+        } else {
+          self.map.slack = r - 1;
+          unsafe { slot_data(a) }
+        }
+      };
+    unsafe { &mut *inserted_at }
   }
 }
 
