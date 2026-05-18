@@ -119,6 +119,20 @@ pub fn displacement_histogram(t: &IntMap<NonZeroU32, NonZeroU64>) -> [usize; 10]
   tangerine::map::internal::displacement_histogram(t)
 }
 
+#[inline(never)]
+pub fn entry(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Entry<'_, NonZeroU32, NonZeroU64> {
+  t.entry(key)
+}
+
+#[inline(never)]
+pub fn entry_get_mut(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Option<&mut NonZeroU64> {
+  match t.entry(key) {
+    Entry::Occupied(entry) => Some(entry.into_mut()),
+    Entry::Vacant(_) => None,
+  }
+}
+
+#[inline(never)]
 pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, value: NonZeroU64) -> Option<NonZeroU64> {
   match t.entry(key) {
     Entry::Occupied(entry) => Some(replace(entry.into_mut(), value)),
@@ -126,6 +140,7 @@ pub fn entry_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32, val
   }
 }
 
+#[inline(never)]
 pub fn entry_try_insert(
     t: &mut IntMap<NonZeroU32, NonZeroU64>,
     key: NonZeroU32,

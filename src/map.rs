@@ -40,6 +40,7 @@ pub struct IntMap<K: Key, V> {
 
 /// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
 /// may either be vacant or occupied.
+#[repr(C)]
 pub enum Entry<'a, K: Key, V> {
   /// An occupied entry.
   Occupied(OccupiedEntry<'a, K, V>),
@@ -48,12 +49,14 @@ pub enum Entry<'a, K: Key, V> {
 }
 
 /// A view of an occupied entry in a map.
+#[repr(C)]
 pub struct OccupiedEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
   pos: *mut Slot<K, V>,
 }
 
 /// A view of a vacant entry in a map.
+#[repr(C)]
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
   pos: *mut Slot<K, V>,
@@ -68,9 +71,9 @@ unsafe impl<K: Key + Sync, V: Sync> Sync for IntMap<K, V> {
 }
 
 #[repr(align(64))]
-struct FakeTable(#[allow(dead_code)] [u8; 192]);
+struct Stub(#[allow(dead_code)] [u8; 192]);
 
-static FAKE_TABLE: FakeTable = FakeTable([0xff; 192]);
+static STUB: Stub = Stub([0xff; 192]);
 
 #[repr(C)]
 struct Slot<K: Key, V> {
@@ -86,11 +89,6 @@ unsafe fn slot_hash<K: Key, V>(p: *mut Slot<K, V>) -> *mut K::Word {
 #[inline(always)]
 unsafe fn slot_data<K: Key, V>(p: *mut Slot<K, V>) -> *mut V {
   unsafe { p.byte_add(offset_of!(Slot<K, V>, data)).cast() }
-}
-
-#[inline(always)]
-const fn ctz(n: usize) -> usize {
-  n.trailing_zeros() as usize
 }
 
 #[inline(always)]
@@ -121,8 +119,8 @@ fn initial_shift<K: Key, V>() -> usize {
 }
 
 fn initial_table<K:Key, V>() -> *const Slot<K, V> {
-  if is_fake_table_ok::<K, V>() {
-    &raw const FAKE_TABLE as _
+  if is_stub_ok::<K, V>() {
+    &raw const STUB as _
   } else {
     null()
   }
@@ -133,19 +131,19 @@ fn initial_limit<K:Key, V>() -> *const Slot<K, V> {
 }
 
 #[inline(always)]
-const fn is_fake_table_ok<K: Key, V>() -> bool {
-  align_of::<[Slot<K, V>; 3]>() <= align_of::<FakeTable>()
-    && size_of::<[Slot<K, V>; 3]>() <= size_of::<FakeTable>()
+const fn is_stub_ok<K: Key, V>() -> bool {
+  align_of::<[Slot<K, V>; 3]>() <= align_of::<Stub>()
+    && size_of::<[Slot<K, V>; 3]>() <= size_of::<Stub>()
 }
 
 #[inline(always)]
 fn is_uninit_null<K:Key, V>(table: *mut Slot<K, V>, _: usize) -> bool {
-  ! is_fake_table_ok::<K, V>() && table.is_null()
+  ! is_stub_ok::<K, V>() && table.is_null()
 }
 
 #[inline(always)]
 fn is_uninit_stub<K:Key, V>(_: *mut Slot<K, V>, shift: usize) -> bool {
-  is_fake_table_ok::<K, V>() && shift == initial_shift::<K, V>()
+  is_stub_ok::<K, V>() && shift == initial_shift::<K, V>()
 }
 
 #[inline(always)]
@@ -418,7 +416,7 @@ impl<K: Key, V> IntMap<K, V> {
     let w = 4 * ALLOCATION_CHUNK;
     let e = ALLOCATION_CHUNK;
     let d = w + e;
-    let s = K::BITS - ctz(w);
+    let s = K::BITS - w.trailing_zeros() as usize;
     assert!(d <= allocation_max_num_slots::<K, V>());
     let l = unsafe { allocation_layout::<K, V>(d) };
     let t = unsafe { alloc(l) } as *mut Slot<K, V>;
@@ -460,7 +458,7 @@ impl<K: Key, V> IntMap<K, V> {
         0 // special case, we can store every possible key
       } else if last_write == unsafe { old_z.sub(1) } {
         old_e * 2 // if we wrote in the final slot
-      } else if old_e < ctz(new_w) {
+      } else if old_e < K::BITS - new_s {
         old_e + ALLOCATION_CHUNK // we maintain e >= log2(w)
       } else {
         old_e
@@ -850,13 +848,13 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     let p = self.pos;
     let x = self.cur;
     let h = self.key;
-    let a = p;
     let inserted_at =
       if is_uninit(t, s) {
         self.map.insert_init(h, value)
       } else {
         let r = self.map.slack;
         let z = self.map.limit.cast_mut();
+        let a = p;
         let p = unsafe { insert_at(p, x, h, value) };
         if unsafe { z.offset_from_unsigned(p) } == 1 || r == 0 {
           self.map.insert_grow(h, p)
@@ -902,7 +900,7 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
   }
 
   #[inline(always)]
-  fn fold<U, G: FnMut(U, T) -> U>(self, init: U, g: G) -> U {
+  fn fold<A, G: FnMut(A, T) -> A>(self, init: A, g: G) -> A {
     let mut n = self.len;
     let mut p = self.pos;
     let mut f = self.f;
