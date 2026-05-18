@@ -27,8 +27,3 @@ pub(crate) fn invert_u64(a: u64) -> u64 {
   let x = x.wrapping_mul(y.wrapping_add(1));
   x
 }
-
-#[inline(always)]
-pub(crate) fn ptr_diff<T>(x: *const T, y: *const T) -> usize {
-  x.addr().wrapping_sub(y.addr()) / size_of::<T>()
-}

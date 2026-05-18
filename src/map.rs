@@ -24,7 +24,6 @@ use rand_core::Rng;
 use crate::key::Key;
 use crate::internal_trait::Hash;
 use crate::internal_trait::Word;
-use crate::util::ptr_diff;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
 /// or [`NonZeroU64`](core::num::NonZeroU64).
@@ -70,10 +69,10 @@ unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
 unsafe impl<K: Key + Sync, V: Sync> Sync for IntMap<K, V> {
 }
 
-#[repr(align(64))]
-struct Stub(#[allow(dead_code)] [u8; 192]);
+#[repr(C, align(64))]
+struct Stub([u8; 192]);
 
-static STUB: Stub = Stub([0xff; 192]);
+static STUB: Stub = Stub([0xff; _]);
 
 #[repr(C)]
 struct Slot<K: Key, V> {
@@ -110,20 +109,20 @@ const unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
   unsafe { Layout::from_size_align_unchecked(s, a) }
 }
 
-fn initial_slack<K: Key, V>() -> usize {
-  capacity::<K, V>(initial_shift::<K, V>())
-}
-
-fn initial_shift<K: Key, V>() -> usize {
-  K::Word::BITS - 1
-}
-
 fn initial_table<K:Key, V>() -> *const Slot<K, V> {
   if is_stub_ok::<K, V>() {
     &raw const STUB as _
   } else {
     null()
   }
+}
+
+fn initial_shift<K: Key, V>() -> usize {
+  K::Word::BITS - 1
+}
+
+fn initial_slack<K: Key, V>() -> usize {
+  capacity::<K, V>(initial_shift::<K, V>())
 }
 
 fn initial_limit<K:Key, V>() -> *const Slot<K, V> {
@@ -444,7 +443,7 @@ impl<K: Key, V> IntMap<K, V> {
     let old_s = self.shift;
     let old_r = self.slack;
     let old_z = self.limit.cast_mut();
-    let old_d = ptr_diff(old_z, old_t);
+    let old_d = unsafe { old_z.offset_from_unsigned(old_t) };
     let old_w = 1 << K::BITS - old_s;
     let old_e = old_d - old_w;
     // If s == 0, then the map can hold every possible key and should never grow.
@@ -627,7 +626,7 @@ impl<K: Key, V> IntMap<K, V> {
       if n != 0 {
         self.slack = c;
         let mut p = t;
-        let mut i = ptr_diff(z, t);
+        let mut i = unsafe { z.offset_from_unsigned(t) };
         unsafe { assert_unchecked(i % ALLOCATION_CHUNK == 0) };
         unsafe { assert_unchecked(i != 0) };
         loop {
@@ -653,7 +652,7 @@ impl<K: Key, V> IntMap<K, V> {
     let z = self.limit.cast_mut();
     if is_uninit(t, s) { return }
     let n = capacity::<K, V>(s) - r;
-    let d = ptr_diff(z, t);
+    let d = unsafe { z.offset_from_unsigned(t) };
     self.table = initial_table::<K, V>();
     self.shift = initial_shift::<K, V>();
     self.slack = initial_slack::<K, V>();
@@ -752,7 +751,7 @@ impl<K: Key, V> IntMap<K, V> {
   fn num_slots(&self) -> usize {
     let t = self.table;
     let z = self.limit;
-    ptr_diff(z, t)
+    unsafe { z.offset_from_unsigned(t) }
   }
 
   fn allocation_size(&self) -> usize {
