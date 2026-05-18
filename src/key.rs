@@ -51,6 +51,7 @@ pub unsafe trait IntoKey {
 pub(crate) mod internal {
   use core::num::NonZeroU32;
   use core::num::NonZeroU64;
+
   use super::IntoKey;
   use crate::hash::Hash;
   use crate::word::Word;

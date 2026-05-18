@@ -118,6 +118,16 @@ pub fn clone(t: &IntMap<NonZeroU32, NonZeroU64>) -> IntMap<NonZeroU32, NonZeroU6
 }
 
 #[inline(never)]
+pub fn iter(t: &IntMap<NonZeroU32, NonZeroU64>) -> impl ExactSizeIterator<Item = (NonZeroU32, &NonZeroU64)> {
+  t.iter()
+}
+
+#[inline(never)]
+pub fn values(t: &IntMap<NonZeroU32, NonZeroU64>) -> impl ExactSizeIterator<Item = &NonZeroU64> {
+  t.values()
+}
+
+#[inline(never)]
 pub fn iter_keys_loop(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u32 {
   let mut x = 0u32;
   for y in t.keys() { x ^= y.get(); }

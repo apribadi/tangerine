@@ -38,7 +38,7 @@ pub struct IntMap<K: Key, V> {
 
 /// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
 /// may either be vacant or occupied.
-#[repr(C)]
+#[repr(usize)]
 pub enum Entry<'a, K: Key, V> {
   /// An occupied entry.
   Occupied(OccupiedEntry<'a, K, V>),
