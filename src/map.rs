@@ -528,8 +528,7 @@ impl<K: Key, V> IntMap<K, V> {
       None
     } else {
       self.slack = self.slack + 1;
-      let value = unsafe { remove_at(p.0, s, p.0.offset_from_unsigned(t)) };
-      Some(value)
+      Some(unsafe { remove_at(p.0, s, p.0.offset_from_unsigned(t)) })
     }
   }
 
@@ -601,29 +600,6 @@ impl<K: Key, V> IntMap<K, V> {
         }
       };
     unsafe { &mut *inserted_at }
-  }
-
-  #[inline(always)]
-  unsafe fn remove_at(&mut self, pos: *mut Slot<K, V>) -> V {
-    let t = self.table.cast_mut();
-    let s = self.shift;
-    let r = self.slack;
-    self.slack = r + 1;
-    let value = unsafe { slot_data(pos).read() };
-    let mut p = pos;
-    let mut a;
-    let mut i = ptr_diff(p, t);
-    loop {
-      a = p;
-      p = unsafe { p.add(1) };
-      i = i + 1;
-      let x = unsafe { slot_hash(p).read() };
-      if ! (slot(x, s) < i && /* likely */ x != K::MAX) { break }
-      unsafe { slot_hash(a).write(x) };
-      unsafe { slot_data(a).write(slot_data(p).read()) };
-    }
-    unsafe { slot_hash(a).write(K::MAX) };
-    value
   }
 
   /// Ensures that there is a value associated with the given key by inserting
@@ -903,7 +879,11 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
   /// Removes the value occupying the entry, and returns that value.
   #[inline(always)]
   pub fn remove(self) -> V {
-    unsafe { self.map.remove_at(self.pos) }
+    let t = self.map.table.cast_mut();
+    let s = self.map.shift;
+    let p = self.pos;
+    self.map.slack = self.map.slack + 1;
+    unsafe { remove_at(p, s, p.offset_from_unsigned(t)) }
   }
 }
 
