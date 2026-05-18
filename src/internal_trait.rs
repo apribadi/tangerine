@@ -6,10 +6,6 @@ use crate::key::IntoKey;
 pub(crate) unsafe trait Key: Sized {
   type Word: Hash + Word;
 
-  const BITS: usize = Self::Word::BITS;
-
-  const MAX: Self::Word = Self::Word::MAX;
-
   fn into_word(_: Self) -> Self::Word;
 
   unsafe fn from_word(_: Self::Word) -> Self;
@@ -71,55 +67,51 @@ pub(crate) unsafe trait Hash {
   fn invert_hash(_: Self, _: Self::Seed1) -> Self;
 }
 
-pub(crate) unsafe trait Word:
-  Copy
-  + Ord
-  + Into<u64>
-  + core::ops::Add<Self, Output = Self>
-  + core::ops::BitOr<Self, Output = Self>
-  + core::ops::Not<Output = Self>
-  + core::ops::Shr<usize, Output = Self>
-  + int_cast::IntCast
-  + int_cast::BoundedCastFromInt<u64>
-  + int_cast::BoundedCastFromInt<Self::UInt>
-{
-  type UInt:
-    Copy
-    + core::ops::Shr<usize, Output = Self::UInt>
-    + Into<u64>
-    + int_cast::IntCast
-    + int_cast::CastFromInt<Self>;
-
-
+pub(crate) unsafe trait Word: Copy + Ord {
   const BITS: usize;
 
   const MAX: Self;
 
-  fn asr(_: Self, _: usize) -> Self;
+  fn capacity(_: usize) -> usize;
+
+  fn slot(_: Self, _: usize) -> usize;
 }
 
 unsafe impl Word for u32 {
-  type UInt = u64;
+  const BITS: usize = 32;
 
-  const BITS: usize = Self::BITS as usize;
-
-  const MAX: Self = Self::MAX;
+  const MAX: Self = u32::MAX;
 
   #[inline(always)]
-  fn asr(x: Self, s: usize) -> Self {
-    (x as i32 >> s) as u32
+  fn capacity(s: usize) -> usize {
+    const { assert!(usize::BITS >= 32) };
+    let n = 0x8000_0000_usize >> s;
+    let n = n as u32;
+    let n = n | (((n as i32) >> 31) as u32);
+    n as usize
+  }
+
+  #[inline(always)]
+  fn slot(h: Self, s: usize) -> usize {
+    const { assert!(usize::BITS >= 32) };
+    (h as usize) >> s
   }
 }
 
 unsafe impl Word for u64 {
-  type UInt = u64;
+  const BITS: usize = 64;
 
-  const BITS: usize = Self::BITS as usize;
-
-  const MAX: Self = Self::MAX;
+  const MAX: Self = u64::MAX;
 
   #[inline(always)]
-  fn asr(x: Self, s: usize) -> Self {
-    (x as i64 >> s) as u64
+  fn capacity(s: usize) -> usize {
+    let n = 0x8000_0000_0000_0000_u64 >> s;
+    let n = n | (((n as i64) >> 63) as u64);
+    n as usize
+  }
+
+  #[inline(always)]
+  fn slot(h: Self, s: usize) -> usize {
+    (h >> s) as usize
   }
 }

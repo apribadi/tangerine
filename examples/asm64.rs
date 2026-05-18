@@ -17,6 +17,7 @@ pub fn with_seed(rng: &mut Rng) -> IntMap<NonZeroU64, NonZeroU64> {
   IntMap::with_seed(rng)
 }
 
+#[inline(never)]
 pub fn len(t: &IntMap<NonZeroU64, NonZeroU64>) -> usize {
   t.len()
 }

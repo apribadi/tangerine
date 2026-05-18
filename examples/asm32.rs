@@ -7,102 +7,136 @@ use std::num::NonZeroU64;
 use tangerine::map::Entry;
 use tangerine::map::IntMap;
 
+#[inline(never)]
 pub fn drop(_: IntMap<NonZeroU32, NonZeroU64>) {
 }
 
+#[inline(never)]
 pub fn new() -> IntMap<NonZeroU32, NonZeroU64> {
   IntMap::new()
 }
 
+#[inline(never)]
 pub fn with_seed(rng: &mut Rng) -> IntMap<NonZeroU32, NonZeroU64> {
   IntMap::with_seed(rng)
 }
 
+#[inline(never)]
 pub fn len(t: &IntMap<NonZeroU32, NonZeroU64>) -> usize {
   t.len()
 }
 
+#[inline(never)]
 pub fn is_empty(t: &IntMap<NonZeroU32, NonZeroU64>) -> bool {
   t.is_empty()
 }
 
+#[inline(never)]
 pub fn contains_key(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> bool {
   t.contains_key(k)
 }
 
+#[inline(never)]
 pub fn prefetch(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) {
   t.prefetch(k)
 }
 
+#[inline(never)]
 pub fn get(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
   t.get(k)
 }
 
+#[inline(never)]
 pub fn get_value(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
   match t.get(k) { None => None, Some(&y) => Some(y) }
 }
 
+#[inline(never)]
+pub fn get_mut(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&mut NonZeroU64> {
+  t.get_mut(k)
+}
+
+#[inline(never)]
+pub fn get_disjoint_mut_0(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 0]) -> [Option<&mut NonZeroU64>; 0] {
+  t.get_disjoint_mut(ks)
+}
+
+#[inline(never)]
+pub fn get_disjoint_mut_4(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 4]) -> [Option<&mut NonZeroU64>; 4] {
+  t.get_disjoint_mut(ks)
+}
+
+#[inline(never)]
+pub fn get_or_insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> &mut NonZeroU64 {
+  t.get_or_insert(k, NonZeroU64::MIN)
+}
+
+#[inline(never)]
+pub fn get_or_insert_with(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> &mut NonZeroU64 {
+  t.get_or_insert_with(k, || NonZeroU64::MIN)
+}
+
+#[inline(never)]
 pub fn prefetch_get(t: &IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&NonZeroU64> {
   t.prefetch(k);
   t.get(k)
 }
 
-pub fn get_mut(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<&mut NonZeroU64> {
-  t.get_mut(k)
-}
-
-pub fn get_disjoint_mut_0(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 0]) -> [Option<&mut NonZeroU64>; 0] {
-  t.get_disjoint_mut(ks)
-}
-
-pub fn get_disjoint_mut_4(t: &mut IntMap<NonZeroU32, NonZeroU64>, ks: [NonZeroU32; 4]) -> [Option<&mut NonZeroU64>; 4] {
-  t.get_disjoint_mut(ks)
-}
-
+#[inline(never)]
 pub fn insert(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32, v: NonZeroU64) -> Option<NonZeroU64> {
   t.insert(k, v)
 }
 
+#[inline(never)]
 pub fn remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, k: NonZeroU32) -> Option<NonZeroU64> {
   t.remove(k)
 }
 
+#[inline(never)]
 pub fn clear(t: &mut IntMap<NonZeroU32, NonZeroU64>) {
   t.clear();
 }
 
+#[inline(never)]
 pub fn clear_needs_drop(t: &mut IntMap<NonZeroU32, Box<u64>>) {
   t.clear();
 }
 
+#[inline(never)]
 pub fn reset(t: &mut IntMap<NonZeroU32, NonZeroU64>) {
   t.reset();
 }
 
+#[inline(never)]
 pub fn reset_needs_drop(t: &mut IntMap<NonZeroU32, Box<u64>>) {
   t.reset();
 }
 
+#[inline(never)]
 pub fn clone(t: &IntMap<NonZeroU32, NonZeroU64>) -> IntMap<NonZeroU32, NonZeroU64> {
   t.clone()
 }
 
+#[inline(never)]
 pub fn iter_keys_loop(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u32 {
   let mut x = 0u32;
   for y in t.keys() { x ^= y.get(); }
   x
 }
 
+#[inline(never)]
 pub fn iter_values_fold(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
   t.values().fold(0, |x, &y| x ^ y.get())
 }
 
+#[inline(never)]
 pub fn iter_values_for_each(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
   let mut x = 0u64;
   t.values().for_each(|&y| { x ^= y.get(); });
   x
 }
 
+#[inline(never)]
 pub fn iter_values_loop(t: &mut IntMap<NonZeroU32, NonZeroU64>) -> u64 {
   let mut x = 0u64;
   for &y in t.values() { x ^= y.get(); }
@@ -153,6 +187,7 @@ pub fn entry_try_insert(
   }
 }
 
+#[inline(never)]
 pub fn entry_remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> Option<NonZeroU64> {
   match t.entry(key) {
     Entry::Occupied(entry) => Some(entry.remove()),
@@ -160,6 +195,7 @@ pub fn entry_remove(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) -> 
   }
 }
 
+#[inline(never)]
 pub fn entry_inc(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
   match t.entry(key) {
     Entry::Occupied(mut entry) => {
@@ -172,6 +208,7 @@ pub fn entry_inc(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
   }
 }
 
+#[inline(never)]
 pub fn entry_dec(t: &mut IntMap<NonZeroU32, NonZeroU64>, key: NonZeroU32) {
   match t.entry(key) {
     Entry::Occupied(mut entry) => {

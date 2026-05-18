@@ -27,7 +27,6 @@ crate-type = ["lib"]
 [dependencies]
 dandelion-random = { version = "0.3.0", features = ["rand_core", "thread_local"] }
 rand_core = "0.10.1"
-int-cast = "0.1.0"
 
 [dev-dependencies]
 ahash = "0.8.12"

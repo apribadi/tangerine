@@ -18,7 +18,6 @@ use core::mem::offset_of;
 use core::ops::Index;
 use core::ptr::null;
 use core::ptr::null_mut;
-use int_cast::IntCast;
 use rand_core::Rng;
 
 use crate::key::Key;
@@ -162,21 +161,12 @@ unsafe fn invert_hash<K: Key>(x: K::Word, m: <K::Word as Hash>::Seed1) -> K {
 
 #[inline(always)]
 fn slot<W: Word>(h: W, s: usize) -> usize {
-  (h.cast::<W::UInt>() >> s).into() as usize
+  W::slot(h, s)
 }
 
 #[inline(always)]
 fn capacity<K: Key, V>(s: usize) -> usize {
-  /*
-  let n: u64 = (! (K::Word::MAX >> 1)).into();
-  let n = (n >> s).wrapping_cast::<K::Word>();
-  let n: u64 = (n | K::Word::asr(n, K::BITS - 1)).into();
-  n.wrapping_cast()
-  */
-  let n = (! (K::Word::MAX >> 1)).cast::<<K::Word as Word>::UInt>();
-  let n = (n >> s).wrapping_cast::<K::Word>();
-  let n = (n | K::Word::asr(n, K::BITS - 1)).cast::<<K::Word as Word>::UInt>();
-  n.into() as usize
+  K::Word::capacity(s)
 }
 
 #[inline(always)]
@@ -215,13 +205,13 @@ unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>)
     p = unsafe { p.add(1) };
     i = i + 1;
     let x = unsafe { slot_hash(p).read() };
-    if ! (slot(x, s) < i && /* likely */ x != K::MAX) { break }
+    if ! (slot(x, s) < i && /* likely */ x != K::Word::MAX) { break }
     unsafe { slot_hash(a).write(x) };
     unsafe { slot_data(a).write(slot_data(p).read()) };
     // NOTE: We could do the loop exit test here instead, with the modification
     // that we read data as MaybeUninit<V>.
   }
-  unsafe { slot_hash(a).write(K::MAX) };
+  unsafe { slot_hash(a).write(K::Word::MAX) };
   value
 }
 
@@ -231,7 +221,7 @@ unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::Word, h: K::Word, value
   let mut x = x;
   let mut y = value;
   unsafe { slot_hash(p).write(h) };
-  while x != K::MAX {
+  while x != K::Word::MAX {
     y = unsafe { slot_data(p).replace(y) };
     p = unsafe { p.add(1) };
     x = unsafe { slot_hash(p).replace(x) };
@@ -415,12 +405,12 @@ impl<K: Key, V> IntMap<K, V> {
     let w = 4 * ALLOCATION_CHUNK;
     let e = ALLOCATION_CHUNK;
     let d = w + e;
-    let s = K::BITS - w.trailing_zeros() as usize;
+    let s = K::Word::BITS - w.trailing_zeros() as usize;
     assert!(d <= allocation_max_num_slots::<K, V>());
     let l = unsafe { allocation_layout::<K, V>(d) };
     let t = unsafe { alloc(l) } as *mut Slot<K, V>;
     if t.is_null() { match handle_alloc_error(l) { } }
-    for i in 0 .. d { unsafe { slot_hash(t.add(i)).write(K::MAX) }; }
+    for i in 0 .. d { unsafe { slot_hash(t.add(i)).write(K::Word::MAX) }; }
     let k = slot(h, s);
     let a = unsafe { t.add(k) };
     unsafe { slot_hash(a).write(h) };
@@ -437,27 +427,27 @@ impl<K: Key, V> IntMap<K, V> {
   fn insert_grow(&mut self, h: K::Word, last_write: *mut Slot<K, V>) -> *mut V {
     // Remove the last slot so that the table is in a valid state, even if we
     // panic.
-    let last_write_hash = unsafe { slot_hash(last_write).replace(K::MAX) };
+    let last_write_hash = unsafe { slot_hash(last_write).replace(K::Word::MAX) };
     // Retrieve and compute values for the old table.
     let old_t = self.table.cast_mut();
     let old_s = self.shift;
     let old_r = self.slack;
     let old_z = self.limit.cast_mut();
     let old_d = unsafe { old_z.offset_from_unsigned(old_t) };
-    let old_w = 1 << K::BITS - old_s;
+    let old_w = 1 << K::Word::BITS - old_s;
     let old_e = old_d - old_w;
     // If s == 0, then the map can hold every possible key and should never grow.
     debug_assert!(0 != old_s);
-    debug_assert!(old_s <= K::BITS - 1);
+    debug_assert!(old_s <= K::Word::BITS - 1);
     // Compute new sizes.
     let new_s = old_s - 1;
-    let new_w = 1 << K::BITS - new_s;
+    let new_w = 1 << K::Word::BITS - new_s;
     let new_e =
       if new_s == 0 {
         0 // special case, we can store every possible key
       } else if last_write == unsafe { old_z.sub(1) } {
         old_e * 2 // if we wrote in the final slot
-      } else if old_e < K::BITS - new_s {
+      } else if old_e < K::Word::BITS - new_s {
         old_e + ALLOCATION_CHUNK // we maintain e >= log2(w)
       } else {
         old_e
@@ -481,7 +471,7 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { assert_unchecked(i % ALLOCATION_CHUNK == 0) };
     unsafe { assert_unchecked(i != 0) };
     loop {
-      unsafe { slot_hash(p).write(K::MAX) };
+      unsafe { slot_hash(p).write(K::Word::MAX) };
       p = unsafe { p.add(1) };
       i = i - 1;
       if i == 0 { break }
@@ -500,7 +490,7 @@ impl<K: Key, V> IntMap<K, V> {
       unsafe { slot_hash(a).write(x) };
       unsafe { slot_data(a).cast::<MaybeUninit<V>>().write(y) };
       p = unsafe { p.add(1) };
-      i = select_unpredictable(x != K::MAX, k + 1, i);
+      i = select_unpredictable(x != K::Word::MAX, k + 1, i);
       if p == old_z { break }
     }
     // The map is now in a valid state, even if deallocating panics.
@@ -541,7 +531,7 @@ impl<K: Key, V> IntMap<K, V> {
     let m = self.seed0;
     let h = hash(key, m);
     if is_uninit_null(t, s) {
-      Entry::Vacant(VacantEntry { map: self, pos: null_mut(), cur: K::MAX, key: h })
+      Entry::Vacant(VacantEntry { map: self, pos: null_mut(), cur: K::Word::MAX, key: h })
     } else {
       let p = unsafe { search(t, s, h) };
       if p.1 == h {
@@ -612,8 +602,8 @@ impl<K: Key, V> IntMap<K, V> {
         let mut p = z;
         loop {
           p = unsafe { p.sub(1) };
-          if unsafe { slot_hash(p).read() } != K::MAX {
-            unsafe { slot_hash(p).write(K::MAX) };
+          if unsafe { slot_hash(p).read() } != K::Word::MAX {
+            unsafe { slot_hash(p).write(K::Word::MAX) };
             r = r + 1;
             self.slack = r;
             unsafe { slot_data(p).drop_in_place() };
@@ -630,7 +620,7 @@ impl<K: Key, V> IntMap<K, V> {
         unsafe { assert_unchecked(i % ALLOCATION_CHUNK == 0) };
         unsafe { assert_unchecked(i != 0) };
         loop {
-          unsafe { slot_hash(p).write(K::MAX) };
+          unsafe { slot_hash(p).write(K::Word::MAX) };
           p = unsafe { p.add(1) };
           i = i - 1;
           if i == 0 { break }
@@ -665,7 +655,7 @@ impl<K: Key, V> IntMap<K, V> {
           let x = unsafe { slot_hash(p).read() };
           let a = p;
           p = unsafe { p.add(1) };
-          if x != K::MAX {
+          if x != K::Word::MAX {
             unsafe { slot_data(a).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
@@ -775,7 +765,7 @@ impl<K: Key, V> IntMap<K, V> {
       let k = i;
       p = unsafe { p.add(1) };
       i = i + 1;
-      if x != K::MAX {
+      if x != K::Word::MAX {
         r[usize::min(9, k - slot(x, s))] += 1;
         n = n - 1;
         if n == 0 { break }
@@ -886,7 +876,7 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
       x = unsafe { slot_hash(p).read()};
       a = p;
       p = unsafe { p.add(1) };
-      if x != K::MAX { break }
+      if x != K::Word::MAX { break }
     }
     self.len = n - 1;
     self.pos = p;
@@ -910,7 +900,7 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
         let x = unsafe { slot_hash(p).read() };
         let a = p;
         p = unsafe { p.add(1) };
-        if x != K::MAX {
+        if x != K::Word::MAX {
           u = g(u, f(a, x));
           n = n - 1;
           if n == 0 { break }
