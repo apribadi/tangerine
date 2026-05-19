@@ -397,33 +397,35 @@ impl<K: Key, V> IntMap<K, V> {
   #[inline(never)]
   #[cold]
   fn insert_init(&mut self, h: K::Word, value: V) -> *mut V {
-    let w = 4 * ALLOCATION_CHUNK;
-    let e = ALLOCATION_CHUNK;
-    let d = w + e;
-    let s = K::Word::BITS - w.trailing_zeros() as usize;
-    assert!(d <= allocation_max_num_slots::<K, V>());
-    let l = unsafe { allocation_layout::<K, V>(d) };
-    let t = unsafe { alloc(l) } as *mut Slot<K, V>;
-    if t.is_null() { match handle_alloc_error(l) { } }
-    for i in 0 .. d { unsafe { slot_hash(t.add(i)).write(K::Word::MAX) }; }
-    let k = slot(h, s);
-    let a = unsafe { t.add(k) };
+    let new_w = 4 * ALLOCATION_CHUNK;
+    let new_e = ALLOCATION_CHUNK;
+    let new_d = new_w + new_e;
+    let new_s = K::Word::BITS - new_w.trailing_zeros() as usize;
+    let new_r = capacity::<K, V>(new_s) - 1;
+    assert!(new_d <= allocation_max_num_slots::<K, V>());
+    let new_l = unsafe { allocation_layout::<K, V>(new_d) };
+    let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
+    if new_t.is_null() { match handle_alloc_error(new_l) { } }
+    let new_z = unsafe { new_t.add(new_d) };
+    for i in 0 .. new_d { unsafe { slot_hash(new_t.add(i)).write(K::Word::MAX) }; }
+    let k = slot(h, new_s);
+    let a = unsafe { new_t.add(k) };
     unsafe { slot_hash(a).write(h) };
     unsafe { slot_data(a).write(value) };
-    self.table = t;
-    self.shift = s;
-    self.slack = capacity::<K, V>(s) - 1;
-    self.limit = unsafe { t.add(d) };
+    self.table = new_t;
+    self.shift = new_s;
+    self.slack = new_r;
+    self.limit = new_z;
     unsafe { slot_data(a) }
   }
 
   #[inline(never)]
   #[cold]
-  fn insert_grow(&mut self, pos: *mut Slot<K, V>, h: K::Word) -> *mut V {
-    let last_write = unsafe { pos.sub(1) };
-    // Remove the last slot so that the table is in a valid state, even if we
-    // panic.
-    let last_write_hash = unsafe { slot_hash(last_write).replace(K::Word::MAX) };
+  fn insert_grow(&mut self, p: *mut Slot<K, V>, h: K::Word) -> *mut V {
+    // Stash the item in the last written-to slot so that the table is in a
+    // valid state, even if we panic.
+    let stashed_slot = unsafe { p.sub(1) };
+    let stashed_hash = unsafe { slot_hash(stashed_slot).replace(K::Word::MAX) };
     // Retrieve and compute values for the old table.
     let old_t = self.table.cast_mut();
     let old_s = self.shift;
@@ -441,7 +443,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_e =
       if new_s == 0 {
         0 // special case, we can store every possible key
-      } else if last_write == unsafe { old_z.sub(1) } {
+      } else if p == old_z {
         old_e * 2 // if we wrote in the final slot
       } else if old_e < K::Word::BITS - new_s {
         old_e + ALLOCATION_CHUNK // we maintain e >= log2(w)
@@ -473,7 +475,7 @@ impl<K: Key, V> IntMap<K, V> {
       if i == 0 { break }
     }
     // Re-add the last write so that we copy it to the new table.
-    unsafe { slot_hash(last_write).write(last_write_hash) };
+    unsafe { slot_hash(stashed_slot).write(stashed_hash) };
     // Copy slots.
     let mut p = old_t;
     let mut i = 0;
@@ -491,7 +493,8 @@ impl<K: Key, V> IntMap<K, V> {
     }
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
-    // Find the newly-inserted value. Note, this was not necessarily at last_write.
+    // Find the newly-inserted value. Note, this was not necessarily at
+    // stashed_slot.
     let k = slot(h, new_s);
     let mut p = unsafe { new_t.add(k) };
     while unsafe { slot_hash(p).read() } != h {
