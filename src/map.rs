@@ -517,7 +517,7 @@ impl<K: Key, V> IntMap<K, V> {
     if p.1 != h {
       None
     } else {
-      self.slack = self.slack + 1;
+      self.slack += 1;
       Some(unsafe { remove_at(t, s, p.0) })
     }
   }
@@ -761,11 +761,10 @@ impl<K: Key, V> IntMap<K, V> {
     let mut i = 0;
     loop {
       let x = unsafe { slot_hash(p).read() };
-      let k = i;
       p = unsafe { p.add(1) };
       i = i + 1;
       if x != K::Word::MAX {
-        r[usize::min(9, k - slot(x, s))] += 1;
+        r[usize::min(9, i - 1 - slot(x, s))] += 1;
         n = n - 1;
         if n == 0 { break }
       }
@@ -821,7 +820,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
     let t = self.map.table.cast_mut();
     let s = self.map.shift;
     let p = self.pos;
-    self.map.slack = self.map.slack + 1;
+    self.map.slack += 1;
     unsafe { remove_at(t, s, p) }
   }
 }
