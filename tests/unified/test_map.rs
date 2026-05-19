@@ -404,3 +404,36 @@ fn test_foo() {
 
 }
 */
+
+#[test]
+fn test_hash() {
+  let mut s = String::new();
+
+  let (a, b) = tangerine::hash::internal::seed(&mut Rng::new(NonZeroU128::MIN));
+
+  write!(s, "{:#x}\n", tangerine::hash::internal::hash(0, a));
+  write!(s, "{:#x}\n", tangerine::hash::internal::hash(1, a));
+  write!(s, "{:#x}\n", tangerine::hash::internal::hash(2, a));
+  write!(s, "{:#x}\n", tangerine::hash::internal::hash(3, a));
+  write!(s, "{:#x}\n", tangerine::hash::internal::hash(4, a));
+  write!(s, "\n");
+  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(0, a), b));
+  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(1, a), b));
+  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(2, a), b));
+  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(3, a), b));
+  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(4, a), b));
+
+  expect![[r#"
+      0xffffffff
+      0xbb6a2bb7
+      0x934ef060
+      0xe2867718
+      0x241e5a92
+
+      0x0
+      0x1
+      0x2
+      0x3
+      0x4
+  "#]].assert_eq(&s.drain(..).as_str());
+}

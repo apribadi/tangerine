@@ -5,12 +5,24 @@ use crate::util::invert_u32;
 use crate::util::invert_u64;
 
 unsafe impl Hash for u32 {
+  type Seed = ((u32, u32), (u32, u32));
+
   type Seed0 = (u32, u32);
 
   type Seed1 = (u32, u32);
 
   #[inline(always)]
-  fn seed_nondet() -> (Self::Seed0, Self::Seed1) {
+  fn seed0(seed: &Self::Seed) -> Self::Seed0 {
+    seed.0
+  }
+
+  #[inline(always)]
+  fn seed1(seed: &Self::Seed) -> Self::Seed1 {
+    seed.1
+  }
+
+  #[inline(always)]
+  fn seed_nondet() -> Self::Seed {
     let n = dandelion::thread_local::u64();
     let a = 1 | (n as u32);
     let b = 1 | ((n >> 32) as u32);
@@ -21,7 +33,7 @@ unsafe impl Hash for u32 {
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl Rng) -> (Self::Seed0, Self::Seed1) {
+  fn seed(g: &mut impl Rng) -> Self::Seed {
     let n = g.next_u64();
     let a = 1 | (n as u32);
     let b = 1 | ((n >> 32) as u32);
@@ -55,9 +67,21 @@ unsafe impl Hash for u32 {
 }
 
 unsafe impl Hash for u64 {
+  type Seed = ((u64, u64), (u64, u64));
+
   type Seed0 = (u64, u64);
 
   type Seed1 = (u64, u64);
+
+  #[inline(always)]
+  fn seed0(seed: &Self::Seed) -> Self::Seed0 {
+    seed.0
+  }
+
+  #[inline(always)]
+  fn seed1(seed: &Self::Seed) -> Self::Seed1 {
+    seed.1
+  }
 
   #[inline(always)]
   fn seed_nondet() -> (Self::Seed0, Self::Seed1) {

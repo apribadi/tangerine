@@ -31,8 +31,7 @@ pub struct IntMap<K: Key, V> {
   shift: usize,
   slack: usize,
   limit: *const Slot<K, V>,
-  seed0: <K::Word as Hash>::Seed0,
-  seed1: <K::Word as Hash>::Seed1,
+  seed: <K::Word as Hash>::Seed,
 }
 
 /// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
@@ -197,48 +196,45 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut S
 unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>) -> V {
   let value = unsafe { slot_data(p).read() };
   let mut p = p;
-  let mut a;
   let mut i = unsafe { p.offset_from_unsigned(t) };
   loop {
-    a = p;
     p = unsafe { p.add(1) };
     i = i + 1;
     let x = unsafe { slot_hash(p).read() };
     if ! (slot(x, s) < i && /* likely */ x != K::Word::MAX) { break }
-    unsafe { slot_hash(a).write(x) };
-    unsafe { slot_data(a).write(slot_data(p).read()) };
+    unsafe { slot_hash(p.sub(1)).write(x) };
+    unsafe { slot_data(p.sub(1)).write(slot_data(p).read()) };
     // NOTE: We could do the loop exit test here instead, with the modification
     // that we read data as MaybeUninit<V>.
   }
-  unsafe { slot_hash(a).write(K::Word::MAX) };
+  unsafe { slot_hash(p.sub(1)).write(K::Word::MAX) };
   value
 }
 
 #[inline(always)]
 unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::Word, h: K::Word, value: V) -> *mut Slot<K, V> {
+  unsafe { slot_hash(p).write(h) };
   let mut p = p;
   let mut x = x;
   let mut y = value;
-  unsafe { slot_hash(p).write(h) };
   while x != K::Word::MAX {
     y = unsafe { slot_data(p).replace(y) };
     p = unsafe { p.add(1) };
     x = unsafe { slot_hash(p).replace(x) };
   }
   unsafe { slot_data(p).write(y) };
-  p
+  unsafe { p.add(1) }
 }
 
 impl<K: Key, V> IntMap<K, V> {
   #[inline(always)]
-  fn from_seed(m: (<K::Word as Hash>::Seed0, <K::Word as Hash>::Seed1)) -> Self {
+  fn from_seed(m: <K::Word as Hash>::Seed) -> Self {
     Self {
       table: initial_table::<K, V>(),
       shift: initial_shift::<K, V>(),
       slack: initial_slack::<K, V>(),
       limit: initial_limit::<K, V>(),
-      seed0: m.0,
-      seed1: m.1,
+      seed: m,
     }
   }
 
@@ -273,7 +269,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn prefetch(&self, key: K) {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed0;
+    let m = K::Word::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) { return }
     let k = slot(h, s);
@@ -286,7 +282,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn contains_key(&self, key: K) -> bool {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed0;
+    let m = K::Word::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) { return false }
     unsafe { search(t, s, h) }.1 == h
@@ -298,7 +294,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get(&self, key: K) -> Option<&V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed0;
+    let m = K::Word::seed0(&self.seed);
     if is_uninit_null(t, s) { return None }
     let h = hash(key, m);
     let p = unsafe { search(t, s, h) };
@@ -315,7 +311,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed0;
+    let m = K::Word::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
@@ -335,7 +331,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed0;
+    let m = K::Word::seed0(&self.seed);
     let hs = keys.map(|key| hash(key, m));
     let mut is_disjoint = true;
     for i in 0 .. N {
@@ -371,7 +367,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed0;
+    let m = K::Word::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) {
       let _: *mut V = self.insert_init(h, value);
@@ -387,8 +383,8 @@ impl<K: Key, V> IntMap<K, V> {
           let r = self.slack;
           let z = self.limit.cast_mut();
           let p = unsafe { insert_at(p.0, p.1, h, value) };
-          if unsafe { z.offset_from_unsigned(p) } == 1 || r == 0 {
-            let _: *mut V = self.insert_grow(h, p);
+          if p == z || r == 0 {
+            let _: *mut V = self.insert_grow(p, h);
           } else {
             self.slack = r - 1;
           }
@@ -423,7 +419,8 @@ impl<K: Key, V> IntMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn insert_grow(&mut self, h: K::Word, last_write: *mut Slot<K, V>) -> *mut V {
+  fn insert_grow(&mut self, pos: *mut Slot<K, V>, h: K::Word) -> *mut V {
+    let last_write = unsafe { pos.sub(1) };
     // Remove the last slot so that the table is in a valid state, even if we
     // panic.
     let last_write_hash = unsafe { slot_hash(last_write).replace(K::Word::MAX) };
@@ -509,7 +506,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn remove(&mut self, key: K) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed0;
+    let m = K::Word::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
@@ -527,7 +524,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.seed0;
+    let m = K::Word::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) {
       Entry::Vacant(VacantEntry { map: self, pos: null_mut(), cur: K::Word::MAX, key: h })
@@ -652,10 +649,9 @@ impl<K: Key, V> IntMap<K, V> {
         let mut p = t;
         loop {
           let x = unsafe { slot_hash(p).read() };
-          let a = p;
           p = unsafe { p.add(1) };
           if x != K::Word::MAX {
-            unsafe { slot_data(a).drop_in_place() };
+            unsafe { slot_data(p.sub(1)).drop_in_place() };
             n = n - 1;
             if n == 0 { break }
           }
@@ -672,7 +668,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.seed1;
+    let m = K::Word::seed1(&self.seed);
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -687,7 +683,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.seed1;
+    let m = K::Word::seed1(&self.seed);
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -701,7 +697,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.seed1;
+    let m = K::Word::seed1(&self.seed);
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -844,8 +840,8 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
         let z = self.map.limit.cast_mut();
         let a = p;
         let p = unsafe { insert_at(p, x, h, value) };
-        if unsafe { z.offset_from_unsigned(p) } == 1 || r == 0 {
-          self.map.insert_grow(h, p)
+        if p == z || r == 0 {
+          self.map.insert_grow(p, h)
         } else {
           self.map.slack = r - 1;
           unsafe { slot_data(a) }
@@ -869,17 +865,15 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
     let n = self.len;
     if n == 0 { return None }
     let mut p = self.pos;
-    let mut a;
     let mut x;
     loop {
       x = unsafe { slot_hash(p).read()};
-      a = p;
       p = unsafe { p.add(1) };
       if x != K::Word::MAX { break }
     }
     self.len = n - 1;
     self.pos = p;
-    Some((self.f)(a, x))
+    Some((self.f)(unsafe { p.sub(1) }, x))
   }
 
   #[inline(always)]
@@ -897,10 +891,9 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
     if n != 0 {
       loop {
         let x = unsafe { slot_hash(p).read() };
-        let a = p;
         p = unsafe { p.add(1) };
         if x != K::Word::MAX {
-          u = g(u, f(a, x));
+          u = g(u, f(unsafe { p.sub(1) }, x));
           n = n - 1;
           if n == 0 { break }
         }
