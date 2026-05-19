@@ -439,6 +439,7 @@ impl<K: Key, V> IntMap<K, V> {
     debug_assert!(old_s <= K::Word::BITS - 1);
     // Compute new sizes.
     let new_s = old_s - 1;
+    let new_r = old_r + (capacity::<K, V>(new_s) - capacity::<K, V>(old_s)) - 1;
     let new_w = 1 << K::Word::BITS - new_s;
     let new_e =
       if new_s == 0 {
@@ -461,7 +462,7 @@ impl<K: Key, V> IntMap<K, V> {
     // Update struct fields.
     self.table = new_t;
     self.shift = new_s;
-    self.slack = old_r + (capacity::<K, V>(new_s) - capacity::<K, V>(old_s)) - 1;
+    self.slack = new_r;
     self.limit = new_z;
     // Initialize new table.
     let mut p = new_t;
