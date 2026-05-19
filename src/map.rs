@@ -380,9 +380,9 @@ impl<K: Key, V> IntMap<K, V> {
         if is_uninit_stub(t, s) {
           let _: *mut V = self.insert_init(h, value);
         } else {
+          let p = unsafe { insert_at(p.0, p.1, h, value) };
           let r = self.slack;
           let z = self.limit.cast_mut();
-          let p = unsafe { insert_at(p.0, p.1, h, value) };
           if p == z || r == 0 {
             let _: *mut V = self.insert_grow(p, h);
           } else {
@@ -836,10 +836,10 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
       if is_uninit(t, s) {
         self.map.insert_init(h, value)
       } else {
-        let r = self.map.slack;
-        let z = self.map.limit.cast_mut();
         let a = p;
         let p = unsafe { insert_at(p, x, h, value) };
+        let r = self.map.slack;
+        let z = self.map.limit.cast_mut();
         if p == z || r == 0 {
           self.map.insert_grow(p, h)
         } else {
