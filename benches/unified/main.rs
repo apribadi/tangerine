@@ -6,6 +6,7 @@ use crate::maps::Map;
 use divan::Bencher;
 use std::hint::black_box;
 use std::num::NonZeroU32;
+use std::num::NonZeroU64;
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
@@ -75,12 +76,15 @@ impl KeyGen {
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    intmap::IntMap<NonZeroU32, NonZeroU32>,
+    // std::collections::HashMap<NonZeroU32, NonZeroU32, rustc_hash::FxBuildHasher>,
     std::collections::HashMap<NonZeroU32, NonZeroU32, foldhash::fast::RandomState>,
-    std::collections::HashMap<NonZeroU32, NonZeroU32, rustc_hash::FxBuildHasher>,
+    // std::collections::HashMap<NonZeroU64, NonZeroU32, foldhash::fast::RandomState>,
+    intmap::IntMap<NonZeroU32, NonZeroU32>,
+    // intmap::IntMap<NonZeroU64, NonZeroU32>,
     tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
+    // tangerine::map::IntMap<NonZeroU64, NonZeroU32>,
   ])]
-fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
+fn bench_get_latency<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
   fn go<T: Map<NonZeroU32>>(t: &mut [(T, NonZeroU32)]) {
     for _ in 0 .. 1000 {
@@ -111,13 +115,16 @@ fn bench_get_chained<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    intmap::IntMap<NonZeroU32, u32>,
-    std::collections::HashMap<NonZeroU32, u32, ahash::RandomState>,
+    // std::collections::HashMap<NonZeroU32, u32, ahash::RandomState>,
+    // std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
-    std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
+    // std::collections::HashMap<NonZeroU64, u32, foldhash::fast::RandomState>,
+    intmap::IntMap<NonZeroU32, u32>,
+    // intmap::IntMap<NonZeroU64, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
+    tangerine::map::IntMap<NonZeroU64, u32>,
   ])]
-fn bench_get_unchained<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
+fn bench_get_throughput<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
   fn go<T: Map<u32>>(t: &mut [(T, KeyGen)]) -> u32 {
     let mut z = 0;
@@ -150,11 +157,14 @@ fn bench_get_unchained<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    intmap::IntMap<NonZeroU32, u32>,
+    // std::collections::HashMap<NonZeroU32, u32, ahash::RandomState>,
+    // std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
-    std::collections::HashMap<NonZeroU32, u32, ahash::RandomState>,
-    std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
+    // std::collections::HashMap<NonZeroU64, u32, foldhash::fast::RandomState>,
+    intmap::IntMap<NonZeroU32, u32>,
+    // intmap::IntMap<NonZeroU64, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
+    // tangerine::map::IntMap<NonZeroU64, u32>,
   ])]
 fn bench_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
@@ -190,10 +200,13 @@ fn bench_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    intmap::IntMap<NonZeroU32, u32>,
+    // std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
-    std::collections::HashMap<NonZeroU32, u32, rustc_hash::FxBuildHasher>,
+    // std::collections::HashMap<NonZeroU64, u32, foldhash::fast::RandomState>,
+    intmap::IntMap<NonZeroU32, u32>,
+    // intmap::IntMap<NonZeroU64, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
+    // tangerine::map::IntMap<NonZeroU64, u32>,
   ])]
 fn bench_remove_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
@@ -246,8 +259,8 @@ fn bench_iter_key<T: Map<u32>>(bencher: Bencher<'_, '_>) {
 #[divan::bench(
   sample_count = SAMPLE_COUNT,
   types = [
-    intmap::IntMap<NonZeroU32, u32>,
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
+    intmap::IntMap<NonZeroU32, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
   ])]
 fn bench_iter_value<T: Map<u32>>(bencher: Bencher<'_, '_>) {
