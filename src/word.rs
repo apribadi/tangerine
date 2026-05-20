@@ -13,6 +13,9 @@ unsafe impl Word for u32 {
 
   const MAX: Self = u32::MAX;
 
+  // NOTE: Here we statically assert that usize is at least 32 bits. We could
+  // easily lift this restriction, however.
+
   #[inline(always)]
   fn capacity(s: usize) -> usize {
     const _: () = assert!(usize::BITS >= 32);

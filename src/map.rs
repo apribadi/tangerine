@@ -17,6 +17,7 @@ use core::mem::offset_of;
 use core::ops::Index;
 use core::ptr::null;
 use core::ptr::null_mut;
+use core::ptr::write_bytes;
 use rand_core::Rng;
 
 use crate::hash::Hash;
@@ -97,7 +98,7 @@ const fn allocation_size<K: Key, V>(num_slots: usize) -> usize {
   num_slots * size_of::<Slot<K, V>>()
 }
 
-const ALLOCATION_CHUNK: usize = 4;
+const CHUNK: usize = 4;
 
 #[inline(always)]
 const unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
@@ -196,18 +197,20 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut S
 unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>) -> V {
   let value = unsafe { slot_data(p).read() };
   let mut p = p;
+  let mut q;
   let mut i = unsafe { p.offset_from_unsigned(t) };
   loop {
+    q = p;
     p = unsafe { p.add(1) };
     i = i + 1;
     let x = unsafe { slot_hash(p).read() };
     if ! (slot(x, s) < i && /* likely */ x != K::Word::MAX) { break }
-    unsafe { slot_hash(p.sub(1)).write(x) };
-    unsafe { slot_data(p.sub(1)).write(slot_data(p).read()) };
+    unsafe { slot_hash(q).write(x) };
+    unsafe { slot_data(q).write(slot_data(p).read()) };
     // NOTE: We could do the loop exit test here instead, with the modification
     // that we read data as MaybeUninit<V>.
   }
-  unsafe { slot_hash(p.sub(1)).write(K::Word::MAX) };
+  unsafe { slot_hash(q).write(K::Word::MAX) };
   value
 }
 
@@ -224,6 +227,21 @@ unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::Word, h: K::Word, value
   }
   unsafe { slot_data(p).write(y) };
   unsafe { p.add(1) }
+}
+
+#[inline(always)]
+unsafe fn clear_slots<K: Key, V>(p: *mut Slot<K, V>, n: usize) {
+  // PRECONDITIONS:
+  // - n != 0
+  // - n % CHUNK == 0
+  let mut p = p;
+  let mut n = n;
+  loop {
+    unsafe { write_bytes(p, 0xff, CHUNK) };
+    p = unsafe { p.add(CHUNK) };
+    n = n - CHUNK;
+    if n == 0 { break }
+  }
 }
 
 impl<K: Key, V> IntMap<K, V> {
@@ -340,19 +358,15 @@ impl<K: Key, V> IntMap<K, V> {
       }
     }
     assert!(is_disjoint);
-    let mut out = [const { None }; N];
-    if is_uninit_null(t, s) { return out }
-    for i in 0 .. N {
-      let h = hs[i];
+    if is_uninit_null(t, s) { return [const { None }; _] }
+    hs.map(|h| {
       let p = unsafe { search(t, s, h) };
-      out[i] =
-        if p.1 != h {
-          None
-        } else {
-          Some(unsafe { &mut *slot_data(p.0) })
-        };
-    }
-    out
+      if p.1 != h {
+        None
+      } else {
+        Some(unsafe { &mut *slot_data(p.0) })
+      }
+    })
   }
 
   /// Inserts the given key and value into the map. Returns the previous value
@@ -397,8 +411,8 @@ impl<K: Key, V> IntMap<K, V> {
   #[inline(never)]
   #[cold]
   fn insert_init(&mut self, h: K::Word, value: V) -> *mut V {
-    let new_w = 4 * ALLOCATION_CHUNK;
-    let new_e = ALLOCATION_CHUNK;
+    let new_w = 4 * CHUNK;
+    let new_e = CHUNK;
     let new_d = new_w + new_e;
     let new_s = K::Word::BITS - new_w.trailing_zeros() as usize;
     let new_r = capacity::<K, V>(new_s) - 1;
@@ -407,7 +421,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
     let new_z = unsafe { new_t.add(new_d) };
-    for i in 0 .. new_d { unsafe { slot_hash(new_t.add(i)).write(K::Word::MAX) }; }
+    unsafe { clear_slots(new_t, new_d) };
     let k = slot(h, new_s);
     let a = unsafe { new_t.add(k) };
     unsafe { slot_hash(a).write(h) };
@@ -447,7 +461,7 @@ impl<K: Key, V> IntMap<K, V> {
       } else if p == old_z {
         old_e * 2 // if we wrote in the final slot
       } else if old_e < K::Word::BITS - new_s {
-        old_e + ALLOCATION_CHUNK // we maintain e >= log2(w)
+        old_e + CHUNK // we maintain e >= log2(w)
       } else {
         old_e
       };
@@ -465,16 +479,7 @@ impl<K: Key, V> IntMap<K, V> {
     self.slack = new_r;
     self.limit = new_z;
     // Initialize new table.
-    let mut p = new_t;
-    let mut i = new_d;
-    unsafe { assert_unchecked(i % ALLOCATION_CHUNK == 0) };
-    unsafe { assert_unchecked(i != 0) };
-    loop {
-      unsafe { slot_hash(p).write(K::Word::MAX) };
-      p = unsafe { p.add(1) };
-      i = i - 1;
-      if i == 0 { break }
-    }
+    unsafe { clear_slots(new_t, new_d) };
     // Re-add the last write so that we copy it to the new table.
     unsafe { slot_hash(stashed_slot).write(stashed_hash) };
     // Copy slots.
@@ -602,29 +607,19 @@ impl<K: Key, V> IntMap<K, V> {
         let mut p = z;
         loop {
           p = unsafe { p.sub(1) };
-          if unsafe { slot_hash(p).read() } != K::Word::MAX {
-            unsafe { slot_hash(p).write(K::Word::MAX) };
-            r = r + 1;
-            self.slack = r;
-            unsafe { slot_data(p).drop_in_place() };
-            n = n - 1;
-            if n == 0 { break }
-          }
+          if unsafe { slot_hash(p).read() } == K::Word::MAX { continue }
+          unsafe { slot_hash(p).write(K::Word::MAX) };
+          r = r + 1;
+          self.slack = r;
+          unsafe { slot_data(p).drop_in_place() };
+          n = n - 1;
+          if n == 0 { break }
         }
       }
     } else {
       if n != 0 {
         self.slack = c;
-        let mut p = t;
-        let mut i = unsafe { z.offset_from_unsigned(t) };
-        unsafe { assert_unchecked(i % ALLOCATION_CHUNK == 0) };
-        unsafe { assert_unchecked(i != 0) };
-        loop {
-          unsafe { slot_hash(p).write(K::Word::MAX) };
-          p = unsafe { p.add(1) };
-          i = i - 1;
-          if i == 0 { break }
-        }
+        unsafe { clear_slots(t, z.offset_from_unsigned(t)) };
       }
     }
   }
@@ -651,14 +646,15 @@ impl<K: Key, V> IntMap<K, V> {
       if n != 0 {
         let mut n = n;
         let mut p = t;
+        let mut q;
         loop {
           let x = unsafe { slot_hash(p).read() };
+          q = p;
           p = unsafe { p.add(1) };
-          if x != K::Word::MAX {
-            unsafe { slot_data(p.sub(1)).drop_in_place() };
-            n = n - 1;
-            if n == 0 { break }
-          }
+          if x == K::Word::MAX { continue }
+          unsafe { slot_data(q).drop_in_place() };
+          n = n - 1;
+          if n == 0 { break }
         }
       }
     }
@@ -756,20 +752,19 @@ impl<K: Key, V> IntMap<K, V> {
     let s = self.shift;
     let r = self.slack;
     let mut n = capacity::<K, V>(s) - r;
-    let mut r = [0usize; 10];
+    let mut a = [0usize; 10];
     let mut p = t;
     let mut i = 0;
     loop {
       let x = unsafe { slot_hash(p).read() };
       p = unsafe { p.add(1) };
       i = i + 1;
-      if x != K::Word::MAX {
-        r[usize::min(9, i - 1 - slot(x, s))] += 1;
-        n = n - 1;
-        if n == 0 { break }
-      }
+      if x == K::Word::MAX { continue }
+      a[usize::min(9, i - 1 - slot(x, s))] += 1;
+      n = n - 1;
+      if n == 0 { break }
     }
-    r
+    a
   }
 }
 
@@ -868,15 +863,17 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
     let n = self.len;
     if n == 0 { return None }
     let mut p = self.pos;
+    let mut q;
     let mut x;
     loop {
       x = unsafe { slot_hash(p).read()};
+      q = p;
       p = unsafe { p.add(1) };
       if x != K::Word::MAX { break }
     }
     self.len = n - 1;
     self.pos = p;
-    Some((self.f)(unsafe { p.sub(1) }, x))
+    Some((self.f)(q, x))
   }
 
   #[inline(always)]
@@ -888,21 +885,22 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
   fn fold<A, G: FnMut(A, T) -> A>(self, init: A, g: G) -> A {
     let mut n = self.len;
     let mut p = self.pos;
+    let mut q;
     let mut f = self.f;
-    let mut u = init;
+    let mut a = init;
     let mut g = g;
     if n != 0 {
       loop {
         let x = unsafe { slot_hash(p).read() };
+        q = p;
         p = unsafe { p.add(1) };
-        if x != K::Word::MAX {
-          u = g(u, f(unsafe { p.sub(1) }, x));
-          n = n - 1;
-          if n == 0 { break }
-        }
+        if x == K::Word::MAX { continue }
+        a = g(a, f(q, x));
+        n = n - 1;
+        if n == 0 { break }
       }
     }
-    u
+    a
   }
 }
 
