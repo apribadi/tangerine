@@ -1,6 +1,11 @@
 //! This module provides a fast hash map keyed by types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
+// TODO:
+//
+// - implement drain
+// - implement IntoIterator for IntMap, &IntMap, and &mut IntMap
+
 use alloc::alloc::Layout;
 use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
@@ -102,12 +107,14 @@ const CHUNK: usize = 4;
 
 #[inline(always)]
 const unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
+  debug_assert!(num_slots % CHUNK == 0);
   let s = allocation_size::<K, V>(num_slots);
   let a = align_of::<Slot<K, V>>();
   unsafe { Layout::from_size_align_unchecked(s, a) }
 }
 
-fn initial_table<K:Key, V>() -> *const Slot<K, V> {
+#[inline(always)]
+const fn initial_table<K:Key, V>() -> *const Slot<K, V> {
   if is_stub_ok::<K, V>() {
     &raw const STUB as _
   } else {
@@ -115,15 +122,18 @@ fn initial_table<K:Key, V>() -> *const Slot<K, V> {
   }
 }
 
-fn initial_shift<K: Key, V>() -> usize {
+#[inline(always)]
+const fn initial_shift<K: Key, V>() -> usize {
   K::Word::BITS - 1
 }
 
+#[inline(always)]
 fn initial_slack<K: Key, V>() -> usize {
   capacity::<K, V>(initial_shift::<K, V>())
 }
 
-fn initial_limit<K:Key, V>() -> *const Slot<K, V> {
+#[inline(always)]
+const fn initial_limit<K:Key, V>() -> *const Slot<K, V> {
   initial_table::<K, V>()
 }
 
@@ -134,17 +144,17 @@ const fn is_stub_ok<K: Key, V>() -> bool {
 }
 
 #[inline(always)]
-fn is_uninit_null<K:Key, V>(table: *mut Slot<K, V>, _: usize) -> bool {
+const fn is_uninit_null<K:Key, V>(table: *mut Slot<K, V>, _: usize) -> bool {
   ! is_stub_ok::<K, V>() && table.is_null()
 }
 
 #[inline(always)]
-fn is_uninit_stub<K:Key, V>(_: *mut Slot<K, V>, shift: usize) -> bool {
+const fn is_uninit_stub<K:Key, V>(_: *mut Slot<K, V>, shift: usize) -> bool {
   is_stub_ok::<K, V>() && shift == initial_shift::<K, V>()
 }
 
 #[inline(always)]
-fn is_uninit<K:Key, V>(table: *mut Slot<K, V>, shift: usize) -> bool {
+const fn is_uninit<K:Key, V>(table: *mut Slot<K, V>, shift: usize) -> bool {
   is_uninit_null(table, shift) || is_uninit_stub(table, shift)
 }
 

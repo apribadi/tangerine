@@ -46,14 +46,14 @@ unsafe impl Hash for u32 {
   }
 
   #[inline(always)]
-  fn seed_nondet() -> (Self::Seed0, Self::Seed1) {
+  fn seed_nondet() -> Self::Seed {
     let a = 1 | dandelion::thread_local::u32();
     let b = invert_u32(a);
     (a, b)
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl Rng) -> (Self::Seed0, Self::Seed1) {
+  fn seed(g: &mut impl Rng) -> Self::Seed {
     let a = 1 | g.next_u32();
     let b = invert_u32(a);
     (a, b)
@@ -92,14 +92,14 @@ unsafe impl Hash for u64 {
   }
 
   #[inline(always)]
-  fn seed_nondet() -> (Self::Seed0, Self::Seed1) {
+  fn seed_nondet() -> Self::Seed {
     let a = 1 | dandelion::thread_local::u64();
     let b = invert_u64(a);
     (a, b)
   }
 
   #[inline(always)]
-  fn seed(g: &mut impl Rng) -> (Self::Seed0, Self::Seed1) {
+  fn seed(g: &mut impl Rng) -> Self::Seed {
     let a = 1 | g.next_u64();
     let b = invert_u64(a);
     (a, b)
@@ -107,18 +107,16 @@ unsafe impl Hash for u64 {
 
   #[inline(always)]
   fn hash(x: Self, m: Self::Seed0) -> Self {
-    let a = x as u32;
-    let b = crc32cd(0, x);
-    let x = (a as u64) ^ ((b as u64) << 32);
+    let x = (x as u32 as u64) ^ ((crc32cd(0, x) as u64) << 32);
     let x = x.wrapping_mul(m).wrapping_sub(1);
     x
   }
 
   #[inline(always)]
   fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-    // TODO: invert
+    // TODO:
+    let x = x.wrapping_mul(m).wrapping_add(m);
     let _ = x;
-    let _ = m;
     unimplemented!()
   }
 }
