@@ -57,8 +57,8 @@ pub struct OccupiedEntry<'a, K: Key, V> {
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
   pos: *mut Slot<K, V>,
-  cur: K::Word,
-  key: K::Word,
+  occupant: K::Word,
+  hash: K::Word,
 }
 
 unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
@@ -384,6 +384,7 @@ impl<K: Key, V> IntMap<K, V> {
     let m = K::Word::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) {
+      cold_path();
       let _: *mut V = self.insert_init(h, value);
       None
     } else {
@@ -392,12 +393,14 @@ impl<K: Key, V> IntMap<K, V> {
         Some(unsafe { slot_data(p.0).replace(value) })
       } else {
         if is_uninit_stub(t, s) {
+          cold_path();
           let _: *mut V = self.insert_init(h, value);
         } else {
           let p = unsafe { insert_at(p.0, p.1, h, value) };
           let r = self.slack;
           let z = self.limit.cast_mut();
           if p == z || r == 0 {
+            cold_path();
             let _: *mut V = self.insert_grow(p, h);
           } else {
             self.slack = r - 1;
@@ -536,13 +539,13 @@ impl<K: Key, V> IntMap<K, V> {
     let m = K::Word::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) {
-      Entry::Vacant(VacantEntry { map: self, pos: null_mut(), cur: K::Word::MAX, key: h })
+      Entry::Vacant(VacantEntry { map: self, pos: null_mut(), occupant: K::Word::MAX, hash: h })
     } else {
       let p = unsafe { search(t, s, h) };
       if p.1 == h {
         Entry::Occupied(OccupiedEntry { map: self, pos: p.0 })
       } else {
-        Entry::Vacant(VacantEntry { map: self, pos: p.0, cur: p.1, key: h })
+        Entry::Vacant(VacantEntry { map: self, pos: p.0, occupant: p.1, hash: h })
       }
     }
   }
@@ -646,10 +649,9 @@ impl<K: Key, V> IntMap<K, V> {
       if n != 0 {
         let mut n = n;
         let mut p = t;
-        let mut q;
         loop {
           let x = unsafe { slot_hash(p).read() };
-          q = p;
+          let q = p;
           p = unsafe { p.add(1) };
           if x == K::Word::MAX { continue }
           unsafe { slot_data(q).drop_in_place() };
@@ -828,10 +830,11 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     let t = self.map.table.cast_mut();
     let s = self.map.shift;
     let p = self.pos;
-    let x = self.cur;
-    let h = self.key;
+    let x = self.occupant;
+    let h = self.hash;
     let inserted_at =
       if is_uninit(t, s) {
+        cold_path();
         self.map.insert_init(h, value)
       } else {
         let a = p;
@@ -839,6 +842,7 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
         let r = self.map.slack;
         let z = self.map.limit.cast_mut();
         if p == z || r == 0 {
+          cold_path();
           self.map.insert_grow(p, h)
         } else {
           self.map.slack = r - 1;
@@ -885,14 +889,13 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
   fn fold<A, G: FnMut(A, T) -> A>(self, init: A, g: G) -> A {
     let mut n = self.len;
     let mut p = self.pos;
-    let mut q;
     let mut f = self.f;
     let mut a = init;
     let mut g = g;
     if n != 0 {
       loop {
         let x = unsafe { slot_hash(p).read() };
-        q = p;
+        let q = p;
         p = unsafe { p.add(1) };
         if x == K::Word::MAX { continue }
         a = g(a, f(q, x));
