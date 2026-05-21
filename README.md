@@ -5,7 +5,6 @@ keys representable as `NonZeroU32` or `NonZeroU64`.
 
 ```rust
 use core::num::NonZeroU32;
-use tangerine::map::IntMap;
 
 let mut t: IntMap<NonZeroU32, u64> = IntMap::new();
 let _ = t.insert(NonZeroU32::MIN, 4);
@@ -34,8 +33,8 @@ hashes, 16 main table slots, and 4 overflow slots.
 
 ```text
                                                           overflow
-hashes |FF FF 2A 30 3C 44 4B FF FF FF A1 FF FF FF FF F8|FD FF FF FF|
-values |      XX XX XX XX XX          XX             XX|XX         |
+hashes │FF FF 2A 30 3C 44 4B FF FF FF A1 FF FF FF FF F8│FD FF FF FF│
+values │      XX XX XX XX XX          XX             XX│XX         │
 ```
 
 The maximum hash value is reserved as a sentinel to indicate an empty slot. To
@@ -82,11 +81,23 @@ unoccupied slot at the end of the table to act as a sentinel.
 While the previously described search procedure is correct, we actually use a
 modified procedure for improved performance.
 
-TODO: displacement statistics for 25% and 50% occupancy
+We keep the load factor of the hash table between 25% and 50%. At those load
+factors, we can measure the CDFs of items' displacements from their desired
+slots.
 
-For the common case where the search terminates at distance 0 or 1 from the
-initial slot, we execute a fast path with branch-free select operations to
-avoid branch mispredictions.
+```text
+  │ LF 0.25 │ LF 0.5
+──┼─────────┼─────────
+0 │  0.852  │  0.649
+1 │  0.983  │  0.894
+2 │  0.998  │  0.969
+3 │  0.999  │  0.991
+4 │  0.999  │  0.997
+```
+
+For the common case where the search terminates at displacement 0 or 1, we
+execute a fast path with branch-free select operations in order to reduce the
+number of branch mispredictions.
 
 ```text
 i = h >> shift
