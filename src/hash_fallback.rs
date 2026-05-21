@@ -108,7 +108,7 @@ unsafe impl Hash for u64 {
   fn hash(x: Self, m: Self::Seed0) -> Self {
     let a = m.0;
     let b = m.1;
-    // TODO: add mixer: x ^ rol(x, a) ^ rol(x, b)
+    let x = x ^ x.rotate_left(17) ^ x.rotate_left(49);
     let x = x.wrapping_mul(a);
     let x = x.swap_bytes();
     let x = x.wrapping_mul(b).wrapping_sub(1);
@@ -117,11 +117,12 @@ unsafe impl Hash for u64 {
 
   #[inline(always)]
   fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-    let a = m.0;
-    let b = m.1;
-    let x = x.wrapping_mul(a).wrapping_add(a);
+    let c = m.0;
+    let d = m.1;
+    let x = x.wrapping_mul(c).wrapping_add(c);
     let x = x.swap_bytes();
-    let x = x.wrapping_mul(b);
+    let x = x.wrapping_mul(d);
+    let x = x ^ x.rotate_left(17) ^ x.rotate_left(49);
     x
   }
 }

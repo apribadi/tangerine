@@ -159,6 +159,8 @@ sentinel slot at the end of the table.
 
 # Ghosts of Hash Maps Past
 
+# Benchmarks
+
 # References
 
 - On the k-Independence Required by Linear Probing and Minwise Independence
