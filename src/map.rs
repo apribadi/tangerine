@@ -184,11 +184,11 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut S
   let k = slot(h, s);
   let b = unsafe { t.add(k + 1) };
   let v = unsafe { slot_hash(b).read() };
-  if ! (v < h) {
+  if v >= h {
     let a = unsafe { t.add(k) };
     let u = unsafe { slot_hash(a).read() };
-    let p = select_unpredictable(u < h, b, a);
-    let x = select_unpredictable(u < h, v, u);
+    let p = select_unpredictable(u >= h, a, b);
+    let x = select_unpredictable(u >= h, u, v);
     (p, x)
   } else {
     cold_path();
@@ -197,7 +197,7 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut S
     loop {
       p = unsafe { p.add(1) };
       x = unsafe { slot_hash(p).read() };
-      if ! (x < h) { break }
+      if x >= h { break }
     }
     (p, x)
   }
@@ -778,6 +778,28 @@ impl<K: Key, V> IntMap<K, V> {
     }
     a
   }
+
+  #[inline(always)]
+  fn get_simple(&self, key: K) -> Option<&V> {
+    let t = self.table.cast_mut();
+    let s = self.shift;
+    let m = K::Word::seed0(&self.seed);
+    if is_uninit_null(t, s) { return None }
+    let h = hash(key, m);
+    let k = slot(h, s);
+    let mut p = unsafe { t.add(k) };
+    let mut x;
+    loop {
+      x = unsafe { slot_hash(p).read() };
+      if x >= h { break }
+      p = unsafe { p.add(1) };
+    }
+    if x != h {
+      None
+    } else {
+      Some(unsafe { &*slot_data(p) })
+    }
+  }
 }
 
 impl<K: Key, V> Drop for IntMap<K, V> {
@@ -988,5 +1010,10 @@ pub mod internal {
 
   pub fn displacement_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 10] {
     t.displacement_histogram()
+  }
+
+  #[inline(always)]
+  pub fn get_simple<K: Key, V>(t: &IntMap<K, V>, key: K) -> Option<&V> {
+    t.get_simple(key)
   }
 }
