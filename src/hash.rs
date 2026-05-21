@@ -26,22 +26,35 @@ pub mod internal {
   use super::Hash;
   use super::Rng;
 
-  #[derive(Clone, Copy)]
-  pub struct Seed0(<u32 as Hash>::Seed0);
+  pub struct Hash32(<u32 as Hash>::Seed);
 
-  #[derive(Clone, Copy)]
-  pub struct Seed1(<u32 as Hash>::Seed1);
+  impl Hash32 {
+    pub fn new(g: &mut impl Rng) -> Self {
+      Self(<u32 as Hash>::seed(g))
+    }
 
-  pub fn seed(g: &mut impl Rng) -> (Seed0, Seed1) {
-    let m = <u32 as Hash>::seed(g);
-    (Seed0(<u32 as Hash>::seed0(&m)), Seed1(<u32 as Hash>::seed1(&m)))
+    pub fn hash(&self, x: u32) -> u32 {
+      <u32 as Hash>::hash(x, <u32 as Hash>::seed0(&self.0))
+    }
+
+    pub fn invert_hash(&self, x: u32) -> u32 {
+      <u32 as Hash>::invert_hash(x, <u32 as Hash>::seed1(&self.0))
+    }
   }
 
-  pub fn hash(x: u32, m: Seed0) -> u32 {
-    <u32 as Hash>::hash(x, m.0)
-  }
+  pub struct Hash64(<u64 as Hash>::Seed);
 
-  pub fn invert_hash(x: u32, m: Seed1) -> u32 {
-    <u32 as Hash>::invert_hash(x, m.0)
+  impl Hash64 {
+    pub fn new(g: &mut impl Rng) -> Self {
+      Self(<u64 as Hash>::seed(g))
+    }
+
+    pub fn hash(&self, x: u64) -> u64 {
+      <u64 as Hash>::hash(x, <u64 as Hash>::seed0(&self.0))
+    }
+
+    pub fn invert_hash(&self, x: u64) -> u64 {
+      <u64 as Hash>::invert_hash(x, <u64 as Hash>::seed1(&self.0))
+    }
   }
 }

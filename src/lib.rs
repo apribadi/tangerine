@@ -18,6 +18,7 @@ cfg_select! {
       target_feature = "aes",
       target_feature = "crc",
       target_feature = "neon",
+      false,
     ) =>
   {
     mod hash_aarch64;

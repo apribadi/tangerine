@@ -332,10 +332,10 @@ fn test_displacement_histogram() {
       num_slots = 264
       len = 128
       load_factor = 0.48484848484848486
-      0: 84
-      1: 29
-      2: 14
-      3: 1
+      0: 110
+      1: 18
+      2: 0
+      3: 0
       4: 0
       5: 0
       6: 0
@@ -408,32 +408,67 @@ fn test_foo() {
 #[test]
 fn test_hash() {
   let mut s = String::new();
+  let mut g = Rng::new(NonZeroU128::MIN);
 
-  let (a, b) = tangerine::hash::internal::seed(&mut Rng::new(NonZeroU128::MIN));
+  let t = tangerine::hash::internal::Hash32::new(&mut g);
 
-  write!(s, "{:#x}\n", tangerine::hash::internal::hash(0, a));
-  write!(s, "{:#x}\n", tangerine::hash::internal::hash(1, a));
-  write!(s, "{:#x}\n", tangerine::hash::internal::hash(2, a));
-  write!(s, "{:#x}\n", tangerine::hash::internal::hash(3, a));
-  write!(s, "{:#x}\n", tangerine::hash::internal::hash(4, a));
-  write!(s, "\n");
-  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(0, a), b));
-  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(1, a), b));
-  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(2, a), b));
-  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(3, a), b));
-  write!(s, "{:#x}\n", tangerine::hash::internal::invert_hash(tangerine::hash::internal::hash(4, a), b));
+  {
+    let x = 0;
+    let y = t.hash(x);
+    let z = t.invert_hash(y);
+    let d = x ^ z;
+    write!(s, "{:#010x} {:#010x} {:#010x} {:#010x}\n", x, y, z, d);
+  }
+  for _ in 0 .. 10 {
+    let x = g.u32();
+    let y = t.hash(x);
+    let z = t.invert_hash(y);
+    let d = x ^ z;
+    write!(s, "{:#010x} {:#010x} {:#010x} {:#010x}\n", x, y, z, d);
+  }
 
   expect![[r#"
-      0xffffffff
-      0xbb6a2bb7
-      0x934ef060
-      0xe2867718
-      0x241e5a92
+      0x00000000 0xffffffff 0x00000000 0x00000000
+      0x0cda5a84 0x044d168f 0x0cda5a84 0x00000000
+      0xd541b224 0xad99f459 0xd541b224 0x00000000
+      0x3f24c4ae 0x31ba7fba 0x3f24c4ae 0x00000000
+      0xac246ba4 0x2d6ac716 0xac246ba4 0x00000000
+      0xcab9f146 0xcd5ce86e 0xcab9f146 0x00000000
+      0x85fca478 0xa3196b75 0x85fca478 0x00000000
+      0xaf7f073a 0xc94e544f 0xaf7f073a 0x00000000
+      0xeea3aa19 0x7d5bb63e 0xeea3aa19 0x00000000
+      0xd8b677b7 0x41e3e7e5 0xd8b677b7 0x00000000
+      0xd9ad5229 0x180a45c7 0xd9ad5229 0x00000000
+  "#]].assert_eq(&s.drain(..).as_str());
 
-      0x0
-      0x1
-      0x2
-      0x3
-      0x4
+  let t = tangerine::hash::internal::Hash64::new(&mut g);
+
+  {
+    let x = 0;
+    let y = t.hash(x);
+    let z = t.invert_hash(y);
+    let d = x ^ z;
+    write!(s, "{:#018x} {:#018x} {:#018x} {:#018x}\n", x, y, z, d);
+  }
+  for _ in 0 .. 10 {
+    let x = g.u64();
+    let y = t.hash(x);
+    let z = t.invert_hash(y);
+    let d = x ^ z;
+    write!(s, "{:#018x} {:#018x} {:#018x} {:#018x}\n", x, y, z, d);
+  }
+
+  expect![[r#"
+      0x0000000000000000 0xffffffffffffffff 0x0000000000000000 0x0000000000000000
+      0x3e4b32845074d8fd 0xda8a962d6066de19 0x3e4b32845074d8fd 0x0000000000000000
+      0x4a165da67f91ccc4 0x28a1dc40f24f3972 0x4a165da67f91ccc4 0x0000000000000000
+      0x2c44afca8ef5ed81 0x8e014da1d955fc64 0x2c44afca8ef5ed81 0x0000000000000000
+      0xb74aff78c1bf3aca 0xdc789a85c85b7119 0xb74aff78c1bf3aca 0x0000000000000000
+      0x3ada70ecaa882eb0 0xeef50408dce298ec 0x3ada70ecaa882eb0 0x0000000000000000
+      0x8e08d57f338296e8 0x41dacb1894fa9a40 0x8e08d57f338296e8 0x0000000000000000
+      0x28c8426d0b11f3ee 0xa3247c14292e7948 0x28c8426d0b11f3ee 0x0000000000000000
+      0x8500faf5a7e4edc4 0x2285863751f15969 0x8500faf5a7e4edc4 0x0000000000000000
+      0x50ad8d427f8a958c 0x57712fc6baf702d1 0x50ad8d427f8a958c 0x0000000000000000
+      0x8c3a32205b615928 0x2596ab9017c0a2ea 0x8c3a32205b615928 0x0000000000000000
   "#]].assert_eq(&s.drain(..).as_str());
 }

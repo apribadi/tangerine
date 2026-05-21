@@ -5,6 +5,7 @@ keys representable as `NonZeroU32` or `NonZeroU64`.
 
 ```rust
 use core::num::NonZeroU32;
+use tangerine::map::IntMap;
 
 let mut t: IntMap<NonZeroU32, u64> = IntMap::new();
 let _ = t.insert(NonZeroU32::MIN, 4);
