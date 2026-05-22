@@ -2,12 +2,14 @@
 
 use dandelion::Rng;
 use expect_test::expect;
+use std::iter;
 use std::fmt::Write;
-use std::num::NonZeroU32;
 use std::num::NonZeroU128;
+use std::num::NonZeroU32;
 use std::write;
 use tangerine::map::IntMap;
-use tangerine::map::internal;
+use tangerine::map;
+use tangerine::hash;
 
 /*
 #[test]
@@ -39,9 +41,9 @@ fn test_api() {
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key);
-  write!(s, "{:?} <- internal::num_slots(&t))\n", internal::num_slots(&t));
-  write!(s, "{:?} <- internal::load_factor(&t))\n", internal::load_factor(&t));
-  write!(s, "{:?} <- internal::allocation_size(&t))\n", internal::allocation_size(&t));
+  write!(s, "{:?} <- map::internal::num_slots(&t))\n", map::internal::num_slots(&t));
+  write!(s, "{:?} <- map::internal::load_factor(&t))\n", map::internal::load_factor(&t));
+  write!(s, "{:?} <- map::internal::allocation_size(&t))\n", map::internal::allocation_size(&t));
   write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.insert(key, 40), key, 40);
   write!(s, "{:?} <- t.try_insert({:?}, {:?})\n", t.insert(key, 41), key, 41);
   write!(s, "{:?} <- t.insert({:?}, {:?})\n", t.insert(key, 42), key, 42);
@@ -57,9 +59,9 @@ fn test_api() {
   write!(s, "{:?} <- t.is_empty()\n", t.is_empty());
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
-  write!(s, "{:?} <- internal::num_slots(&t))\n", internal::num_slots(&t));
-  write!(s, "{:?} <- internal::load_factor(&t))\n", internal::load_factor(&t));
-  write!(s, "{:?} <- internal::allocation_size(&t))\n", internal::allocation_size(&t));
+  write!(s, "{:?} <- map::internal::num_slots(&t))\n", map::internal::num_slots(&t));
+  write!(s, "{:?} <- map::internal::load_factor(&t))\n", map::internal::load_factor(&t));
+  write!(s, "{:?} <- map::internal::allocation_size(&t))\n", map::internal::allocation_size(&t));
 
   let _ = t.insert(key, 0);
   t.clear();
@@ -72,9 +74,9 @@ fn test_api() {
       false <- t.contains_key(13)
       None <- t.get(13)
       None <- t.get_mut(13)
-      0 <- internal::num_slots(&t))
-      NaN <- internal::load_factor(&t))
-      0 <- internal::allocation_size(&t))
+      0 <- map::internal::num_slots(&t))
+      NaN <- map::internal::load_factor(&t))
+      0 <- map::internal::allocation_size(&t))
       None <- t.try_insert(13, 40)
       Some(40) <- t.try_insert(13, 41)
       Some(41) <- t.insert(13, 42)
@@ -90,9 +92,9 @@ fn test_api() {
       true <- t.is_empty()
       false <- t.contains_key(13)
       None <- t.get(13)
-      20 <- internal::num_slots(&t))
-      0.0 <- internal::load_factor(&t))
-      160 <- internal::allocation_size(&t))
+      20 <- map::internal::num_slots(&t))
+      0.0 <- map::internal::load_factor(&t))
+      160 <- map::internal::allocation_size(&t))
   "#]].assert_eq(s.drain(..).as_str());
 }
 
@@ -109,9 +111,9 @@ fn test_empty() {
   write!(s, "{:?} <- t.contains_key({:?})\n", t.contains_key(key), key);
   write!(s, "{:?} <- t.get({:?})\n", t.get(key), key);
   write!(s, "{:?} <- t.get_mut({:?})\n", t.get_mut(key), key);
-  write!(s, "{:?} <- internal::num_slots(&t))\n", internal::num_slots(&t));
-  write!(s, "{:?} <- internal::load_factor(&t))\n", internal::load_factor(&t));
-  write!(s, "{:?} <- internal::allocation_size(&t))\n", internal::allocation_size(&t));
+  write!(s, "{:?} <- map::internal::num_slots(&t))\n", map::internal::num_slots(&t));
+  write!(s, "{:?} <- map::internal::load_factor(&t))\n", map::internal::load_factor(&t));
+  write!(s, "{:?} <- map::internal::allocation_size(&t))\n", map::internal::allocation_size(&t));
 
   for _ in t.iter() { panic!() }
   for _ in t.keys() { panic!() }
@@ -132,9 +134,9 @@ fn test_iter() {
     let _ = t.insert(k, 10 * i);
   }
 
-  write!(s, "num_slots = {}\n", internal::num_slots(&t));
-  write!(s, "load = {}\n", internal::load_factor(&t));
-  write!(s, "allocation_size = {}\n", internal::allocation_size(&t));
+  write!(s, "num_slots = {}\n", map::internal::num_slots(&t));
+  write!(s, "load = {}\n", map::internal::load_factor(&t));
+  write!(s, "allocation_size = {}\n", map::internal::allocation_size(&t));
 
   let values = t.values();
   let _ = t.get(NonZeroU32::MIN);
@@ -171,9 +173,9 @@ fn test_1() {
   assert!(t.len() == 100);
 
   write!(s, "len = {}\n", t.len());
-  write!(s, "num_slots = {}\n", internal::num_slots(&t));
-  write!(s, "load = {}\n", internal::load_factor(&t));
-  write!(s, "allocation_size = {}\n", internal::allocation_size(&t));
+  write!(s, "num_slots = {}\n", map::internal::num_slots(&t));
+  write!(s, "load = {}\n", map::internal::load_factor(&t));
+  write!(s, "allocation_size = {}\n", map::internal::allocation_size(&t));
 
   for i in 1 ..= 100 {
     let k = NonZeroU32::new(i).unwrap();
@@ -188,9 +190,9 @@ fn test_1() {
   }
 
   write!(s, "len = {}\n", t.len());
-  write!(s, "num_slots = {}\n", internal::num_slots(&t));
-  write!(s, "load = {}\n", internal::load_factor(&t));
-  write!(s, "allocation_size = {}\n", internal::allocation_size(&t));
+  write!(s, "num_slots = {}\n", map::internal::num_slots(&t));
+  write!(s, "load = {}\n", map::internal::load_factor(&t));
+  write!(s, "allocation_size = {}\n", map::internal::allocation_size(&t));
 
   for i in 1 ..= 100 {
     let k = NonZeroU32::new(i).unwrap();
@@ -315,34 +317,134 @@ fn test_displacement_histogram() {
   let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::with_seed(&mut g);
 
-  for i in 1 ..= 128 {
+  for i in 1 ..= 512 {
     let k = NonZeroU32::new(i).unwrap();
     let _ = t.insert(k, ());
   }
 
-  write!(s, "num_slots = {}\n", internal::num_slots(&t));
+  write!(s, "num_slots = {}\n", map::internal::num_slots(&t));
   write!(s, "len = {}\n", t.len());
-  write!(s, "load_factor = {}\n", internal::load_factor(&t));
+  write!(s, "load_factor = {}\n", map::internal::load_factor(&t));
 
-  for (i, &c) in internal::displacement_histogram(&t).iter().enumerate() {
+  for (i, &c) in map::internal::displacement_histogram(&t).iter().enumerate() {
     write!(s, "{}: {}\n", i, c);
   }
 
-  expect![[r#"
-      num_slots = 264
-      len = 128
-      load_factor = 0.48484848484848486
-      0: 110
-      1: 18
-      2: 0
-      3: 0
-      4: 0
-      5: 0
-      6: 0
-      7: 0
-      8: 0
-      9: 0
-  "#]].assert_eq(&s.drain(..).as_str());
+  match hash::internal::BACKEND {
+    hash::internal::Backend::AArch64 => {
+      expect![[r#"
+          num_slots = 1036
+          len = 512
+          load_factor = 0.4942084942084942
+          0: 317
+          1: 136
+          2: 47
+          3: 11
+          4: 1
+          5: 0
+          6: 0
+          7: 0
+          8: 0
+          9: 0
+      "#]].assert_eq(&s.drain(..).as_str());
+    }
+    hash::internal::Backend::Generic => {
+      expect![[r#"
+          num_slots = 1036
+          len = 512
+          load_factor = 0.4942084942084942
+          0: 285
+          1: 146
+          2: 56
+          3: 19
+          4: 6
+          5: 0
+          6: 0
+          7: 0
+          8: 0
+          9: 0
+      "#]].assert_eq(&s.drain(..).as_str());
+    }
+  }
+}
+
+#[test]
+fn test_hash() {
+  let mut s = String::new();
+  let mut g = Rng::new(NonZeroU128::MIN);
+
+  let t = hash::internal::Hash32::with_seed(&mut g);
+
+  for x in iter::chain([0], iter::repeat_with(|| g.u32()).take(10)) {
+    let y = t.hash(x);
+    let z = t.invert_hash(y);
+    let d = x ^ z;
+    write!(s, "{:#010x} {:#010x} {:#010x} {:#010x}\n", x, y, z, d);
+  }
+
+  let t = hash::internal::Hash64::with_seed(&mut g);
+
+  for x in iter::chain([0], iter::repeat_with(|| g.u64()).take(10)) {
+    let y = t.hash(x);
+    let z = t.invert_hash(y);
+    let d = x ^ z;
+    write!(s, "{:#018x} {:#018x} {:#018x} {:#018x}\n", x, y, z, d);
+  }
+
+  match hash::internal::BACKEND {
+    hash::internal::Backend::AArch64 => {
+      expect![[r#"
+          0x00000000 0xffffffff 0x00000000 0x00000000
+          0x0cda5a84 0x2a7b3c0c 0x0cda5a84 0x00000000
+          0xd541b224 0xf8493beb 0xd541b224 0x00000000
+          0x3f24c4ae 0x3d0f6a8a 0x3f24c4ae 0x00000000
+          0xac246ba4 0x3710a313 0xac246ba4 0x00000000
+          0xcab9f146 0xefd52ce5 0xcab9f146 0x00000000
+          0x85fca478 0x5b7e3603 0x85fca478 0x00000000
+          0xaf7f073a 0x143d4e3f 0xaf7f073a 0x00000000
+          0xeea3aa19 0xb3b7c142 0xeea3aa19 0x00000000
+          0xd8b677b7 0xd227eb20 0xd8b677b7 0x00000000
+          0xd9ad5229 0xa8c5fe83 0xd9ad5229 0x00000000
+          0x0000000000000000 0xffffffffffffffff 0x0000000000000000 0x0000000000000000
+          0x57f78f5dfff0a290 0x0d03fbd8c0d7588f 0x57f78f5dfff0a290 0x0000000000000000
+          0x3e4b32845074d8fd 0x731ac2f04d7e83dc 0x3e4b32845074d8fd 0x0000000000000000
+          0x4a165da67f91ccc4 0x8e06d03fda808643 0x4a165da67f91ccc4 0x0000000000000000
+          0x2c44afca8ef5ed81 0xcf5fdd44a53a39e0 0x2c44afca8ef5ed81 0x0000000000000000
+          0xb74aff78c1bf3aca 0xa99b8e9fd6c69e89 0xb74aff78c1bf3aca 0x0000000000000000
+          0x3ada70ecaa882eb0 0xcdd26159113af0af 0x3ada70ecaa882eb0 0x0000000000000000
+          0x8e08d57f338296e8 0x9962846f81c18de7 0x8e08d57f338296e8 0x0000000000000000
+          0x28c8426d0b11f3ee 0xfc37a02e1b27352d 0x28c8426d0b11f3ee 0x0000000000000000
+          0x8500faf5a7e4edc4 0xeafaded79ebc0743 0x8500faf5a7e4edc4 0x0000000000000000
+          0x50ad8d427f8a958c 0xed87ca815e9b7a0b 0x50ad8d427f8a958c 0x0000000000000000
+      "#]].assert_eq(&s.drain(..).as_str());
+    }
+    hash::internal::Backend::Generic => {
+      expect![[r#"
+          0x00000000 0xffffffff 0x00000000 0x00000000
+          0x0cda5a84 0x044d168f 0x0cda5a84 0x00000000
+          0xd541b224 0xad99f459 0xd541b224 0x00000000
+          0x3f24c4ae 0x31ba7fba 0x3f24c4ae 0x00000000
+          0xac246ba4 0x2d6ac716 0xac246ba4 0x00000000
+          0xcab9f146 0xcd5ce86e 0xcab9f146 0x00000000
+          0x85fca478 0xa3196b75 0x85fca478 0x00000000
+          0xaf7f073a 0xc94e544f 0xaf7f073a 0x00000000
+          0xeea3aa19 0x7d5bb63e 0xeea3aa19 0x00000000
+          0xd8b677b7 0x41e3e7e5 0xd8b677b7 0x00000000
+          0xd9ad5229 0x180a45c7 0xd9ad5229 0x00000000
+          0x0000000000000000 0xffffffffffffffff 0x0000000000000000 0x0000000000000000
+          0x3e4b32845074d8fd 0xda8a962d6066de19 0x3e4b32845074d8fd 0x0000000000000000
+          0x4a165da67f91ccc4 0x28a1dc40f24f3972 0x4a165da67f91ccc4 0x0000000000000000
+          0x2c44afca8ef5ed81 0x8e014da1d955fc64 0x2c44afca8ef5ed81 0x0000000000000000
+          0xb74aff78c1bf3aca 0xdc789a85c85b7119 0xb74aff78c1bf3aca 0x0000000000000000
+          0x3ada70ecaa882eb0 0xeef50408dce298ec 0x3ada70ecaa882eb0 0x0000000000000000
+          0x8e08d57f338296e8 0x41dacb1894fa9a40 0x8e08d57f338296e8 0x0000000000000000
+          0x28c8426d0b11f3ee 0xa3247c14292e7948 0x28c8426d0b11f3ee 0x0000000000000000
+          0x8500faf5a7e4edc4 0x2285863751f15969 0x8500faf5a7e4edc4 0x0000000000000000
+          0x50ad8d427f8a958c 0x57712fc6baf702d1 0x50ad8d427f8a958c 0x0000000000000000
+          0x8c3a32205b615928 0x2596ab9017c0a2ea 0x8c3a32205b615928 0x0000000000000000
+      "#]].assert_eq(&s.drain(..).as_str());
+    }
+  }
 }
 
 /*
@@ -405,70 +507,3 @@ fn test_foo() {
 }
 */
 
-#[test]
-fn test_hash() {
-  let mut s = String::new();
-  let mut g = Rng::new(NonZeroU128::MIN);
-
-  let t = tangerine::hash::internal::Hash32::new(&mut g);
-
-  {
-    let x = 0;
-    let y = t.hash(x);
-    let z = t.invert_hash(y);
-    let d = x ^ z;
-    write!(s, "{:#010x} {:#010x} {:#010x} {:#010x}\n", x, y, z, d);
-  }
-  for _ in 0 .. 10 {
-    let x = g.u32();
-    let y = t.hash(x);
-    let z = t.invert_hash(y);
-    let d = x ^ z;
-    write!(s, "{:#010x} {:#010x} {:#010x} {:#010x}\n", x, y, z, d);
-  }
-
-  expect![[r#"
-      0x00000000 0xffffffff 0x00000000 0x00000000
-      0x0cda5a84 0x044d168f 0x0cda5a84 0x00000000
-      0xd541b224 0xad99f459 0xd541b224 0x00000000
-      0x3f24c4ae 0x31ba7fba 0x3f24c4ae 0x00000000
-      0xac246ba4 0x2d6ac716 0xac246ba4 0x00000000
-      0xcab9f146 0xcd5ce86e 0xcab9f146 0x00000000
-      0x85fca478 0xa3196b75 0x85fca478 0x00000000
-      0xaf7f073a 0xc94e544f 0xaf7f073a 0x00000000
-      0xeea3aa19 0x7d5bb63e 0xeea3aa19 0x00000000
-      0xd8b677b7 0x41e3e7e5 0xd8b677b7 0x00000000
-      0xd9ad5229 0x180a45c7 0xd9ad5229 0x00000000
-  "#]].assert_eq(&s.drain(..).as_str());
-
-  let t = tangerine::hash::internal::Hash64::new(&mut g);
-
-  {
-    let x = 0;
-    let y = t.hash(x);
-    let z = t.invert_hash(y);
-    let d = x ^ z;
-    write!(s, "{:#018x} {:#018x} {:#018x} {:#018x}\n", x, y, z, d);
-  }
-  for _ in 0 .. 10 {
-    let x = g.u64();
-    let y = t.hash(x);
-    let z = t.invert_hash(y);
-    let d = x ^ z;
-    write!(s, "{:#018x} {:#018x} {:#018x} {:#018x}\n", x, y, z, d);
-  }
-
-  expect![[r#"
-      0x0000000000000000 0xffffffffffffffff 0x0000000000000000 0x0000000000000000
-      0x3e4b32845074d8fd 0xda8a962d6066de19 0x3e4b32845074d8fd 0x0000000000000000
-      0x4a165da67f91ccc4 0x28a1dc40f24f3972 0x4a165da67f91ccc4 0x0000000000000000
-      0x2c44afca8ef5ed81 0x8e014da1d955fc64 0x2c44afca8ef5ed81 0x0000000000000000
-      0xb74aff78c1bf3aca 0xdc789a85c85b7119 0xb74aff78c1bf3aca 0x0000000000000000
-      0x3ada70ecaa882eb0 0xeef50408dce298ec 0x3ada70ecaa882eb0 0x0000000000000000
-      0x8e08d57f338296e8 0x41dacb1894fa9a40 0x8e08d57f338296e8 0x0000000000000000
-      0x28c8426d0b11f3ee 0xa3247c14292e7948 0x28c8426d0b11f3ee 0x0000000000000000
-      0x8500faf5a7e4edc4 0x2285863751f15969 0x8500faf5a7e4edc4 0x0000000000000000
-      0x50ad8d427f8a958c 0x57712fc6baf702d1 0x50ad8d427f8a958c 0x0000000000000000
-      0x8c3a32205b615928 0x2596ab9017c0a2ea 0x8c3a32205b615928 0x0000000000000000
-  "#]].assert_eq(&s.drain(..).as_str());
-}

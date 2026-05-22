@@ -1,6 +1,7 @@
 #![allow(missing_docs)]
 
 use rand_core::Rng;
+use self::internal::Backend;
 
 pub(crate) unsafe trait Hash {
   type Seed;
@@ -22,14 +23,43 @@ pub(crate) unsafe trait Hash {
   fn invert_hash(_: Self, _: Self::Seed1) -> Self;
 }
 
+cfg_select! {
+  all(
+      target_arch = "aarch64",
+      target_feature = "aes",
+      target_feature = "crc",
+      target_feature = "neon",
+      false
+    ) =>
+  {
+    #[path = "hash_aarch64.rs"]
+    mod aarch64;
+
+    const BACKEND: Backend = Backend::AArch64;
+  }
+  _ => {
+    #[path = "hash_generic.rs"]
+    mod generic;
+
+    const BACKEND: Backend = Backend::Generic;
+  }
+}
+
 pub mod internal {
   use super::Hash;
   use super::Rng;
 
+  pub enum Backend {
+    AArch64,
+    Generic,
+  }
+
+  pub const BACKEND: Backend = super::BACKEND;
+
   pub struct Hash32(<u32 as Hash>::Seed);
 
   impl Hash32 {
-    pub fn new(g: &mut impl Rng) -> Self {
+    pub fn with_seed(g: &mut impl Rng) -> Self {
       Self(<u32 as Hash>::seed(g))
     }
 
@@ -45,7 +75,7 @@ pub mod internal {
   pub struct Hash64(<u64 as Hash>::Seed);
 
   impl Hash64 {
-    pub fn new(g: &mut impl Rng) -> Self {
+    pub fn with_seed(g: &mut impl Rng) -> Self {
       Self(<u64 as Hash>::seed(g))
     }
 

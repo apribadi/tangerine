@@ -114,9 +114,9 @@ unsafe impl Hash for u64 {
 
   #[inline(always)]
   fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-    // TODO: invert
     let x = x.wrapping_mul(m).wrapping_add(m);
-    let _ = x;
-    unimplemented!()
+    let u = x as u32;
+    let v = invert_crc32cw((x >> 32) as u32) ^ crc32cw(0, u);
+    (u as u64) ^ ((v as u64) << 32)
   }
 }
