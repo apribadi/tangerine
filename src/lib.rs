@@ -8,6 +8,7 @@ pub mod map;
 pub mod set;
 
 pub mod hash;
+mod cast;
 mod util;
 mod word;
 

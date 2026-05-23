@@ -1,19 +1,22 @@
-use casting::CastInto;
-use casting::CastFrom;
+use crate::cast::Cast;
+use crate::cast::CastInto;
+use crate::cast::CastFrom;
 
 pub(crate) unsafe trait Word
   : Copy
   + Ord
-  + CastInto<usize>
+  + Cast
+  + CastFrom<Self::Signed>
   + CastFrom<usize>
   + CastInto<Self::Signed>
-  + CastFrom<Self::Signed>
+  + CastInto<usize>
   + core::ops::BitOr<Self, Output = Self>
   + core::ops::Not<Output = Self>
   + core::ops::Shr<usize, Output = Self>
 {
   type Signed
     : Copy
+    + Cast
     + core::ops::Shr<usize, Output = Self::Signed>;
 
   const BITS: usize;
@@ -22,10 +25,7 @@ pub(crate) unsafe trait Word
 
   #[inline(always)]
   fn asr(x: Self, n: usize) -> Self {
-    let x: Self::Signed = x.cast_into();
-    let x = x >> n;
-    let x: Self = x.cast_into();
-    x
+    (x.cast::<Self::Signed>() >> n).cast()
   }
 }
 

@@ -25,7 +25,6 @@ name = "asm64"
 crate-type = ["lib"]
 
 [dependencies]
-casting = "0.1.1"
 dandelion-random = { version = "0.3.1", features = ["rand_core", "thread_local"] }
 rand_core = "0.10.1"
 

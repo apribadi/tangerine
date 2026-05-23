@@ -6,7 +6,6 @@ use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use alloc::boxed::Box;
-use casting::CastInto;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use core::fmt;
@@ -25,6 +24,7 @@ use rand_core::Rng;
 use crate::hash::Hash;
 use crate::key::Key;
 use crate::word::Word;
+use crate::cast::Cast;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
 /// or [`NonZeroU64`](core::num::NonZeroU64).
@@ -172,31 +172,23 @@ unsafe fn invert_hash<K: Key>(x: K::Word, m: <K::Word as Hash>::Seed1) -> K {
 fn capacity<K: Key, V>(s: usize) -> usize {
   if K::Word::BITS <= usize::BITS as usize {
     let n = ! (K::Word::MAX >> 1);
-    let n: usize = n.cast_into();
-    let n = n >> s;
-    let n: K::Word = n.cast_into();
+    let n = (n.cast::<usize>() >> s).cast::<K::Word>();
     let n = n | K::Word::asr(n, K::Word::BITS - 1);
-    let n: usize = n.cast_into();
-    n
+    n.cast::<usize>()
   } else {
     let n = ! (K::Word::MAX >> 1);
     let n = n >> s;
     let n = n | K::Word::asr(n, K::Word::BITS - 1);
-    let n: usize = n.cast_into();
-    n
+    n.cast::<usize>()
   }
 }
 
 #[inline(always)]
 fn slot<W: Word>(h: W, s: usize) -> usize {
   if W::BITS <= usize::BITS as usize {
-    let h: usize = h.cast_into();
-    let h = h >> s;
-    h
+    h.cast::<usize>() >> s
   } else {
-    let h = h >> s;
-    let h: usize = h.cast_into();
-    h
+    (h >> s).cast::<usize>()
   }
 }
 
