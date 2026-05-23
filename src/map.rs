@@ -1,18 +1,15 @@
 //! This module provides a fast hash map keyed by types representable as
 //! `NonZeroU32` or `NonZeroU64`.
 
-// TODO:
-//
-// - implement drain
-// - implement IntoIterator for IntMap, &IntMap, and &mut IntMap
-
 use alloc::alloc::Layout;
 use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use alloc::boxed::Box;
+use casting::CastInto;
 use core::fmt::Debug;
 use core::fmt::Formatter;
+use core::fmt;
 use core::hint::assert_unchecked;
 use core::hint::cold_path;
 use core::hint::select_unpredictable;
@@ -168,14 +165,39 @@ unsafe fn invert_hash<K: Key>(x: K::Word, m: <K::Word as Hash>::Seed1) -> K {
   unsafe { K::from_word(K::Word::invert_hash(x, m)) }
 }
 
-#[inline(always)]
-fn slot<W: Word>(h: W, s: usize) -> usize {
-  W::slot(h, s)
-}
+// NB: For `capacity` and `slot`, it sometimes improves code generation to
+// operate on `usize`s if possible.
 
 #[inline(always)]
 fn capacity<K: Key, V>(s: usize) -> usize {
-  K::Word::capacity(s)
+  if K::Word::BITS <= usize::BITS as usize {
+    let n = ! (K::Word::MAX >> 1);
+    let n: usize = n.cast_into();
+    let n = n >> s;
+    let n: K::Word = n.cast_into();
+    let n = n | K::Word::asr(n, K::Word::BITS - 1);
+    let n: usize = n.cast_into();
+    n
+  } else {
+    let n = ! (K::Word::MAX >> 1);
+    let n = n >> s;
+    let n = n | K::Word::asr(n, K::Word::BITS - 1);
+    let n: usize = n.cast_into();
+    n
+  }
+}
+
+#[inline(always)]
+fn slot<W: Word>(h: W, s: usize) -> usize {
+  if W::BITS <= usize::BITS as usize {
+    let h: usize = h.cast_into();
+    let h = h >> s;
+    h
+  } else {
+    let h = h >> s;
+    let h: usize = h.cast_into();
+    h
+  }
 }
 
 #[inline(always)]
@@ -955,7 +977,7 @@ impl<K: Key, V: Clone> Clone for IntMap<K, V> {
 }
 
 impl <K: Key + Debug + Ord, V: Debug> Debug for IntMap<K, V> {
-  fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     let mut a = self.iter().collect::<Box<[(K, &V)]>>();
     a.sort_by(|&(ref x, _), &(ref y, _)| x.cmp(y));
     f.debug_map().entries(a).finish()

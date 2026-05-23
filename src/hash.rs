@@ -29,7 +29,6 @@ cfg_select! {
       target_feature = "aes",
       target_feature = "crc",
       target_feature = "neon",
-      false
     ) =>
   {
     #[path = "hash_aarch64.rs"]

@@ -1,51 +1,46 @@
-pub(crate) unsafe trait Word: Copy + Ord {
+use casting::CastInto;
+use casting::CastFrom;
+
+pub(crate) unsafe trait Word
+  : Copy
+  + Ord
+  + CastInto<usize>
+  + CastFrom<usize>
+  + CastInto<Self::Signed>
+  + CastFrom<Self::Signed>
+  + core::ops::BitOr<Self, Output = Self>
+  + core::ops::Not<Output = Self>
+  + core::ops::Shr<usize, Output = Self>
+{
+  type Signed
+    : Copy
+    + core::ops::Shr<usize, Output = Self::Signed>;
+
   const BITS: usize;
 
   const MAX: Self;
 
-  fn capacity(_: usize) -> usize;
-
-  fn slot(_: Self, _: usize) -> usize;
+  #[inline(always)]
+  fn asr(x: Self, n: usize) -> Self {
+    let x: Self::Signed = x.cast_into();
+    let x = x >> n;
+    let x: Self = x.cast_into();
+    x
+  }
 }
 
 unsafe impl Word for u32 {
+  type Signed = i32;
+
   const BITS: usize = 32;
 
   const MAX: Self = u32::MAX;
-
-  // NOTE: Here we statically assert that usize is at least 32 bits. We could
-  // easily lift this restriction, however.
-
-  #[inline(always)]
-  fn capacity(s: usize) -> usize {
-    const _: () = assert!(usize::BITS >= 32);
-    let n = 0x8000_0000_usize >> s;
-    let n = n as u32;
-    let n = n | (((n as i32) >> 31) as u32);
-    n as usize
-  }
-
-  #[inline(always)]
-  fn slot(h: Self, s: usize) -> usize {
-    const _: () = assert!(usize::BITS >= 32);
-    (h as usize) >> s
-  }
 }
 
 unsafe impl Word for u64 {
+  type Signed = i64;
+
   const BITS: usize = 64;
 
   const MAX: Self = u64::MAX;
-
-  #[inline(always)]
-  fn capacity(s: usize) -> usize {
-    let n = 0x8000_0000_0000_0000_u64 >> s;
-    let n = n | (((n as i64) >> 63) as u64);
-    n as usize
-  }
-
-  #[inline(always)]
-  fn slot(h: Self, s: usize) -> usize {
-    (h >> s) as usize
-  }
 }
