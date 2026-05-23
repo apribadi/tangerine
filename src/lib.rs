@@ -10,6 +10,6 @@ pub mod set;
 pub mod hash;
 mod cast;
 mod util;
-mod word;
+mod uint;
 
 extern crate alloc;

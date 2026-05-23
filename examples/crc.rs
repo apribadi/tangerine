@@ -2,6 +2,11 @@
 #![allow(missing_docs)]
 
 #[inline(always)]
+fn crc32cb(a: u32, x: u8) -> u32 {
+  unsafe { core::arch::aarch64::__crc32cb(a, x) }
+}
+
+#[inline(always)]
 fn crc32cw(a: u32, x: u32) -> u32 {
   unsafe { core::arch::aarch64::__crc32cw(a, x) }
 }
@@ -27,12 +32,7 @@ fn uncrc32w_b(x: u32) -> u32 {
 }
 
 fn main() {
-  let x = 13;
-  let y = crc32cw(0, x);
-  let z = uncrc32w(y);
-  let a = uncrc32w_b(y);
-  print!("{:#x}\n", x);
-  print!("{:#x}\n", y);
-  print!("{:#x}\n", z);
-  print!("{:#x}\n", a);
+  for i in 0 ..= 255u8 {
+    print!("{:#04x}\n", crc32cb(0, i) as u8);
+  }
 }

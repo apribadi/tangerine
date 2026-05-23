@@ -23,7 +23,7 @@ use rand_core::Rng;
 
 use crate::hash::Hash;
 use crate::key::Key;
-use crate::word::Word;
+use crate::uint::UInt;
 use crate::cast::Cast;
 
 /// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
@@ -34,7 +34,7 @@ pub struct IntMap<K: Key, V> {
   shift: usize,
   slack: usize,
   limit: *const Slot<K, V>,
-  seed: <K::Word as Hash>::Seed,
+  seed: <K::UInt as Hash>::Seed,
 }
 
 /// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
@@ -59,8 +59,8 @@ pub struct OccupiedEntry<'a, K: Key, V> {
 pub struct VacantEntry<'a, K: Key, V> {
   map: &'a mut IntMap<K, V>,
   pos: *mut Slot<K, V>,
-  occupant: K::Word,
-  hash: K::Word,
+  occupant: K::UInt,
+  hash: K::UInt,
 }
 
 unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
@@ -76,12 +76,12 @@ static STUB: Stub = Stub([0xff; _]);
 
 #[repr(C)]
 struct Slot<K: Key, V> {
-  hash: K::Word,
+  hash: K::UInt,
   data: MaybeUninit<V>,
 }
 
 #[inline(always)]
-unsafe fn slot_hash<K: Key, V>(p: *mut Slot<K, V>) -> *mut K::Word {
+unsafe fn slot_hash<K: Key, V>(p: *mut Slot<K, V>) -> *mut K::UInt {
   unsafe { p.byte_add(offset_of!(Slot<K, V>, hash)).cast() }
 }
 
@@ -121,7 +121,7 @@ const fn initial_table<K:Key, V>() -> *const Slot<K, V> {
 
 #[inline(always)]
 const fn initial_shift<K: Key, V>() -> usize {
-  K::Word::BITS - 1
+  K::UInt::BITS - 1
 }
 
 #[inline(always)]
@@ -156,13 +156,13 @@ const fn is_uninit<K:Key, V>(table: *mut Slot<K, V>, shift: usize) -> bool {
 }
 
 #[inline(always)]
-fn hash<K: Key>(key: K, m: <K::Word as Hash>::Seed0) -> K::Word {
-  K::Word::hash(K::into_word(key), m)
+fn hash<K: Key>(key: K, m: <K::UInt as Hash>::Seed0) -> K::UInt {
+  K::UInt::hash(K::into_uint(key), m)
 }
 
 #[inline(always)]
-unsafe fn invert_hash<K: Key>(x: K::Word, m: <K::Word as Hash>::Seed1) -> K {
-  unsafe { K::from_word(K::Word::invert_hash(x, m)) }
+unsafe fn invert_hash<K: Key>(x: K::UInt, m: <K::UInt as Hash>::Seed1) -> K {
+  unsafe { K::from_uint(K::UInt::invert_hash(x, m)) }
 }
 
 // NB: For `capacity` and `slot`, it sometimes improves code generation to
@@ -170,22 +170,22 @@ unsafe fn invert_hash<K: Key>(x: K::Word, m: <K::Word as Hash>::Seed1) -> K {
 
 #[inline(always)]
 fn capacity<K: Key, V>(s: usize) -> usize {
-  if K::Word::BITS <= usize::BITS as usize {
-    let n = ! (K::Word::MAX >> 1);
-    let n = (n.cast::<usize>() >> s).cast::<K::Word>();
-    let n = n | K::Word::asr(n, K::Word::BITS - 1);
+  if const { K::UInt::BITS <= usize::BITS as usize } {
+    let n = ! (K::UInt::MAX >> 1);
+    let n = (n.cast::<usize>() >> s).cast::<K::UInt>();
+    let n = n | K::UInt::asr(n, K::UInt::BITS - 1);
     n.cast::<usize>()
   } else {
-    let n = ! (K::Word::MAX >> 1);
+    let n = ! (K::UInt::MAX >> 1);
     let n = n >> s;
-    let n = n | K::Word::asr(n, K::Word::BITS - 1);
+    let n = n | K::UInt::asr(n, K::UInt::BITS - 1);
     n.cast::<usize>()
   }
 }
 
 #[inline(always)]
-fn slot<W: Word>(h: W, s: usize) -> usize {
-  if W::BITS <= usize::BITS as usize {
+fn slot<U: UInt>(h: U, s: usize) -> usize {
+  if const { U::BITS <= usize::BITS as usize } {
     h.cast::<usize>() >> s
   } else {
     (h >> s).cast::<usize>()
@@ -193,8 +193,8 @@ fn slot<W: Word>(h: W, s: usize) -> usize {
 }
 
 #[inline(always)]
-unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
-  unsafe { assert_unchecked(s <= K::Word::BITS - 1) };
+unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::UInt) -> (*mut Slot<K, V>, K::UInt) {
+  unsafe { assert_unchecked(s <= K::UInt::BITS - 1) };
   let k = slot(h, s);
   let b = unsafe { t.add(k + 1) };
   let v = unsafe { slot_hash(b).read() };
@@ -228,23 +228,23 @@ unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>)
     p = unsafe { p.add(1) };
     i = i + 1;
     let x = unsafe { slot_hash(p).read() };
-    if ! (slot(x, s) < i && /* likely */ x != K::Word::MAX) { break }
+    if ! (slot(x, s) < i && /* likely */ x != K::UInt::MAX) { break }
     unsafe { slot_hash(q).write(x) };
     unsafe { slot_data(q).write(slot_data(p).read()) };
     // NOTE: We could do the loop exit test here instead, with the modification
     // that we read data as MaybeUninit<V>.
   }
-  unsafe { slot_hash(q).write(K::Word::MAX) };
+  unsafe { slot_hash(q).write(K::UInt::MAX) };
   value
 }
 
 #[inline(always)]
-unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::Word, h: K::Word, value: V) -> *mut Slot<K, V> {
+unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::UInt, h: K::UInt, value: V) -> *mut Slot<K, V> {
   unsafe { slot_hash(p).write(h) };
   let mut p = p;
   let mut x = x;
   let mut y = value;
-  while x != K::Word::MAX {
+  while x != K::UInt::MAX {
     y = unsafe { slot_data(p).replace(y) };
     p = unsafe { p.add(1) };
     x = unsafe { slot_hash(p).replace(x) };
@@ -270,7 +270,7 @@ unsafe fn clear_slots<K: Key, V>(p: *mut Slot<K, V>, n: usize) {
 
 impl<K: Key, V> IntMap<K, V> {
   #[inline(always)]
-  fn from_seed(m: <K::Word as Hash>::Seed) -> Self {
+  fn from_seed(m: <K::UInt as Hash>::Seed) -> Self {
     Self {
       table: initial_table::<K, V>(),
       shift: initial_shift::<K, V>(),
@@ -283,13 +283,13 @@ impl<K: Key, V> IntMap<K, V> {
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
   pub fn new() -> Self {
-    Self::from_seed(K::Word::seed_nondet())
+    Self::from_seed(K::UInt::seed_nondet())
   }
 
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
   pub fn with_seed(rng: &mut impl Rng) -> Self {
-    Self::from_seed(K::Word::seed(rng))
+    Self::from_seed(K::UInt::seed(rng))
   }
 
   /// Returns the number of items.
@@ -311,7 +311,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn prefetch(&self, key: K) {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(&self.seed);
+    let m = K::UInt::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) { return }
     let k = slot(h, s);
@@ -324,7 +324,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn contains_key(&self, key: K) -> bool {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(&self.seed);
+    let m = K::UInt::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) { return false }
     unsafe { search(t, s, h) }.1 == h
@@ -336,7 +336,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get(&self, key: K) -> Option<&V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(&self.seed);
+    let m = K::UInt::seed0(&self.seed);
     if is_uninit_null(t, s) { return None }
     let h = hash(key, m);
     let p = unsafe { search(t, s, h) };
@@ -353,7 +353,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(&self.seed);
+    let m = K::UInt::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
@@ -373,7 +373,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(&self.seed);
+    let m = K::UInt::seed0(&self.seed);
     let hs = keys.map(|key| hash(key, m));
     let mut is_disjoint = true;
     for i in 0 .. N {
@@ -405,7 +405,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(&self.seed);
+    let m = K::UInt::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) {
       cold_path();
@@ -437,11 +437,11 @@ impl<K: Key, V> IntMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn insert_init(&mut self, h: K::Word, value: V) -> *mut V {
+  fn insert_init(&mut self, h: K::UInt, value: V) -> *mut V {
     let new_w = 4 * CHUNK;
     let new_e = CHUNK;
     let new_d = new_w + new_e;
-    let new_s = K::Word::BITS - new_w.trailing_zeros() as usize;
+    let new_s = K::UInt::BITS - new_w.trailing_zeros() as usize;
     let new_r = capacity::<K, V>(new_s) - 1;
     assert!(new_d <= allocation_max_num_slots::<K, V>());
     let new_l = unsafe { allocation_layout::<K, V>(new_d) };
@@ -462,32 +462,32 @@ impl<K: Key, V> IntMap<K, V> {
 
   #[inline(never)]
   #[cold]
-  fn insert_grow(&mut self, p: *mut Slot<K, V>, h: K::Word) -> *mut V {
+  fn insert_grow(&mut self, p: *mut Slot<K, V>, h: K::UInt) -> *mut V {
     // Stash the item in the last written-to slot so that the table is in a
     // valid state, even if we panic.
     let stashed_slot = unsafe { p.sub(1) };
-    let stashed_hash = unsafe { slot_hash(stashed_slot).replace(K::Word::MAX) };
+    let stashed_hash = unsafe { slot_hash(stashed_slot).replace(K::UInt::MAX) };
     // Retrieve and compute values for the old table.
     let old_t = self.table.cast_mut();
     let old_s = self.shift;
     let old_r = self.slack;
     let old_z = self.limit.cast_mut();
     let old_d = unsafe { old_z.offset_from_unsigned(old_t) };
-    let old_w = 1 << K::Word::BITS - old_s;
+    let old_w = 1 << K::UInt::BITS - old_s;
     let old_e = old_d - old_w;
     // If s == 0, then the map can hold every possible key and should never grow.
     debug_assert!(0 != old_s);
-    debug_assert!(old_s <= K::Word::BITS - 1);
+    debug_assert!(old_s <= K::UInt::BITS - 1);
     // Compute new sizes.
     let new_s = old_s - 1;
     let new_r = old_r + (capacity::<K, V>(new_s) - capacity::<K, V>(old_s)) - 1;
-    let new_w = 1 << K::Word::BITS - new_s;
+    let new_w = 1 << K::UInt::BITS - new_s;
     let new_e =
       if new_s == 0 {
         0 // special case, we can store every possible key
       } else if p == old_z {
         old_e * 2 // if we wrote in the final slot
-      } else if old_e < K::Word::BITS - new_s {
+      } else if old_e < K::UInt::BITS - new_s {
         old_e + CHUNK // we maintain e >= log2(w)
       } else {
         old_e
@@ -521,7 +521,7 @@ impl<K: Key, V> IntMap<K, V> {
       unsafe { slot_hash(a).write(x) };
       unsafe { slot_data(a).cast::<MaybeUninit<V>>().write(y) };
       p = unsafe { p.add(1) };
-      i = select_unpredictable(x != K::Word::MAX, k + 1, i);
+      i = select_unpredictable(x != K::UInt::MAX, k + 1, i);
       if p == old_z { break }
     }
     // The map is now in a valid state, even if deallocating panics.
@@ -542,7 +542,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn remove(&mut self, key: K) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(&self.seed);
+    let m = K::UInt::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
@@ -560,10 +560,10 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(&self.seed);
+    let m = K::UInt::seed0(&self.seed);
     let h = hash(key, m);
     if is_uninit_null(t, s) {
-      Entry::Vacant(VacantEntry { map: self, pos: null_mut(), occupant: K::Word::MAX, hash: h })
+      Entry::Vacant(VacantEntry { map: self, pos: null_mut(), occupant: K::UInt::MAX, hash: h })
     } else {
       let p = unsafe { search(t, s, h) };
       if p.1 == h {
@@ -620,7 +620,7 @@ impl<K: Key, V> IntMap<K, V> {
     let n = c - r;
     if needs_drop::<V>() {
       if n != 0 {
-        // WARNING!
+        // UARNING!
         //
         // We must be careful to leave the map in a valid state even if a call to
         // `drop` panics.
@@ -634,8 +634,8 @@ impl<K: Key, V> IntMap<K, V> {
         let mut p = z;
         loop {
           p = unsafe { p.sub(1) };
-          if unsafe { slot_hash(p).read() } == K::Word::MAX { continue }
-          unsafe { slot_hash(p).write(K::Word::MAX) };
+          if unsafe { slot_hash(p).read() } == K::UInt::MAX { continue }
+          unsafe { slot_hash(p).write(K::UInt::MAX) };
           r = r + 1;
           self.slack = r;
           unsafe { slot_data(p).drop_in_place() };
@@ -677,7 +677,7 @@ impl<K: Key, V> IntMap<K, V> {
           let x = unsafe { slot_hash(p).read() };
           let q = p;
           p = unsafe { p.add(1) };
-          if x == K::Word::MAX { continue }
+          if x == K::UInt::MAX { continue }
           unsafe { slot_data(q).drop_in_place() };
           n = n - 1;
           if n == 0 { break }
@@ -694,7 +694,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = K::Word::seed1(&self.seed);
+    let m = K::UInt::seed1(&self.seed);
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -709,7 +709,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = K::Word::seed1(&self.seed);
+    let m = K::UInt::seed1(&self.seed);
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -723,7 +723,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = K::Word::seed1(&self.seed);
+    let m = K::UInt::seed1(&self.seed);
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -785,7 +785,7 @@ impl<K: Key, V> IntMap<K, V> {
       let x = unsafe { slot_hash(p).read() };
       p = unsafe { p.add(1) };
       i = i + 1;
-      if x == K::Word::MAX { continue }
+      if x == K::UInt::MAX { continue }
       a[usize::min(9, i - 1 - slot(x, s))] += 1;
       n = n - 1;
       if n == 0 { break }
@@ -797,7 +797,7 @@ impl<K: Key, V> IntMap<K, V> {
   fn get_simple(&self, key: K) -> Option<&V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = K::Word::seed0(&self.seed);
+    let m = K::UInt::seed0(&self.seed);
     if is_uninit_null(t, s) { return None }
     let h = hash(key, m);
     let k = slot(h, s);
@@ -899,13 +899,13 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
   }
 }
 
-struct Iter<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> {
+struct Iter<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::UInt) -> T> {
   len: usize,
   pos: *mut Slot<K, V>,
   f: F,
 }
 
-impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K, V, T, F> {
+impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::UInt) -> T> Iterator for Iter<K, V, T, F> {
   type Item = T;
 
   #[inline(always)]
@@ -919,7 +919,7 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
       x = unsafe { slot_hash(p).read()};
       q = p;
       p = unsafe { p.add(1) };
-      if x != K::Word::MAX { break }
+      if x != K::UInt::MAX { break }
     }
     self.len = n - 1;
     self.pos = p;
@@ -943,7 +943,7 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
         let x = unsafe { slot_hash(p).read() };
         let q = p;
         p = unsafe { p.add(1) };
-        if x == K::Word::MAX { continue }
+        if x == K::UInt::MAX { continue }
         a = g(a, f(q, x));
         n = n - 1;
         if n == 0 { break }
@@ -953,7 +953,7 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> Iterator for Iter<K,
   }
 }
 
-impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> ExactSizeIterator for Iter<K, V, T, F> {
+impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::UInt) -> T> ExactSizeIterator for Iter<K, V, T, F> {
   #[inline(always)]
   fn len(&self) -> usize {
     self.len

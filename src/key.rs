@@ -54,55 +54,55 @@ pub(crate) mod internal {
 
   use super::IntoKey;
   use crate::hash::Hash;
-  use crate::word::Word;
+  use crate::uint::UInt;
 
   pub(crate) unsafe trait Key: Sized {
-    type Word: Hash + Word;
+    type UInt: Hash + UInt;
 
-    fn into_word(_: Self) -> Self::Word;
+    fn into_uint(_: Self) -> Self::UInt;
 
-    unsafe fn from_word(_: Self::Word) -> Self;
+    unsafe fn from_uint(_: Self::UInt) -> Self;
   }
 
   unsafe impl Key for NonZeroU32 {
-    type Word = u32;
+    type UInt = u32;
 
     #[inline(always)]
-    fn into_word(x: Self) -> Self::Word {
+    fn into_uint(x: Self) -> Self::UInt {
       x.get()
     }
 
     #[inline(always)]
-    unsafe fn from_word(x: Self::Word) -> Self {
+    unsafe fn from_uint(x: Self::UInt) -> Self {
       unsafe { Self::new_unchecked(x) }
     }
   }
 
   unsafe impl Key for NonZeroU64 {
-    type Word = u64;
+    type UInt = u64;
 
     #[inline(always)]
-    fn into_word(x: Self) -> Self::Word {
+    fn into_uint(x: Self) -> Self::UInt {
       x.get()
     }
 
     #[inline(always)]
-    unsafe fn from_word(x: Self::Word) -> Self {
+    unsafe fn from_uint(x: Self::UInt) -> Self {
       unsafe { Self::new_unchecked(x) }
     }
   }
 
   unsafe impl<K: Key, T: IntoKey<Key = K>> Key for T {
-    type Word = K::Word;
+    type UInt = K::UInt;
 
     #[inline(always)]
-    fn into_word(x: Self) -> Self::Word {
-      K::into_word(T::inject(x))
+    fn into_uint(x: Self) -> Self::UInt {
+      K::into_uint(T::inject(x))
     }
 
     #[inline(always)]
-    unsafe fn from_word(x: Self::Word) -> Self {
-      unsafe { T::project(K::from_word(x)) }
+    unsafe fn from_uint(x: Self::UInt) -> Self {
+      unsafe { T::project(K::from_uint(x)) }
     }
   }
 }
