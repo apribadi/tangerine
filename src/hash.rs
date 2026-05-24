@@ -55,6 +55,22 @@ pub mod internal {
 
   pub const BACKEND: Backend = super::BACKEND;
 
+  pub struct Hash8(<u8 as Hash>::Seed);
+
+  impl Hash8 {
+    pub fn with_seed(g: &mut impl Rng) -> Self {
+      Self(<u8 as Hash>::seed(g))
+    }
+
+    pub fn hash(&self, x: u8) -> u8 {
+      <u8 as Hash>::hash(x, <u8 as Hash>::seed0(&self.0))
+    }
+
+    pub fn invert_hash(&self, x: u8) -> u8 {
+      <u8 as Hash>::invert_hash(x, <u8 as Hash>::seed1(&self.0))
+    }
+  }
+
   pub struct Hash32(<u32 as Hash>::Seed);
 
   impl Hash32 {

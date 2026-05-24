@@ -1,6 +1,7 @@
 //! This module provides traits for hashable keys representable as [`NonZeroU32`]
 //! or [`NonZeroU64`].
 
+use core::num::NonZeroU8;
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 
@@ -12,6 +13,9 @@ use core::num::NonZeroU64;
 /// strictly required.
 #[allow(private_bounds)]
 pub trait Key: internal::Key {
+}
+
+impl Key for NonZeroU8 {
 }
 
 impl Key for NonZeroU32 {
@@ -49,6 +53,7 @@ pub unsafe trait IntoKey {
 }
 
 pub(crate) mod internal {
+  use core::num::NonZeroU8;
   use core::num::NonZeroU32;
   use core::num::NonZeroU64;
 
@@ -64,34 +69,6 @@ pub(crate) mod internal {
     unsafe fn from_uint(_: Self::UInt) -> Self;
   }
 
-  unsafe impl Key for NonZeroU32 {
-    type UInt = u32;
-
-    #[inline(always)]
-    fn into_uint(x: Self) -> Self::UInt {
-      x.get()
-    }
-
-    #[inline(always)]
-    unsafe fn from_uint(x: Self::UInt) -> Self {
-      unsafe { Self::new_unchecked(x) }
-    }
-  }
-
-  unsafe impl Key for NonZeroU64 {
-    type UInt = u64;
-
-    #[inline(always)]
-    fn into_uint(x: Self) -> Self::UInt {
-      x.get()
-    }
-
-    #[inline(always)]
-    unsafe fn from_uint(x: Self::UInt) -> Self {
-      unsafe { Self::new_unchecked(x) }
-    }
-  }
-
   unsafe impl<K: Key, T: IntoKey<Key = K>> Key for T {
     type UInt = K::UInt;
 
@@ -104,5 +81,30 @@ pub(crate) mod internal {
     unsafe fn from_uint(x: Self::UInt) -> Self {
       unsafe { T::project(K::from_uint(x)) }
     }
+  }
+
+  macro_rules! key_impls {
+    ($($nzuint:ty => $uint:ty;)*) => {
+      $( unsafe impl Key for $nzuint {
+          type UInt = $uint;
+
+          #[inline(always)]
+          fn into_uint(x: Self) -> Self::UInt {
+            x.get()
+          }
+
+          #[inline(always)]
+          unsafe fn from_uint(x: Self::UInt) -> Self {
+            unsafe { Self::new_unchecked(x) }
+          }
+        }
+      )*
+    };
+  }
+
+  key_impls! {
+    NonZeroU8 => u8;
+    NonZeroU32 => u32;
+    NonZeroU64 => u64;
   }
 }

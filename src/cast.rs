@@ -27,28 +27,27 @@ pub(crate) trait Cast: Sized {
   }
 }
 
-macro_rules! impl_cast_from {
-  ($src:ty, $dst:ty) => {
-    impl CastFrom<$src> for $dst {
-      #[inline(always)]
-      fn cast_from(x: $src) -> $dst {
-        x as $dst
+macro_rules! cast_impls {
+  ($($src:ty => $($dst:ty)*;)*) => {
+    $(impl Cast for $src {
       }
-    }
-  }
+
+      $(impl CastFrom<$src> for $dst {
+          #[inline(always)]
+          fn cast_from(x: $src) -> $dst {
+            x as $dst
+          }
+        }
+      )*)*
+  };
 }
 
-impl Cast for i32 { }
-impl Cast for i64 { }
-impl Cast for u32 { }
-impl Cast for u64 { }
-impl Cast for usize { }
-
-impl_cast_from!(i32, u32);
-impl_cast_from!(i64, u64);
-impl_cast_from!(u32, i32);
-impl_cast_from!(u32, usize);
-impl_cast_from!(u64, i64);
-impl_cast_from!(u64, usize);
-impl_cast_from!(usize, u32);
-impl_cast_from!(usize, u64);
+cast_impls! {
+  i8 => u8;
+  i32 => u32;
+  i64 => u64;
+  u8 => i8 usize;
+  u32 => i32 usize;
+  u64 => i64 usize;
+  usize => u8 u32 u64;
+}

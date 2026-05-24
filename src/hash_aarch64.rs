@@ -28,6 +28,54 @@ fn invert_crc32cw(x: u32) -> u32 {
   crc32cd(0, widening_carryless_mul_u32(x, 0xc915_ea3b))
 }
 
+unsafe impl Hash for u8 {
+  type Seed = ();
+
+  type Seed0 = ();
+
+  type Seed1 = ();
+
+  #[inline(always)]
+  fn seed0(_: &Self::Seed) -> Self::Seed0 {
+  }
+
+  #[inline(always)]
+  fn seed1(_: &Self::Seed) -> Self::Seed1 {
+  }
+
+  #[inline(always)]
+  fn seed_nondet() -> Self::Seed {
+  }
+
+  #[inline(always)]
+  fn seed(_: &mut impl Rng) -> Self::Seed {
+  }
+
+  #[inline(always)]
+  fn hash(x: Self, _: Self::Seed0) -> Self {
+    unsafe {
+      let z = core::arch::aarch64::vdupq_n_u8(0);
+      let x = core::arch::aarch64::vdupq_n_u8(x);
+      let x = core::arch::aarch64::vaeseq_u8(x, z);
+      let x = core::arch::aarch64::vgetq_lane_u8(x, 0);
+      let x = x.wrapping_sub(0x64);
+      x
+    }
+  }
+
+  #[inline(always)]
+  fn invert_hash(x: Self, _: Self::Seed1) -> Self {
+    unsafe {
+      let x = x.wrapping_add(0x64);
+      let z = core::arch::aarch64::vdupq_n_u8(0);
+      let x = core::arch::aarch64::vdupq_n_u8(x);
+      let x = core::arch::aarch64::vaesdq_u8(x, z);
+      let x = core::arch::aarch64::vgetq_lane_u8(x, 0);
+      x
+    }
+  }
+}
+
 unsafe impl Hash for u32 {
   type Seed = (u32, u32);
 
@@ -36,13 +84,13 @@ unsafe impl Hash for u32 {
   type Seed1 = u32;
 
   #[inline(always)]
-  fn seed0(seed: &Self::Seed) -> Self::Seed0 {
-    seed.0
+  fn seed0(m: &Self::Seed) -> Self::Seed0 {
+    m.0
   }
 
   #[inline(always)]
-  fn seed1(seed: &Self::Seed) -> Self::Seed1 {
-    seed.1
+  fn seed1(m: &Self::Seed) -> Self::Seed1 {
+    m.1
   }
 
   #[inline(always)]
@@ -82,13 +130,13 @@ unsafe impl Hash for u64 {
   type Seed1 = u64;
 
   #[inline(always)]
-  fn seed0(seed: &Self::Seed) -> Self::Seed0 {
-    seed.0
+  fn seed0(m: &Self::Seed) -> Self::Seed0 {
+    m.0
   }
 
   #[inline(always)]
-  fn seed1(seed: &Self::Seed) -> Self::Seed1 {
-    seed.1
+  fn seed1(m: &Self::Seed) -> Self::Seed1 {
+    m.1
   }
 
   #[inline(always)]

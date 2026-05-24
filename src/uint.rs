@@ -19,7 +19,7 @@ pub(crate) unsafe trait UInt
     + Cast
     + core::ops::Shr<usize, Output = Self::SInt>;
 
-  const BITS: usize;
+  const BITS: usize = 8 * size_of::<Self>();
 
   const MAX: Self;
 
@@ -29,18 +29,20 @@ pub(crate) unsafe trait UInt
   }
 }
 
+unsafe impl UInt for u8 {
+  type SInt = i8;
+
+  const MAX: Self = u8::MAX;
+}
+
 unsafe impl UInt for u32 {
   type SInt = i32;
-
-  const BITS: usize = 32;
 
   const MAX: Self = u32::MAX;
 }
 
 unsafe impl UInt for u64 {
   type SInt = i64;
-
-  const BITS: usize = 64;
 
   const MAX: Self = u64::MAX;
 }
