@@ -54,24 +54,23 @@ unsafe impl Hash for u8 {
   #[inline(always)]
   fn hash(x: Self, _: Self::Seed0) -> Self {
     unsafe {
-      let z = core::arch::aarch64::vdupq_n_u8(0);
+      let z = core::arch::aarch64::vdupq_n_u8(0x52);
       let x = core::arch::aarch64::vdupq_n_u8(x);
       let x = core::arch::aarch64::vaeseq_u8(x, z);
       let x = core::arch::aarch64::vgetq_lane_u8(x, 0);
-      let x = x.wrapping_sub(0x64);
-      x
+      x.wrapping_sub(1)
     }
   }
 
   #[inline(always)]
   fn invert_hash(x: Self, _: Self::Seed1) -> Self {
     unsafe {
-      let x = x.wrapping_add(0x64);
+      let x = x.wrapping_add(1);
       let z = core::arch::aarch64::vdupq_n_u8(0);
       let x = core::arch::aarch64::vdupq_n_u8(x);
       let x = core::arch::aarch64::vaesdq_u8(x, z);
       let x = core::arch::aarch64::vgetq_lane_u8(x, 0);
-      x
+      x ^ 0x52
     }
   }
 }

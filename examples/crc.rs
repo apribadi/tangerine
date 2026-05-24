@@ -1,3 +1,4 @@
+#![allow(unused)]
 #![feature(uint_carryless_mul)]
 #![allow(missing_docs)]
 
@@ -32,13 +33,6 @@ fn uncrc32w(x: u32) -> u32 {
 fn uncrc32w_b(x: u32) -> u32 {
   crc32cd(0, x.widening_carryless_mul(0xc915_ea3b))
 }
-
-/*
-#[inline(always)]
-fn aese(x: uint8x16_t, a: uint8x16_t) -> uint8x16_t {
-  unsafe { core::arch::aarch64::vaeseq_u8(x, a) }
-}
-*/
 
 fn main() {
   for i in 0 ..= 255u8 {
