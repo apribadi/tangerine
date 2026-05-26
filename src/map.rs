@@ -125,8 +125,8 @@ const fn initial_shift<K: Key, V>() -> usize {
 }
 
 #[inline(always)]
-fn initial_slack<K: Key, V>() -> usize {
-  capacity::<K, V>(initial_shift::<K, V>())
+const fn initial_slack<K: Key, V>() -> usize {
+  1
 }
 
 #[inline(always)]

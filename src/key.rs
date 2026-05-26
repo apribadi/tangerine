@@ -12,7 +12,7 @@ use core::num::NonZeroU64;
 /// Types that implement this trait will usually be `Copy`, though that is not
 /// strictly required.
 #[allow(private_bounds)]
-pub trait Key: internal::Key {
+pub trait Key: private::Key {
 }
 
 impl Key for NonZeroU8 {
@@ -52,12 +52,47 @@ pub unsafe trait IntoKey {
   unsafe fn project(_: Self::Key) -> Self;
 }
 
-pub(crate) mod internal {
-  use core::num::NonZeroU8;
-  use core::num::NonZeroU32;
-  use core::num::NonZeroU64;
+unsafe impl<K: private::Key, T: IntoKey<Key = K>> private::Key for T {
+  type UInt = K::UInt;
 
-  use super::IntoKey;
+  #[inline(always)]
+  fn into_uint(x: Self) -> Self::UInt {
+    K::into_uint(T::inject(x))
+  }
+
+  #[inline(always)]
+  unsafe fn from_uint(x: Self::UInt) -> Self {
+    unsafe { T::project(K::from_uint(x)) }
+  }
+}
+
+macro_rules! key_impls {
+  ($($nzuint:ty => $uint:ty;)*) => {
+    $(
+      unsafe impl private::Key for $nzuint {
+        type UInt = $uint;
+
+        #[inline(always)]
+        fn into_uint(x: Self) -> Self::UInt {
+          x.get()
+        }
+
+        #[inline(always)]
+        unsafe fn from_uint(x: Self::UInt) -> Self {
+          unsafe { Self::new_unchecked(x) }
+        }
+      }
+    )*
+  };
+}
+
+key_impls! {
+  NonZeroU8 => u8;
+  NonZeroU32 => u32;
+  NonZeroU64 => u64;
+}
+
+pub(crate) mod private {
   use crate::hash::Hash;
   use crate::uint::UInt;
 
@@ -67,45 +102,5 @@ pub(crate) mod internal {
     fn into_uint(_: Self) -> Self::UInt;
 
     unsafe fn from_uint(_: Self::UInt) -> Self;
-  }
-
-  unsafe impl<K: Key, T: IntoKey<Key = K>> Key for T {
-    type UInt = K::UInt;
-
-    #[inline(always)]
-    fn into_uint(x: Self) -> Self::UInt {
-      K::into_uint(T::inject(x))
-    }
-
-    #[inline(always)]
-    unsafe fn from_uint(x: Self::UInt) -> Self {
-      unsafe { T::project(K::from_uint(x)) }
-    }
-  }
-
-  macro_rules! key_impls {
-    ($($nzuint:ty => $uint:ty;)*) => {
-      $(
-        unsafe impl Key for $nzuint {
-          type UInt = $uint;
-
-          #[inline(always)]
-          fn into_uint(x: Self) -> Self::UInt {
-            x.get()
-          }
-
-          #[inline(always)]
-          unsafe fn from_uint(x: Self::UInt) -> Self {
-            unsafe { Self::new_unchecked(x) }
-          }
-        }
-      )*
-    };
-  }
-
-  key_impls! {
-    NonZeroU8 => u8;
-    NonZeroU32 => u32;
-    NonZeroU64 => u64;
   }
 }

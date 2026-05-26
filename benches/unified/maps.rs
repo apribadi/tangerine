@@ -1,22 +1,20 @@
-use std::num::NonZeroU32;
-
-pub(crate) trait Map<T> {
+pub(crate) trait Map<K, V> {
   fn new() -> Self;
 
   fn len(&self) -> usize;
 
-  fn get(&self, _: NonZeroU32) -> Option<&T>;
+  fn get(&self, _: K) -> Option<&V>;
 
-  fn insert(&mut self, _: NonZeroU32, _: T) -> Option<T>;
+  fn insert(&mut self, _: K, _: V) -> Option<V>;
 
-  fn remove(&mut self, _: NonZeroU32) -> Option<T>;
+  fn remove(&mut self, _: K) -> Option<V>;
 
-  fn for_each_value<F: FnMut(&T)>(&self, f: F);
+  fn for_each_value<F: FnMut(&V)>(&self, f: F);
 }
 
-impl<K, V> Map<V> for tangerine::map::IntMap<K, V>
+impl<T, U, V> Map<T, V> for tangerine::map::IntMap<U, V>
 where
-  K: tangerine::key::Key + From<NonZeroU32>
+  U: tangerine::key::Key + From<T>
 {
   #[inline(always)]
   fn new() -> Self {
@@ -29,18 +27,18 @@ where
   }
 
   #[inline(always)]
-  fn get(&self, k: NonZeroU32) -> Option<&V> {
-    tangerine::map::IntMap::get(self, K::from(k))
+  fn get(&self, k: T) -> Option<&V> {
+    tangerine::map::IntMap::get(self, U::from(k))
   }
 
   #[inline(always)]
-  fn insert(&mut self, k: NonZeroU32, v: V) -> Option<V> {
-    tangerine::map::IntMap::insert(self, K::from(k), v)
+  fn insert(&mut self, k: T, v: V) -> Option<V> {
+    tangerine::map::IntMap::insert(self, U::from(k), v)
   }
 
   #[inline(always)]
-  fn remove(&mut self, k: NonZeroU32) -> Option<V> {
-    tangerine::map::IntMap::remove(self, K::from(k))
+  fn remove(&mut self, k: T) -> Option<V> {
+    tangerine::map::IntMap::remove(self, U::from(k))
   }
 
   #[inline(always)]
@@ -49,9 +47,9 @@ where
   }
 }
 
-impl<K, V, S> Map<V> for std::collections::HashMap<K, V, S>
+impl<T, U, V, S> Map<T, V> for std::collections::HashMap<U, V, S>
 where
-  K: std::hash::Hash + Copy + Eq + From<NonZeroU32>,
+  U: std::hash::Hash + Copy + Eq + From<T>,
   S: std::hash::BuildHasher + Default,
 {
   #[inline(always)]
@@ -65,18 +63,18 @@ where
   }
 
   #[inline(always)]
-  fn get(&self, k: NonZeroU32) -> Option<&V> {
-    std::collections::HashMap::get(self, &K::from(k))
+  fn get(&self, k: T) -> Option<&V> {
+    std::collections::HashMap::get(self, &U::from(k))
   }
 
   #[inline(always)]
-  fn insert(&mut self, k: NonZeroU32, v: V) -> Option<V> {
-    std::collections::HashMap::insert(self, K::from(k), v)
+  fn insert(&mut self, k: T, v: V) -> Option<V> {
+    std::collections::HashMap::insert(self, U::from(k), v)
   }
 
   #[inline(always)]
-  fn remove(&mut self, k: NonZeroU32) -> Option<V> {
-    std::collections::HashMap::remove(self, &K::from(k))
+  fn remove(&mut self, k: T) -> Option<V> {
+    std::collections::HashMap::remove(self, &U::from(k))
   }
 
   #[inline(always)]
@@ -85,9 +83,9 @@ where
   }
 }
 
-impl<K, V> Map<V> for intmap::IntMap<K, V>
+impl<K, V> Map<K, V> for intmap::IntMap<K, V>
 where
-  K: intmap::IntKey + From<NonZeroU32>
+  K: intmap::IntKey
 {
   #[inline(always)]
   fn new() -> Self {
@@ -100,17 +98,17 @@ where
   }
 
   #[inline(always)]
-  fn get(&self, k: NonZeroU32) -> Option<&V> {
+  fn get(&self, k: K) -> Option<&V> {
     intmap::IntMap::get(self, K::from(k))
   }
 
   #[inline(always)]
-  fn insert(&mut self, k: NonZeroU32, v: V) -> Option<V> {
+  fn insert(&mut self, k: K, v: V) -> Option<V> {
     intmap::IntMap::insert(self, K::from(k), v)
   }
 
   #[inline(always)]
-  fn remove(&mut self, k: NonZeroU32) -> Option<V> {
+  fn remove(&mut self, k: K) -> Option<V> {
     intmap::IntMap::remove(self, K::from(k))
   }
 

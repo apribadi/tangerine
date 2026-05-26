@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+//! hashing
 
 use rand_core::Rng;
 
@@ -22,9 +22,10 @@ pub(crate) unsafe trait Hash {
   fn invert_hash(_: Self, _: Self::Seed1) -> Self;
 }
 
+// TODO: x86-64
 cfg_select! {
-  feature = "no-arch-spec-hash" => {
-    #[path = "hash_generic.rs"]
+  feature = "use-basic-hash" => {
+    #[path = "hash_basic.rs"]
     mod backend;
   }
   all(
@@ -38,67 +39,45 @@ cfg_select! {
     mod backend;
   }
   _ => {
-    #[path = "hash_generic.rs"]
+    #[path = "hash_basic.rs"]
     mod backend;
   }
 }
 
 pub mod internal {
-  use super::Hash;
-  use super::Rng;
+  //! Unstable API exposing implementation details for benchmarks and tests.
+
+  #![allow(missing_docs)]
+
+  use rand_core::Rng;
 
   pub enum Backend {
     AArch64,
-    Generic,
+    Basic,
   }
 
   pub const BACKEND: Backend = super::backend::BACKEND;
 
-  pub struct Hash8(<u8 as Hash>::Seed);
-
-  impl Hash8 {
-    pub fn with_seed(g: &mut impl Rng) -> Self {
-      Self(<u8 as Hash>::seed(g))
-    }
-
-    pub fn hash(&self, x: u8) -> u8 {
-      <u8 as Hash>::hash(x, <u8 as Hash>::seed0(&self.0))
-    }
-
-    pub fn invert_hash(&self, x: u8) -> u8 {
-      <u8 as Hash>::invert_hash(x, <u8 as Hash>::seed1(&self.0))
-    }
+  #[allow(private_bounds)]
+  pub trait Hash: super::Hash {
   }
 
-  pub struct Hash32(<u32 as Hash>::Seed);
-
-  impl Hash32 {
-    pub fn with_seed(g: &mut impl Rng) -> Self {
-      Self(<u32 as Hash>::seed(g))
-    }
-
-    pub fn hash(&self, x: u32) -> u32 {
-      <u32 as Hash>::hash(x, <u32 as Hash>::seed0(&self.0))
-    }
-
-    pub fn invert_hash(&self, x: u32) -> u32 {
-      <u32 as Hash>::invert_hash(x, <u32 as Hash>::seed1(&self.0))
-    }
+  impl<T: super::Hash> Hash for T {
   }
 
-  pub struct Hash64(<u64 as Hash>::Seed);
+  pub struct Hasher<T: Hash>(<T as super::Hash>::Seed);
 
-  impl Hash64 {
+  impl<T: Hash> Hasher<T> {
     pub fn with_seed(g: &mut impl Rng) -> Self {
-      Self(<u64 as Hash>::seed(g))
+      Self(<T as super::Hash>::seed(g))
     }
 
-    pub fn hash(&self, x: u64) -> u64 {
-      <u64 as Hash>::hash(x, <u64 as Hash>::seed0(&self.0))
+    pub fn hash(&self, x: T) -> T {
+      <T as super::Hash>::hash(x, <T as super::Hash>::seed0(&self.0))
     }
 
-    pub fn invert_hash(&self, x: u64) -> u64 {
-      <u64 as Hash>::invert_hash(x, <u64 as Hash>::seed1(&self.0))
+    pub fn invert_hash(&self, x: T) -> T {
+      <T as super::Hash>::invert_hash(x, <T as super::Hash>::seed1(&self.0))
     }
   }
 }

@@ -8,7 +8,7 @@ name = "tangerine-intmap"
 version = "0.1.0"
 
 [features]
-no-arch-spec-hash = []
+use-basic-hash = []
 
 [lib]
 name = "tangerine"

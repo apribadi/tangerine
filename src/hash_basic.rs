@@ -4,7 +4,7 @@ use crate::hash::Hash;
 use crate::util::invert_u32;
 use crate::util::invert_u64;
 
-pub(crate) const BACKEND: Backend = Backend::Generic;
+pub(crate) const BACKEND: Backend = Backend::Basic;
 
 unsafe impl Hash for u32 {
   type Seed = ((u32, u32), (u32, u32));

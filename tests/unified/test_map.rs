@@ -120,6 +120,17 @@ fn test_empty() {
 
   t.clear();
   t.reset();
+
+  expect![[r#"
+      0 <- t.len()
+      true <- t.is_empty()
+      false <- t.contains_key(13)
+      None <- t.get(13)
+      None <- t.get_mut(13)
+      0 <- map::internal::num_slots(&t))
+      NaN <- map::internal::load_factor(&t))
+      0 <- map::internal::allocation_size(&t))
+  "#]].assert_eq(&s.drain(..).as_str());
 }
 
 #[test]
@@ -347,7 +358,7 @@ fn test_displacement_histogram() {
           9: 0
       "#]].assert_eq(&s.drain(..).as_str());
     }
-    hash::internal::Backend::Generic => {
+    hash::internal::Backend::Basic => {
       expect![[r#"
           num_slots = 1036
           len = 512

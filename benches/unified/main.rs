@@ -81,9 +81,9 @@ impl KeyGen {
     intmap::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
   ])]
-fn bench_get_latency<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
+fn bench_get_latency<T: Map<NonZeroU32, NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
-  fn go<T: Map<NonZeroU32>>(t: &mut [(T, NonZeroU32)]) {
+  fn go<T: Map<NonZeroU32, NonZeroU32>>(t: &mut [(T, NonZeroU32)]) {
     for _ in 0 .. 1000 {
       for &mut (ref mut t, ref mut k) in t.iter_mut() {
         for _ in 0 .. 100 {
@@ -120,9 +120,9 @@ fn bench_get_latency<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: 
     tangerine::map::IntMap<NonZeroU32, u32>,
     tangerine::map::IntMap<NonZeroU64, u32>,
   ])]
-fn bench_get_throughput<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
+fn bench_get_throughput<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
-  fn go<T: Map<u32>>(t: &mut [(T, KeyGen)]) -> u32 {
+  fn go<T: Map<NonZeroU32, u32>>(t: &mut [(T, KeyGen)]) -> u32 {
     let mut z = 0;
     for _ in 0 .. 1000 {
       for &mut (ref mut t, ref mut k) in t.iter_mut() {
@@ -157,9 +157,9 @@ fn bench_get_throughput<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usiz
     intmap::IntMap<NonZeroU32, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
   ])]
-fn bench_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
+fn bench_insert<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
-  fn go<T: Map<u32>>(t: &mut [(T, KeyGen, usize, usize)]) {
+  fn go<T: Map<NonZeroU32, u32>>(t: &mut [(T, KeyGen, usize, usize)]) {
     for _ in 0 .. 1000 {
       for &mut (ref mut t, ref mut k, ref mut n, limit) in t.iter_mut() {
         for _ in 0 .. 100 {
@@ -197,9 +197,9 @@ fn bench_insert<T: Map<u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
     tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::map::IntMap<NonZeroU64, NonZeroU32>,
   ])]
-fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
+fn bench_remove_insert<T: Map<NonZeroU32, NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
-  fn go<T: Map<NonZeroU32>>(t: &mut [(T, KeyGen, KeyGen)]) {
+  fn go<T: Map<NonZeroU32, NonZeroU32>>(t: &mut [(T, KeyGen, KeyGen)]) {
     for _ in 0 .. 200 {
       for &mut (ref mut t, ref mut a, ref mut b) in t.iter_mut() {
         for _ in 0 .. 250 {
@@ -233,9 +233,9 @@ fn bench_remove_insert<T: Map<NonZeroU32>>(bencher: Bencher<'_, '_>, working_set
     intmap::IntMap<NonZeroU32, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
   ])]
-fn bench_iter_value<T: Map<u32>>(bencher: Bencher<'_, '_>) {
+fn bench_iter_value<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>) {
   #[inline(never)]
-  fn go<T: Map<u32>>(t: &mut T) -> u32 {
+  fn go<T: Map<NonZeroU32, u32>>(t: &mut T) -> u32 {
     let mut z = 0;
     t.for_each_value(|&x| { z ^= x; });
     z
