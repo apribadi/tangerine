@@ -85,7 +85,8 @@ pub(crate) mod internal {
 
   macro_rules! key_impls {
     ($($nzuint:ty => $uint:ty;)*) => {
-      $( unsafe impl Key for $nzuint {
+      $(
+        unsafe impl Key for $nzuint {
           type UInt = $uint;
 
           #[inline(always)]

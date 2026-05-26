@@ -35,7 +35,24 @@ fn uncrc32w_b(x: u32) -> u32 {
 }
 
 fn main() {
-  for i in 0 ..= 255u8 {
+  for a in 24 ..= 24 {
+    let mut m = [false; 256];
+    for i in 0 ..= 255u8 {
+      let x = crc32cb(0, i);
+      let x = (x >> a) as u8;
+      m[x as usize] = true;
+    }
+    let mut n = 0;
+    for i in 0 ..= 255u8 {
+      if m[i as usize] {
+        n += 1;
+      }
+    }
+    print!("{}\n", n);
+  }
+}
+
+/*
     let x =
       unsafe {
         let z = core::arch::aarch64::vdupq_n_u8(0);
@@ -53,5 +70,4 @@ fn main() {
         x
       };
     print!("{:#04x} {:#04x}\n", x, y);
-  }
-}
+*/

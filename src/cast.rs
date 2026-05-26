@@ -29,16 +29,18 @@ pub(crate) trait Cast: Sized {
 
 macro_rules! cast_impls {
   ($($src:ty => $($dst:ty)*;)*) => {
-    $(impl Cast for $src {
+    $(
+      impl Cast for $src {
       }
-
-      $(impl CastFrom<$src> for $dst {
+    $(
+      impl CastFrom<$src> for $dst {
           #[inline(always)]
           fn cast_from(x: $src) -> $dst {
             x as $dst
           }
-        }
-      )*)*
+      }
+    )*
+    )*
   };
 }
 
