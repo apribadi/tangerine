@@ -46,11 +46,6 @@ pub fn get(t: &IntMap<NonZeroU8, NonZeroU8>, k: NonZeroU8) -> Option<&NonZeroU8>
 }
 
 #[inline(never)]
-pub fn get_simple(t: &IntMap<NonZeroU8, NonZeroU8>, k: NonZeroU8) -> Option<NonZeroU8> {
-  match tangerine::map::internal::get_simple(t, k) { None => None, Some(&y) => Some(y) }
-}
-
-#[inline(never)]
 pub fn get_value(t: &IntMap<NonZeroU8, NonZeroU8>, k: NonZeroU8) -> Option<NonZeroU8> {
   match t.get(k) { None => None, Some(&y) => Some(y) }
 }

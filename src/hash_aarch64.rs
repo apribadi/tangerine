@@ -1,8 +1,11 @@
 use rand_core::Rng;
+use crate::hash::internal::Backend;
 use crate::hash::Hash;
 use crate::util::invert_u8;
 use crate::util::invert_u32;
 use crate::util::invert_u64;
+
+pub(crate) const BACKEND: Backend = Backend::AArch64;
 
 #[inline(always)]
 fn lo(x: u64) -> u32 {

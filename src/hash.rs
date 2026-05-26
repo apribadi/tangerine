@@ -1,7 +1,6 @@
 #![allow(missing_docs)]
 
 use rand_core::Rng;
-use self::internal::Backend;
 
 pub(crate) unsafe trait Hash {
   type Seed;
@@ -24,6 +23,10 @@ pub(crate) unsafe trait Hash {
 }
 
 cfg_select! {
+  feature = "no-arch-spec-hash" => {
+    #[path = "hash_generic.rs"]
+    mod backend;
+  }
   all(
       target_arch = "aarch64",
       target_feature = "aes",
@@ -32,15 +35,11 @@ cfg_select! {
     ) =>
   {
     #[path = "hash_aarch64.rs"]
-    mod aarch64;
-
-    const BACKEND: Backend = Backend::AArch64;
+    mod backend;
   }
   _ => {
     #[path = "hash_generic.rs"]
-    mod generic;
-
-    const BACKEND: Backend = Backend::Generic;
+    mod backend;
   }
 }
 
@@ -53,7 +52,7 @@ pub mod internal {
     Generic,
   }
 
-  pub const BACKEND: Backend = super::BACKEND;
+  pub const BACKEND: Backend = super::backend::BACKEND;
 
   pub struct Hash8(<u8 as Hash>::Seed);
 

@@ -112,7 +112,7 @@ const unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
 
 #[inline(always)]
 const fn initial_table<K:Key, V>() -> *const Slot<K, V> {
-  if is_stub_ok::<K, V>() {
+  if const { is_stub_ok::<K, V>() } {
     &raw const STUB as _
   } else {
     null()
@@ -254,7 +254,7 @@ unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::UInt, h: K::UInt, value
 }
 
 #[inline(always)]
-unsafe fn clear_slots<K: Key, V>(p: *mut Slot<K, V>, n: usize) {
+unsafe fn clear_table<K: Key, V>(p: *mut Slot<K, V>, n: usize) {
   // PRECONDITIONS:
   // - n != 0
   // - n % CHUNK == 0
@@ -448,7 +448,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
     let new_z = unsafe { new_t.add(new_d) };
-    unsafe { clear_slots(new_t, new_d) };
+    unsafe { clear_table(new_t, new_d) };
     let k = slot(h, new_s);
     let a = unsafe { new_t.add(k) };
     unsafe { slot_hash(a).write(h) };
@@ -506,7 +506,7 @@ impl<K: Key, V> IntMap<K, V> {
     self.slack = new_r;
     self.limit = new_z;
     // Initialize new table.
-    unsafe { clear_slots(new_t, new_d) };
+    unsafe { clear_table(new_t, new_d) };
     // Re-add the last write so that we copy it to the new table.
     unsafe { slot_hash(stashed_slot).write(stashed_hash) };
     // Copy slots.
@@ -646,7 +646,7 @@ impl<K: Key, V> IntMap<K, V> {
     } else {
       if n != 0 {
         self.slack = c;
-        unsafe { clear_slots(t, z.offset_from_unsigned(t)) };
+        unsafe { clear_table(t, z.offset_from_unsigned(t)) };
       }
     }
   }
@@ -791,28 +791,6 @@ impl<K: Key, V> IntMap<K, V> {
       if n == 0 { break }
     }
     a
-  }
-
-  #[inline(always)]
-  fn get_simple(&self, key: K) -> Option<&V> {
-    let t = self.table.cast_mut();
-    let s = self.shift;
-    let m = K::UInt::seed0(&self.seed);
-    if is_uninit_null(t, s) { return None }
-    let h = hash(key, m);
-    let k = slot(h, s);
-    let mut p = unsafe { t.add(k) };
-    let mut x;
-    loop {
-      x = unsafe { slot_hash(p).read() };
-      if x >= h { break }
-      p = unsafe { p.add(1) };
-    }
-    if x != h {
-      None
-    } else {
-      Some(unsafe { &*slot_data(p) })
-    }
   }
 }
 
@@ -1024,10 +1002,5 @@ pub mod internal {
 
   pub fn displacement_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 10] {
     t.displacement_histogram()
-  }
-
-  #[inline(always)]
-  pub fn get_simple<K: Key, V>(t: &IntMap<K, V>, key: K) -> Option<&V> {
-    t.get_simple(key)
   }
 }
