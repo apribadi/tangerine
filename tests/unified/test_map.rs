@@ -5,6 +5,7 @@ use expect_test::expect;
 use std::fmt::Write;
 use std::num::NonZeroU128;
 use std::num::NonZeroU32;
+use std::num::NonZeroU8;
 use std::write;
 use tangerine::map::IntMap;
 use tangerine::map;
@@ -439,3 +440,27 @@ fn test_foo() {
 }
 */
 
+#[test]
+fn test_255u8() {
+  let mut s = String::new();
+  let mut g = Rng::new(NonZeroU128::MIN);
+  let mut t = IntMap::with_seed(&mut g);
+
+  let mut n = 0;
+  for k in NonZeroU8::MIN ..= NonZeroU8::MAX {
+    let None = t.insert(k, ()) else { panic!() };
+    let m = map::internal::allocation_size(&t);
+    if m != n {
+      n = m;
+      write!(s, "{}: {}\n", t.len(), m);
+    }
+  }
+
+  expect![[r#"
+      1: 20
+      9: 40
+      17: 72
+      33: 136
+      65: 256
+  "#]].assert_eq(&s.drain(..).as_str());
+}

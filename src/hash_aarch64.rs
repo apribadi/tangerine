@@ -51,34 +51,34 @@ fn invert_crc32cw(x: u32) -> u32 {
 }
 
 unsafe impl Hash for u8 {
-  type Seed = (u8, (u8, &'static [u8; 256]));
+  type Seed = (&'static [u8; 256], u8, u8);
 
   type Seed0 = u8;
 
-  type Seed1 = (u8, &'static [u8; 256]);
+  type Seed1 = (&'static [u8; 256], u8);
 
   #[inline(always)]
   fn seed0(m: &Self::Seed) -> Self::Seed0 {
-    m.0
+    m.1
   }
 
   #[inline(always)]
   fn seed1(m: &Self::Seed) -> Self::Seed1 {
-    m.1
+    (m.0, m.2)
   }
 
   #[inline(always)]
   fn seed_nondet() -> Self::Seed {
     let a = 1 | dandelion::thread_local::u32() as u8;
     let b = invert_u8(a);
-    (a, (b, &HASH_U8_INVERSE))
+    (&HASH_U8_PERM_INV, a, b)
   }
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
     let a = 1 | g.next_u32() as u8;
     let b = invert_u8(a);
-    (a, (b, &HASH_U8_INVERSE))
+    (&HASH_U8_PERM_INV, a, b)
   }
 
   #[inline(always)]
@@ -90,9 +90,9 @@ unsafe impl Hash for u8 {
 
   #[inline(always)]
   fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-    let a = m.0;
-    let p = m.1;
-    let x = x.wrapping_mul(a).wrapping_add(a);
+    let p = m.0;
+    let m = m.1;
+    let x = x.wrapping_mul(m).wrapping_add(m);
     let x = p[x as usize];
     x
   }
@@ -190,7 +190,7 @@ unsafe impl Hash for u64 {
   }
 }
 
-static HASH_U8_INVERSE: [u8; 256] = [
+static HASH_U8_PERM_INV: [u8; 256] = [
   0x00, 0xf1, 0xe2, 0x13, 0xc4, 0x35, 0x26, 0xd7, 0x88, 0x79, 0x6a, 0x9b, 0x4c, 0xbd, 0xae, 0x5f,
   0x10, 0xe1, 0xf2, 0x03, 0xd4, 0x25, 0x36, 0xc7, 0x98, 0x69, 0x7a, 0x8b, 0x5c, 0xad, 0xbe, 0x4f,
   0x20, 0xd1, 0xc2, 0x33, 0xe4, 0x15, 0x06, 0xf7, 0xa8, 0x59, 0x4a, 0xbb, 0x6c, 0x9d, 0x8e, 0x7f,

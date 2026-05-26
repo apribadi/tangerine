@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(unused_features)]
 #![cfg_attr(miri, feature(uint_carryless_mul))]
 #![doc = include_str!("../README.md")]
 

@@ -5,6 +5,7 @@ mod maps;
 use crate::maps::Map;
 use divan::Bencher;
 use std::hint::black_box;
+use std::num::NonZeroU8;
 use std::num::NonZeroU32;
 use std::num::NonZeroU64;
 
@@ -243,5 +244,29 @@ fn bench_iter_value<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>) {
   let mut t = T::new();
   let mut k = KeyGen::new();
   for _ in 0 .. 1_000_000 { let _ = t.insert(k.next(), k.peek().get()); }
+  bencher.bench_local(|| go(black_box(&mut t)));
+}
+
+#[divan::bench(
+  sample_count = SAMPLE_COUNT,
+  types = [
+    std::collections::HashMap<NonZeroU8, (), foldhash::fast::RandomState>,
+    intmap::IntMap<NonZeroU8, ()>,
+    tangerine::map::IntMap<NonZeroU8, ()>,
+  ])]
+fn bench_insert_255u8<T: Map<NonZeroU8, ()>>(bencher: Bencher<'_, '_>) {
+  #[inline(never)]
+  fn go<T: Map<NonZeroU8, ()>>(t: &mut T) {
+    let mut i = 0;
+    'done: loop {
+      for k in NonZeroU8::MIN ..= NonZeroU8::MAX {
+        let _ = t.insert(k, ());
+        i += 1;
+        if i == 1_000_000 { break 'done }
+      }
+      *t = T::new();
+    }
+  }
+  let mut t = T::new();
   bencher.bench_local(|| go(black_box(&mut t)));
 }
