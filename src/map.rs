@@ -10,7 +10,6 @@ use core::fmt::Debug;
 use core::fmt::Formatter;
 use core::fmt;
 use core::hint::assert_unchecked;
-use core::hint::cold_path;
 use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
@@ -165,8 +164,8 @@ unsafe fn invert_hash<K: Key>(x: K::UInt, m: impl Fn(K::UInt) -> K::UInt) -> K {
   unsafe { K::from_uint(m(x)) }
 }
 
-// NB: For `capacity` and `slot`, it sometimes improves code generation to
-// operate on `usize`s if possible.
+// NB: For `capacity` and `slot`, it can improve code generation to operate on
+// `usize`s when possible.
 
 #[inline(always)]
 fn capacity<K: Key, V>(s: usize) -> usize {
@@ -205,7 +204,6 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::UInt) -> (*mut S
     let x = select_unpredictable(u >= h, u, v);
     (p, x)
   } else {
-    cold_path();
     let mut p = b;
     let mut x;
     loop {
@@ -254,7 +252,7 @@ unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::UInt, h: K::UInt, value
 }
 
 #[inline(always)]
-unsafe fn clear_table<K: Key, V>(p: *mut Slot<K, V>, n: usize) {
+unsafe fn init_span<K: Key, V>(p: *mut Slot<K, V>, n: usize) {
   // PRECONDITIONS:
   // - n != 0
   // - n % CHUNK == 0
@@ -393,62 +391,20 @@ impl<K: Key, V> IntMap<K, V> {
     })
   }
 
-  /// Inserts the given key and value into the map. Returns the previous value
-  /// associated with given key, if one was present.
-  ///
-  /// # Panics
-  ///
-  /// Panics if allocation fails. If that happens, it is possible for the map
-  /// to leak an arbitrary set of items, but the map will remain in a valid
-  /// state.
-  #[inline(always)]
-  pub fn insert(&mut self, key: K, value: V) -> Option<V> {
-    let t = self.table.cast_mut();
-    let s = self.shift;
-    let m = self.hash.forward();
-    let h = hash(key, m);
-    if is_uninit_null(t, s) {
-      cold_path();
-      let _: *mut V = self.insert_init(h, value);
-      None
-    } else {
-      let p = unsafe { search(t, s, h) };
-      if p.1 == h {
-        Some(unsafe { slot_data(p.0).replace(value) })
-      } else {
-        if is_uninit_stub(t, s) {
-          cold_path();
-          let _: *mut V = self.insert_init(h, value);
-        } else {
-          let p = unsafe { insert_at(p.0, p.1, h, value) };
-          let r = self.slack;
-          let z = self.limit.cast_mut();
-          if p == z || r == 0 {
-            cold_path();
-            let _: *mut V = self.insert_grow(p, h);
-          } else {
-            self.slack = r - 1;
-          }
-        }
-        None
-      }
-    }
-  }
-
   #[inline(never)]
   #[cold]
   fn insert_init(&mut self, h: K::UInt, value: V) -> *mut V {
-    let new_w = 4 * CHUNK;
+    let new_d = 4 * CHUNK;
     let new_e = CHUNK;
-    let new_d = new_w + new_e;
-    let new_s = K::UInt::BITS - new_w.trailing_zeros() as usize;
+    let new_w = new_d + new_e;
+    let new_s = K::UInt::BITS - new_d.trailing_zeros() as usize;
     let new_r = capacity::<K, V>(new_s) - 1;
-    assert!(new_d <= allocation_max_num_slots::<K, V>());
-    let new_l = unsafe { allocation_layout::<K, V>(new_d) };
+    assert!(new_w <= allocation_max_num_slots::<K, V>());
+    let new_l = unsafe { allocation_layout::<K, V>(new_w) };
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
-    let new_z = unsafe { new_t.add(new_d) };
-    unsafe { clear_table(new_t, new_d) };
+    let new_z = unsafe { new_t.add(new_w) };
+    unsafe { init_span(new_t, new_w) };
     let k = slot(h, new_s);
     let a = unsafe { new_t.add(k) };
     unsafe { slot_hash(a).write(h) };
@@ -467,21 +423,21 @@ impl<K: Key, V> IntMap<K, V> {
     // valid state, even if we panic.
     let stashed_slot = unsafe { p.sub(1) };
     let stashed_hash = unsafe { slot_hash(stashed_slot).replace(K::UInt::MAX) };
-    // Retrieve and compute values for the old table.
+    // Retrieve values for the old table.
     let old_t = self.table.cast_mut();
     let old_s = self.shift;
     let old_r = self.slack;
     let old_z = self.limit.cast_mut();
-    let old_d = unsafe { old_z.offset_from_unsigned(old_t) };
-    let old_w = 1 << K::UInt::BITS - old_s;
-    let old_e = old_d - old_w;
     // If s == 0, then the map can hold every possible key and should never grow.
-    debug_assert!(0 != old_s);
-    debug_assert!(old_s <= K::UInt::BITS - 1);
+    debug_assert!(1 <= old_s && old_s <= K::UInt::BITS - 1);
+    // Compute old sizes.
+    let old_w = unsafe { old_z.offset_from_unsigned(old_t) };
+    let old_d = 1 << K::UInt::BITS - old_s;
+    let old_e = old_w - old_d;
     // Compute new sizes.
     let new_s = old_s - 1;
     let new_r = old_r + (capacity::<K, V>(new_s) - capacity::<K, V>(old_s)) - 1;
-    let new_w = 1 << K::UInt::BITS - new_s;
+    let new_d = 1 << K::UInt::BITS - new_s;
     let new_e =
       if new_s == 0 {
         0 // special case, we can store every possible key
@@ -492,21 +448,21 @@ impl<K: Key, V> IntMap<K, V> {
       } else {
         old_e
       };
-    let new_d = new_w + new_e;
+    let new_w = new_d + new_e;
     // Panic if the layout would overflow.
-    assert!(new_d <= allocation_max_num_slots::<K, V>());
+    assert!(new_w <= allocation_max_num_slots::<K, V>());
     // Allocate.
-    let new_l = unsafe { allocation_layout::<K, V>(new_d) };
+    let new_l = unsafe { allocation_layout::<K, V>(new_w) };
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
-    let new_z = unsafe { new_t.add(new_d) };
+    let new_z = unsafe { new_t.add(new_w) };
     // Update struct fields.
     self.table = new_t;
     self.shift = new_s;
     self.slack = new_r;
     self.limit = new_z;
     // Initialize new table.
-    unsafe { clear_table(new_t, new_d) };
+    unsafe { init_span(new_t, new_w) };
     // Re-add the last write so that we copy it to the new table.
     unsafe { slot_hash(stashed_slot).write(stashed_hash) };
     // Copy slots.
@@ -525,7 +481,7 @@ impl<K: Key, V> IntMap<K, V> {
       if p == old_z { break }
     }
     // The map is now in a valid state, even if deallocating panics.
-    unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_d)) };
+    unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_w)) };
     // Find the newly-inserted value. Note, this was not necessarily at
     // stashed_slot.
     let k = slot(h, new_s);
@@ -534,6 +490,45 @@ impl<K: Key, V> IntMap<K, V> {
       p = unsafe { p.add(1) };
     }
     unsafe { slot_data(p) }
+  }
+
+  /// Inserts the given key and value into the map. Returns the previous value
+  /// associated with given key, if one was present.
+  ///
+  /// # Panics
+  ///
+  /// Panics if allocation fails. If that happens, it is possible for the map
+  /// to leak an arbitrary set of items, but the map will remain in a valid
+  /// state.
+  #[inline(always)]
+  pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+    let t = self.table.cast_mut();
+    let s = self.shift;
+    let m = self.hash.forward();
+    let h = hash(key, m);
+    if is_uninit_null(t, s) {
+      let _: *mut V = self.insert_init(h, value);
+      None
+    } else {
+      let p = unsafe { search(t, s, h) };
+      if p.1 == h {
+        Some(unsafe { slot_data(p.0).replace(value) })
+      } else {
+        if is_uninit_stub(t, s) {
+          let _: *mut V = self.insert_init(h, value);
+        } else {
+          let p = unsafe { insert_at(p.0, p.1, h, value) };
+          let r = self.slack;
+          let z = self.limit.cast_mut();
+          if p == z || r == 0 {
+            let _: *mut V = self.insert_grow(p, h);
+          } else {
+            self.slack = r - 1;
+          }
+        }
+        None
+      }
+    }
   }
 
   /// Removes the given key from the map. Returns the previous value associated
@@ -622,8 +617,8 @@ impl<K: Key, V> IntMap<K, V> {
       if n != 0 {
         // UARNING!
         //
-        // We must be careful to leave the map in a valid state even if a call to
-        // `drop` panics.
+        // We must be careful to leave the map in a valid state even if a call
+        // to `drop` panics.
         //
         // Here, we traverse the table in reverse order to ensure that we don't
         // remove an item that is currently displacing another item.
@@ -646,7 +641,7 @@ impl<K: Key, V> IntMap<K, V> {
     } else {
       if n != 0 {
         self.slack = c;
-        unsafe { clear_table(t, z.offset_from_unsigned(t)) };
+        unsafe { init_span(t, z.offset_from_unsigned(t)) };
       }
     }
   }
@@ -664,7 +659,7 @@ impl<K: Key, V> IntMap<K, V> {
     let z = self.limit.cast_mut();
     if is_uninit(t, s) { return }
     let n = capacity::<K, V>(s) - r;
-    let d = unsafe { z.offset_from_unsigned(t) };
+    let w = unsafe { z.offset_from_unsigned(t) };
     self.table = initial_table::<K, V>();
     self.shift = initial_shift::<K, V>();
     self.slack = initial_slack::<K, V>();
@@ -684,7 +679,7 @@ impl<K: Key, V> IntMap<K, V> {
         }
       }
     }
-    unsafe { dealloc(t as *mut u8, allocation_layout::<K, V>(d)) };
+    unsafe { dealloc(t as *mut u8, allocation_layout::<K, V>(w)) };
   }
 
   /// Returns an iterator yielding each key and a reference to its associated
@@ -694,7 +689,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.hash.reverse();
+    let m = self.hash.inverse();
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -709,7 +704,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.hash.reverse();
+    let m = self.hash.inverse();
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -723,7 +718,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.hash.reverse();
+    let m = self.hash.inverse();
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -858,19 +853,17 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     let h = self.hash;
     let inserted_at =
       if is_uninit(t, s) {
-        cold_path();
         self.map.insert_init(h, value)
       } else {
-        let a = p;
+        let q = p;
         let p = unsafe { insert_at(p, x, h, value) };
         let r = self.map.slack;
         let z = self.map.limit.cast_mut();
         if p == z || r == 0 {
-          cold_path();
           self.map.insert_grow(p, h)
         } else {
           self.map.slack = r - 1;
-          unsafe { slot_data(a) }
+          unsafe { slot_data(q) }
         }
       };
     unsafe { &mut *inserted_at }

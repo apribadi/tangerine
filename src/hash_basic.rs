@@ -36,7 +36,7 @@ impl Hash<u8> for HashU8 {
   }
 
   #[inline(always)]
-  fn reverse(&self) -> impl Copy + Fn(u8) -> u8 {
+  fn inverse(&self) -> impl Copy + Fn(u8) -> u8 {
     let p = &self.0[1];
     let m = self.2;
     move |x| {
@@ -86,7 +86,7 @@ impl Hash<u32> for HashU32 {
   }
 
   #[inline(always)]
-  fn reverse(&self) -> impl Copy + Fn(u32) -> u32 {
+  fn inverse(&self) -> impl Copy + Fn(u32) -> u32 {
     let c = self.1.0;
     let d = self.1.1;
     move |x| {
@@ -137,7 +137,7 @@ impl Hash<u64> for HashU64 {
   }
 
   #[inline(always)]
-  fn reverse(&self) -> impl Copy + Fn(u64) -> u64 {
+  fn inverse(&self) -> impl Copy + Fn(u64) -> u64 {
     let c = self.1.0;
     let d = self.1.1;
     move |x| {

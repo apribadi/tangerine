@@ -9,7 +9,7 @@ pub(crate) trait Hash<T> {
 
   fn forward(&self) -> impl Copy + Fn(T) -> T;
 
-  fn reverse(&self) -> impl Copy + Fn(T) -> T;
+  fn inverse(&self) -> impl Copy + Fn(T) -> T;
 }
 
 // TODO: x86-64
@@ -70,7 +70,7 @@ pub mod internal {
     }
 
     fn invert_hash(&self, x: u8) -> u8 {
-      self.0.reverse()(x)
+      self.0.inverse()(x)
     }
   }
 
@@ -84,7 +84,7 @@ pub mod internal {
     }
 
     fn invert_hash(&self, x: u32) -> u32 {
-      self.0.reverse()(x)
+      self.0.inverse()(x)
     }
   }
 
@@ -98,7 +98,7 @@ pub mod internal {
     }
 
     fn invert_hash(&self, x: u64) -> u64 {
-      self.0.reverse()(x)
+      self.0.inverse()(x)
     }
   }
 }
