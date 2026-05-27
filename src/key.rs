@@ -4,6 +4,9 @@
 use core::num::NonZeroU8;
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
+use crate::hash::backend::HashU8;
+use crate::hash::backend::HashU32;
+use crate::hash::backend::HashU64;
 
 /// A sealed trait for hashable keys representable as [`NonZeroU32`] or
 /// [`NonZeroU64`]. The only way to implement this trait for additional types is
@@ -55,6 +58,8 @@ pub unsafe trait IntoKey {
 unsafe impl<K: private::Key, T: IntoKey<Key = K>> private::Key for T {
   type UInt = K::UInt;
 
+  type Hash = K::Hash;
+
   #[inline(always)]
   fn into_uint(x: Self) -> Self::UInt {
     K::into_uint(T::inject(x))
@@ -67,10 +72,12 @@ unsafe impl<K: private::Key, T: IntoKey<Key = K>> private::Key for T {
 }
 
 macro_rules! key_impls {
-  ($($nzuint:ty => $uint:ty;)*) => {
+  ($($nzuint:ty => $uint:ty, $hash:ty;)*) => {
     $(
       unsafe impl private::Key for $nzuint {
         type UInt = $uint;
+
+        type Hash = $hash;
 
         #[inline(always)]
         fn into_uint(x: Self) -> Self::UInt {
@@ -87,17 +94,20 @@ macro_rules! key_impls {
 }
 
 key_impls! {
-  NonZeroU8 => u8;
-  NonZeroU32 => u32;
-  NonZeroU64 => u64;
+  NonZeroU8 => u8, HashU8;
+  NonZeroU32 => u32, HashU32;
+  NonZeroU64 => u64, HashU64;
 }
 
 pub(crate) mod private {
-  use crate::hash::Hash;
   use crate::uint::UInt;
 
+  use crate::hash::Hash;
+
   pub(crate) unsafe trait Key: Sized {
-    type UInt: Hash + UInt;
+    type UInt: UInt;
+
+    type Hash: Hash<Self::UInt>;
 
     fn into_uint(_: Self) -> Self::UInt;
 

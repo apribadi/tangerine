@@ -1,34 +1,21 @@
-//! hashing
+//! Hashing
 
 use rand_core::Rng;
 
-pub(crate) unsafe trait Hash {
-  type Seed;
+pub(crate) trait Hash<T> {
+  fn new(_: &mut impl Rng) -> Self;
 
-  type Seed0: Copy;
+  fn new_nondet() -> Self;
 
-  type Seed1: Copy;
+  fn forward(&self) -> impl Copy + Fn(T) -> T;
 
-  fn seed0(_: &Self::Seed) -> Self::Seed0;
-
-  fn seed1(_: &Self::Seed) -> Self::Seed1;
-
-  fn seed_nondet() -> Self::Seed;
-
-  fn seed(_: &mut impl Rng) -> Self::Seed;
-
-  fn hash(_: Self, _: Self::Seed0) -> Self;
-
-  fn invert_hash(_: Self, _: Self::Seed1) -> Self;
+  fn reverse(&self) -> impl Copy + Fn(T) -> T;
 }
 
 // TODO: x86-64
 cfg_select! {
-  feature = "use-basic-hash" => {
-    #[path = "hash_basic.rs"]
-    mod backend;
-  }
   all(
+      not(feature = "use-basic-hash"),
       target_arch = "aarch64",
       target_feature = "aes",
       target_feature = "crc",
@@ -36,11 +23,11 @@ cfg_select! {
     ) =>
   {
     #[path = "hash_aarch64.rs"]
-    mod backend;
+    pub(crate) mod backend;
   }
   _ => {
     #[path = "hash_basic.rs"]
-    mod backend;
+    pub(crate) mod backend;
   }
 }
 
@@ -50,6 +37,7 @@ pub mod internal {
   #![allow(missing_docs)]
 
   use rand_core::Rng;
+  use crate::hash::Hash as _;
 
   pub enum Backend {
     AArch64,
@@ -58,26 +46,59 @@ pub mod internal {
 
   pub const BACKEND: Backend = super::backend::BACKEND;
 
-  #[allow(private_bounds)]
-  pub trait Hash: super::Hash {
+  pub trait Hash<T> {
+    fn new(g: &mut impl Rng) -> Self;
+
+    fn hash(&self, x: T) -> T;
+
+    fn invert_hash(&self, x: T) -> T;
   }
 
-  impl<T: super::Hash> Hash for T {
+  pub struct HashU8(super::backend::HashU8);
+
+  pub struct HashU32(super::backend::HashU32);
+
+  pub struct HashU64(super::backend::HashU64);
+
+  impl Hash<u8> for HashU8 {
+    fn new(g: &mut impl Rng) -> Self {
+      Self(super::backend::HashU8::new(g))
+    }
+
+    fn hash(&self, x: u8) -> u8 {
+      self.0.forward()(x)
+    }
+
+    fn invert_hash(&self, x: u8) -> u8 {
+      self.0.reverse()(x)
+    }
   }
 
-  pub struct Hasher<T: Hash>(<T as super::Hash>::Seed);
-
-  impl<T: Hash> Hasher<T> {
-    pub fn with_seed(g: &mut impl Rng) -> Self {
-      Self(<T as super::Hash>::seed(g))
+  impl Hash<u32> for HashU32 {
+    fn new(g: &mut impl Rng) -> Self {
+      Self(super::backend::HashU32::new(g))
     }
 
-    pub fn hash(&self, x: T) -> T {
-      <T as super::Hash>::hash(x, <T as super::Hash>::seed0(&self.0))
+    fn hash(&self, x: u32) -> u32 {
+      self.0.forward()(x)
     }
 
-    pub fn invert_hash(&self, x: T) -> T {
-      <T as super::Hash>::invert_hash(x, <T as super::Hash>::seed1(&self.0))
+    fn invert_hash(&self, x: u32) -> u32 {
+      self.0.reverse()(x)
+    }
+  }
+
+  impl Hash<u64> for HashU64 {
+    fn new(g: &mut impl Rng) -> Self {
+      Self(super::backend::HashU64::new(g))
+    }
+
+    fn hash(&self, x: u64) -> u64 {
+      self.0.forward()(x)
+    }
+
+    fn invert_hash(&self, x: u64) -> u64 {
+      self.0.reverse()(x)
     }
   }
 }

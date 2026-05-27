@@ -50,143 +50,118 @@ fn invert_crc32cw(x: u32) -> u32 {
   crc32cd(0, widening_carryless_mul_u32(x, 0xc915_ea3b))
 }
 
-unsafe impl Hash for u8 {
-  type Seed = (&'static [u8; 256], u8, u8);
+pub(crate) struct HashU8(&'static [u8; 256], u8, u8);
 
-  type Seed0 = u8;
-
-  type Seed1 = (&'static [u8; 256], u8);
-
+impl Hash<u8> for HashU8 {
   #[inline(always)]
-  fn seed0(m: &Self::Seed) -> Self::Seed0 {
-    m.1
-  }
-
-  #[inline(always)]
-  fn seed1(m: &Self::Seed) -> Self::Seed1 {
-    (m.0, m.2)
-  }
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    let a = 1 | dandelion::thread_local::u32() as u8;
-    let b = invert_u8(a);
-    (&HASH_U8_PERM_INV, a, b)
-  }
-
-  #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
+  fn new(g: &mut impl Rng) -> Self {
     let a = 1 | g.next_u32() as u8;
     let b = invert_u8(a);
-    (&HASH_U8_PERM_INV, a, b)
+    Self(&HASH_U8_PERM_INV, a, b)
   }
 
   #[inline(always)]
-  fn hash(x: Self, m: Self::Seed0) -> Self {
-    let x = (crc32cb(0, x) >> 24) as u8;
-    let x = x.wrapping_mul(m).wrapping_sub(1);
-    x
+  fn new_nondet() -> Self {
+    let a = 1 | dandelion::thread_local::u32() as u8;
+    let b = invert_u8(a);
+    Self(&HASH_U8_PERM_INV, a, b)
   }
 
   #[inline(always)]
-  fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-    let p = m.0;
-    let m = m.1;
-    let x = x.wrapping_mul(m).wrapping_add(m);
-    let x = p[x as usize];
-    x
+  fn forward(&self) -> impl Copy + Fn(u8) -> u8 {
+    let m = self.1;
+    move |x| {
+      let x = (crc32cb(0, x) >> 24) as u8;
+      let x = x.wrapping_mul(m).wrapping_sub(1);
+      x
+    }
+  }
+
+  #[inline(always)]
+  fn reverse(&self) -> impl Copy + Fn(u8) -> u8 {
+    let p = self.0;
+    let m = self.2;
+    move |x| {
+      let x = x.wrapping_mul(m).wrapping_add(m);
+      let x = p[x as usize];
+      x
+    }
   }
 }
 
-unsafe impl Hash for u32 {
-  type Seed = (u32, u32);
+pub(crate) struct HashU32(u32, u32);
 
-  type Seed0 = u32;
-
-  type Seed1 = u32;
-
+impl Hash<u32> for HashU32 {
   #[inline(always)]
-  fn seed0(m: &Self::Seed) -> Self::Seed0 {
-    m.0
-  }
-
-  #[inline(always)]
-  fn seed1(m: &Self::Seed) -> Self::Seed1 {
-    m.1
-  }
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    let a = 1 | dandelion::thread_local::u32();
-    let b = invert_u32(a);
-    (a, b)
-  }
-
-  #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
+  fn new(g: &mut impl Rng) -> Self {
     let a = 1 | g.next_u32();
     let b = invert_u32(a);
-    (a, b)
+    Self(a, b)
   }
 
   #[inline(always)]
-  fn hash(x: Self, m: Self::Seed0) -> Self {
-    let x = crc32cw(0, x);
-    let x = x.wrapping_mul(m).wrapping_sub(1);
-    x
+  fn new_nondet() -> Self {
+    let a = 1 | dandelion::thread_local::u32();
+    let b = invert_u32(a);
+    Self(a, b)
   }
 
   #[inline(always)]
-  fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-    let x = x.wrapping_mul(m).wrapping_add(m);
-    let x = invert_crc32cw(x);
-    x
+  fn forward(&self) -> impl Copy + Fn(u32) -> u32 {
+    let m = self.0;
+    move |x| {
+      let x = crc32cw(0, x);
+      let x = x.wrapping_mul(m).wrapping_sub(1);
+      x
+    }
+  }
+
+  #[inline(always)]
+  fn reverse(&self) -> impl Copy + Fn(u32) -> u32 {
+    let m = self.1;
+    move |x| {
+      let x = x.wrapping_mul(m).wrapping_add(m);
+      let x = invert_crc32cw(x);
+      x
+    }
   }
 }
 
-unsafe impl Hash for u64 {
-  type Seed = (u64, u64);
+pub(crate) struct HashU64(u64, u64);
 
-  type Seed0 = u64;
-
-  type Seed1 = u64;
-
+impl Hash<u64> for HashU64 {
   #[inline(always)]
-  fn seed0(m: &Self::Seed) -> Self::Seed0 {
-    m.0
-  }
-
-  #[inline(always)]
-  fn seed1(m: &Self::Seed) -> Self::Seed1 {
-    m.1
-  }
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    let a = 1 | dandelion::thread_local::u64();
-    let b = invert_u64(a);
-    (a, b)
-  }
-
-  #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
+  fn new(g: &mut impl Rng) -> Self {
     let a = 1 | g.next_u64();
     let b = invert_u64(a);
-    (a, b)
+    Self(a, b)
   }
 
   #[inline(always)]
-  fn hash(x: Self, m: Self::Seed0) -> Self {
-    let x = concat(lo(x), crc32cd(0, x));
-    let x = x.wrapping_mul(m).wrapping_sub(1);
-    x
+  fn new_nondet() -> Self {
+    let a = 1 | dandelion::thread_local::u64();
+    let b = invert_u64(a);
+    Self(a, b)
   }
 
   #[inline(always)]
-  fn invert_hash(x: Self, m: Self::Seed1) -> Self {
-    let x = x.wrapping_mul(m).wrapping_add(m);
-    let x = concat(lo(x), invert_crc32cw(hi(x)) ^ crc32cw(0, lo(x)));
-    x
+  fn forward(&self) -> impl Copy + Fn(u64) -> u64 {
+    let m = self.0;
+    move |x| {
+      let x = concat(lo(x), crc32cd(0, x));
+      let x = x.wrapping_mul(m).wrapping_sub(1);
+      x
+    }
+  }
+
+  #[inline(always)]
+  fn reverse(&self) -> impl Copy + Fn(u64) -> u64 {
+    let m = self.1;
+    move |x| {
+      let x = x.wrapping_mul(m).wrapping_add(m);
+      let x = concat(lo(x), invert_crc32cw(hi(x)) ^ crc32cw(0, lo(x)));
+      x
+    }
   }
 }
 

@@ -8,14 +8,17 @@ use std::num::NonZeroU128;
 use std::write;
 use tangerine::hash::internal::BACKEND;
 use tangerine::hash::internal::Backend;
-use tangerine::hash::internal::Hasher;
+use tangerine::hash::internal::Hash;
+use tangerine::hash::internal::HashU8;
+use tangerine::hash::internal::HashU32;
+use tangerine::hash::internal::HashU64;
 
 #[test]
 fn test_hash_u8() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
 
-  let t = Hasher::<u8>::with_seed(&mut g);
+  let t = HashU8::new(&mut g);
 
   for x in iter::chain(0 .. 10, iter::repeat_with(|| g.u32() as u8).take(10)) {
     let y = t.hash(x);
@@ -80,7 +83,7 @@ fn test_hash_u32() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
 
-  let t = Hasher::<u32>::with_seed(&mut g);
+  let t = HashU32::new(&mut g);
 
   for x in iter::chain(0 .. 10, iter::repeat_with(|| g.u32()).take(10)) {
     let y = t.hash(x);
@@ -145,7 +148,7 @@ fn test_hash_u64() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
 
-  let t = Hasher::<u64>::with_seed(&mut g);
+  let t = HashU64::new(&mut g);
 
   for x in iter::chain(0 .. 10, iter::repeat_with(|| g.u64()).take(10)) {
     let y = t.hash(x);
