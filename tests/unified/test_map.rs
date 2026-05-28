@@ -323,7 +323,7 @@ fn test_1() {
 }
 
 #[test]
-fn test_displacement_histogram() {
+fn test_probe_count() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::with_seed(&mut g);
@@ -337,7 +337,7 @@ fn test_displacement_histogram() {
   write!(s, "len = {}\n", t.len());
   write!(s, "load_factor = {}\n", map::internal::load_factor(&t));
 
-  for (i, &c) in map::internal::displacement_histogram(&t).iter().enumerate() {
+  for (i, &c) in map::internal::probe_count_histogram(&t).iter().enumerate() {
     write!(s, "{}: {}\n", i, c);
   }
 
@@ -357,6 +357,16 @@ fn test_displacement_histogram() {
           7: 0
           8: 0
           9: 0
+          10: 0
+          11: 0
+          12: 0
+          13: 0
+          14: 0
+          15: 0
+          16: 0
+          17: 0
+          18: 0
+          19: 0
       "#]].assert_eq(&s.drain(..).as_str());
     }
     hash::internal::Backend::Basic => {
@@ -387,6 +397,7 @@ fn key_seq(n: u32) -> NonZeroU32 {
   let n = n.rotate_left(16);
   unsafe { NonZeroU32::new_unchecked(n) }
 }
+*/
 
 struct KeyGen {
   state: NonZeroU32,
@@ -412,11 +423,11 @@ impl KeyGen {
 #[test]
 fn test_foo() {
   let mut s = String::new();
-  // let mut g = Rng::new(NonZeroU128::MIN);
-  // let mut g = Rng::new(NonZeroU128::new(2).unwrap());
-  // let mut t = IntMap::with_seed(&mut g);
-  let mut t = IntMap::new();
+  let mut g = Rng::new(NonZeroU128::MIN);
+  let mut t = IntMap::with_seed(&mut g);
+  // let mut t = IntMap::new();
 
+  /*
   for i in 0 .. 1_000_000 { let _ = t.insert(key_seq(i), key_seq(i)); }
 
   for (i, &c) in internal::displacement_histogram(&t).iter().enumerate() {
@@ -426,19 +437,65 @@ fn test_foo() {
   write!(s, "\n");
 
   t.reset();
+  */
 
   let mut k = KeyGen::new();
   for _ in 0 .. 1_000_000 { let _ = t.insert(k.next(), k.peek()); }
 
-  for (i, &c) in internal::displacement_histogram(&t).iter().enumerate() {
+  for (i, &c) in map::internal::probe_count_histogram(&t).iter().enumerate() {
+    write!(s, "{}: {}\n", i, c);
+  }
+
+  write!(s, "\n");
+
+  for (i, &c) in map::internal::shift_count_histogram(&t).iter().enumerate() {
     write!(s, "{}: {}\n", i, c);
   }
 
   expect![[r#"
-  "#]].assert_eq(&s.drain(..).as_str());
+      0: 670482
+      1: 236715
+      2: 67958
+      3: 18272
+      4: 4794
+      5: 1318
+      6: 367
+      7: 81
+      8: 9
+      9: 3
+      10: 1
+      11: 0
+      12: 0
+      13: 0
+      14: 0
+      15: 0
+      16: 0
+      17: 0
+      18: 0
+      19: 0
 
+      0: 670482
+      1: 146954
+      2: 69658
+      3: 39132
+      4: 23916
+      5: 15357
+      6: 10196
+      7: 7008
+      8: 4809
+      9: 3384
+      10: 2382
+      11: 1756
+      12: 1273
+      13: 967
+      14: 725
+      15: 529
+      16: 395
+      17: 295
+      18: 211
+      19: 571
+  "#]].assert_eq(&s.drain(..).as_str());
 }
-*/
 
 #[test]
 fn test_255u8() {
@@ -452,15 +509,20 @@ fn test_255u8() {
     let m = map::internal::allocation_size(&t);
     if m != n {
       n = m;
-      write!(s, "{}: {}\n", t.len(), m);
+      write!(s,
+          "len = {}, num_slots = {}, allocation_size = {}\n",
+          t.len(),
+          map::internal::num_slots(&t),
+          map::internal::allocation_size(&t)
+        );
     }
   }
 
   expect![[r#"
-      1: 20
-      9: 40
-      17: 72
-      33: 136
-      65: 256
+      len = 1, num_slots = 20, allocation_size = 20
+      len = 9, num_slots = 40, allocation_size = 40
+      len = 17, num_slots = 72, allocation_size = 72
+      len = 33, num_slots = 136, allocation_size = 136
+      len = 65, num_slots = 256, allocation_size = 256
   "#]].assert_eq(&s.drain(..).as_str());
 }

@@ -1,5 +1,5 @@
-//! This module provides a fast hash map keyed by types representable as
-//! `NonZeroU32` or `NonZeroU64`.
+//! This module provides a high performance hash map keyed by types
+//! representable as non-zero integers.
 
 use alloc::alloc::Layout;
 use alloc::alloc::alloc;
@@ -20,13 +20,13 @@ use core::ptr::null_mut;
 use core::ptr::write_bytes;
 use rand_core::Rng;
 
+use crate::cast::Cast;
 use crate::hash::Hash;
 use crate::key::Key;
 use crate::uint::UInt;
-use crate::cast::Cast;
 
-/// A fast hash map keyed by types representable as [`NonZeroU32`](core::num::NonZeroU32)
-/// or [`NonZeroU64`](core::num::NonZeroU64).
+/// A high performance hash map keyed by types representable as non-zero
+/// integers.
 #[repr(C)]
 pub struct IntMap<K: Key, V> {
   table: *const Slot<K, V>,
@@ -34,6 +34,12 @@ pub struct IntMap<K: Key, V> {
   slack: usize,
   limit: *const Slot<K, V>,
   hash: K::Hash,
+}
+
+unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
+}
+
+unsafe impl<K: Key + Sync, V: Sync> Sync for IntMap<K, V> {
 }
 
 /// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
@@ -60,12 +66,6 @@ pub struct VacantEntry<'a, K: Key, V> {
   pos: *mut Slot<K, V>,
   occupant: K::UInt,
   hash: K::UInt,
-}
-
-unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
-}
-
-unsafe impl<K: Key + Sync, V: Sync> Sync for IntMap<K, V> {
 }
 
 #[repr(C, align(64))]
@@ -130,7 +130,7 @@ const fn initial_slack<K: Key, V>() -> usize {
 
 #[inline(always)]
 const fn initial_limit<K:Key, V>() -> *const Slot<K, V> {
-  initial_table::<K, V>()
+  initial_table::<K, V>().wrapping_sub(1)
 }
 
 #[inline(always)]
@@ -164,30 +164,53 @@ unsafe fn invert_hash<K: Key>(x: K::UInt, m: impl Fn(K::UInt) -> K::UInt) -> K {
   unsafe { K::from_uint(m(x)) }
 }
 
-// NB: For `capacity` and `slot`, it can improve code generation to operate on
+// NOTE: A "full size" table configuration has `shift == 0`. It requires zero
+// overflow space, as the last slot would be occupied by `MAX`. The capacity
+// can be `2 ** BITS - 1`
+//
+// It is only possible to allocate a table this large when the key size is
+// strictly less than the pointer size.
+
+// NOTE: For `capacity` and `slot`, it can improve code generation to operate on
 // `usize`s when possible.
 
 #[inline(always)]
-fn capacity<K: Key, V>(s: usize) -> usize {
-  if const { K::UInt::BITS <= usize::BITS as usize } {
+fn capacity<K: Key, V>(shift: usize) -> usize {
+  if const { K::UInt::BITS < usize::BITS as usize } {
     let n = ! (K::UInt::MAX >> 1);
-    let n = (n.cast::<usize>() >> s).cast::<K::UInt>();
+    let n = (n.cast::<usize>() >> shift).cast::<K::UInt>();
     let n = n | K::UInt::asr(n, K::UInt::BITS - 1);
     n.cast::<usize>()
   } else {
     let n = ! (K::UInt::MAX >> 1);
-    let n = n >> s;
-    let n = n | K::UInt::asr(n, K::UInt::BITS - 1);
+    let n = n >> shift;
     n.cast::<usize>()
   }
 }
 
 #[inline(always)]
-fn slot<U: UInt>(h: U, s: usize) -> usize {
-  if const { U::BITS <= usize::BITS as usize } {
-    h.cast::<usize>() >> s
+fn slot<U: UInt>(hash: U, shift: usize) -> usize {
+  if const { U::BITS < usize::BITS as usize } {
+    hash.cast::<usize>() >> shift
   } else {
-    (h >> s).cast::<usize>()
+    (hash >> shift).cast::<usize>()
+  }
+}
+
+#[inline(always)]
+fn num_slots<K: Key, V>(t: *mut Slot<K, V>, z: *mut Slot<K, V>) -> usize {
+  if const { K::UInt::BITS < usize::BITS as usize } && false {
+    if z.is_null() {
+      1 << K::UInt::BITS
+    } else {
+      let z = z.wrapping_add(1);
+      let n = unsafe { z.offset_from_unsigned(t) };
+      n
+    }
+  } else {
+    let z = z.wrapping_add(1);
+    let n = unsafe { z.offset_from_unsigned(t) };
+    n
   }
 }
 
@@ -248,7 +271,7 @@ unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::UInt, h: K::UInt, value
     x = unsafe { slot_hash(p).replace(x) };
   }
   unsafe { slot_data(p).write(y) };
-  unsafe { p.add(1) }
+  p
 }
 
 #[inline(always)]
@@ -313,8 +336,8 @@ impl<K: Key, V> IntMap<K, V> {
     let h = hash(key, m);
     if is_uninit_null(t, s) { return }
     let k = slot(h, s);
-    let _ = unsafe { slot_hash(t.add(k)).read_volatile() };
-    let _ = unsafe { slot_hash(t.add(k + 1)).read_volatile() };
+    let _: K::UInt = unsafe { slot_hash(t.add(k)).read_volatile() };
+    let _: K::UInt = unsafe { slot_hash(t.add(k + 1)).read_volatile() };
   }
 
   /// Returns whether the map contains the given key.
@@ -403,7 +426,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_l = unsafe { allocation_layout::<K, V>(new_w) };
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
-    let new_z = unsafe { new_t.add(new_w) };
+    let new_z = unsafe { new_t.add(new_w - 1) };
     unsafe { init_span(new_t, new_w) };
     let k = slot(h, new_s);
     let a = unsafe { new_t.add(k) };
@@ -421,18 +444,17 @@ impl<K: Key, V> IntMap<K, V> {
   fn insert_grow(&mut self, p: *mut Slot<K, V>, h: K::UInt) -> *mut V {
     // Stash the item in the last written-to slot so that the table is in a
     // valid state, even if we panic.
-    let stashed_slot = unsafe { p.sub(1) };
+    let stashed_slot = p;
     let stashed_hash = unsafe { slot_hash(stashed_slot).replace(K::UInt::MAX) };
     // Retrieve values for the old table.
     let old_t = self.table.cast_mut();
     let old_s = self.shift;
     let old_r = self.slack;
     let old_z = self.limit.cast_mut();
-    // If s == 0, then the map can hold every possible key and should never grow.
     debug_assert!(1 <= old_s && old_s <= K::UInt::BITS - 1);
     // Compute old sizes.
-    let old_w = unsafe { old_z.offset_from_unsigned(old_t) };
     let old_d = 1 << K::UInt::BITS - old_s;
+    let old_w = num_slots(old_t, old_z);
     let old_e = old_w - old_d;
     // Compute new sizes.
     let new_s = old_s - 1;
@@ -455,7 +477,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_l = unsafe { allocation_layout::<K, V>(new_w) };
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
-    let new_z = unsafe { new_t.add(new_w) };
+    let new_z = unsafe { new_t.add(new_w - 1) };
     // Update struct fields.
     self.table = new_t;
     self.shift = new_s;
@@ -467,18 +489,20 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { slot_hash(stashed_slot).write(stashed_hash) };
     // Copy slots.
     let mut p = old_t;
-    let mut i = 0;
+    let mut i = old_w;
+    let mut j = 0;
     loop {
       let x = unsafe { slot_hash(p).read() };
       let y = unsafe { slot_data(p).cast::<MaybeUninit<V>>().read() };
       let k = slot(x, new_s);
-      let k = select_unpredictable(i > k, i, k);
+      let k = select_unpredictable(j > k, j, k);
       let a = unsafe { new_t.add(k) };
       unsafe { slot_hash(a).write(x) };
       unsafe { slot_data(a).cast::<MaybeUninit<V>>().write(y) };
       p = unsafe { p.add(1) };
-      i = select_unpredictable(x != K::UInt::MAX, k + 1, i);
-      if p == old_z { break }
+      i = i - 1;
+      j = select_unpredictable(x != K::UInt::MAX, k + 1, j);
+      if i == 0 { break }
     }
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_w)) };
@@ -497,9 +521,9 @@ impl<K: Key, V> IntMap<K, V> {
   ///
   /// # Panics
   ///
-  /// Panics if allocation fails. If that happens, it is possible for the map
-  /// to leak an arbitrary set of items, but the map will remain in a valid
-  /// state.
+  /// Panics if the table would be too large or allocation fails. If that
+  /// happens, it is possible for the map to leak an arbitrary set of items,
+  /// but the map will remain in a valid state.
   #[inline(always)]
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let t = self.table.cast_mut();
@@ -640,8 +664,9 @@ impl<K: Key, V> IntMap<K, V> {
       }
     } else {
       if n != 0 {
+        let w = num_slots(t, z);
         self.slack = c;
-        unsafe { init_span(t, z.offset_from_unsigned(t)) };
+        unsafe { init_span(t, w) };
       }
     }
   }
@@ -659,7 +684,7 @@ impl<K: Key, V> IntMap<K, V> {
     let z = self.limit.cast_mut();
     if is_uninit(t, s) { return }
     let n = capacity::<K, V>(s) - r;
-    let w = unsafe { z.offset_from_unsigned(t) };
+    let w = num_slots(t, z);
     self.table = initial_table::<K, V>();
     self.shift = initial_shift::<K, V>();
     self.slack = initial_slack::<K, V>();
@@ -755,9 +780,9 @@ impl<K: Key, V> IntMap<K, V> {
   }
 
   fn num_slots(&self) -> usize {
-    let t = self.table;
-    let z = self.limit;
-    unsafe { z.offset_from_unsigned(t) }
+    let t = self.table.cast_mut();
+    let z = self.limit.cast_mut();
+    num_slots(t, z)
   }
 
   fn allocation_size(&self) -> usize {
@@ -768,12 +793,12 @@ impl<K: Key, V> IntMap<K, V> {
     self.len() as f64 / self.num_slots() as f64
   }
 
-  fn displacement_histogram(&self) -> [usize; 10] {
+  fn probe_count_histogram(&self) -> [usize; 20] {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
     let mut n = capacity::<K, V>(s) - r;
-    let mut a = [0usize; 10];
+    let mut a = [0usize; 20];
     let mut p = t;
     let mut i = 0;
     loop {
@@ -781,7 +806,33 @@ impl<K: Key, V> IntMap<K, V> {
       p = unsafe { p.add(1) };
       i = i + 1;
       if x == K::UInt::MAX { continue }
-      a[usize::min(9, i - 1 - slot(x, s))] += 1;
+      a[usize::min(19, i - 1 - slot(x, s))] += 1;
+      n = n - 1;
+      if n == 0 { break }
+    }
+    a
+  }
+
+  fn shift_count_histogram(&self) -> [usize; 20] {
+    let t = self.table.cast_mut();
+    let s = self.shift;
+    let r = self.slack;
+    let mut n = capacity::<K, V>(s) - r;
+    let mut a = [0usize; 20];
+    let mut p = t;
+    let mut i = 0;
+    loop {
+      let x = unsafe { slot_hash(p).read() };
+      p = unsafe { p.add(1) };
+      i = i + 1;
+      if x == K::UInt::MAX { continue }
+      let mut k = 0;
+      let mut y = unsafe { slot_hash(p.add(k)).read() };
+      while slot(y, s) < i + k && y != K::UInt::MAX {
+        k = k + 1;
+        y = unsafe { slot_hash(p.add(k)).read() };
+      }
+      a[usize::min(19, k)] += 1;
       n = n - 1;
       if n == 0 { break }
     }
@@ -978,8 +1029,8 @@ pub mod internal {
 
   #![allow(missing_docs)]
 
-  use super::IntMap;
-  use super::Key;
+  use crate::map::IntMap;
+  use crate::key::Key;
 
   pub fn num_slots<K: Key, V>(t: &IntMap<K, V>) -> usize {
     t.num_slots()
@@ -993,7 +1044,11 @@ pub mod internal {
     t.load_factor()
   }
 
-  pub fn displacement_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 10] {
-    t.displacement_histogram()
+  pub fn probe_count_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 20] {
+    t.probe_count_histogram()
+  }
+
+  pub fn shift_count_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 20] {
+    t.shift_count_histogram()
   }
 }

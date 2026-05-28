@@ -1,7 +1,7 @@
 # Synopsis
 
 Tangerine provides high performance hash map and hash set implementations for
-keys representable as `NonZeroU32` or `NonZeroU64`.
+keys representable as non-zero integers.
 
 ```rust
 use core::num::NonZeroU32;

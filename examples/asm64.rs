@@ -115,8 +115,8 @@ pub fn num_slots(t: &IntMap<NonZeroU64, NonZeroU64>) -> usize {
 }
 
 #[inline(never)]
-pub fn displacement_histogram(t: &IntMap<NonZeroU64, NonZeroU64>) -> [usize; 10] {
-  tangerine::map::internal::displacement_histogram(t)
+pub fn probe_count_histogram(t: &IntMap<NonZeroU64, NonZeroU64>) -> [usize; 20] {
+  tangerine::map::internal::probe_count_histogram(t)
 }
 
 pub fn entry_insert(t: &mut IntMap<NonZeroU64, NonZeroU64>, key: NonZeroU64, value: NonZeroU64) -> Option<NonZeroU64> {

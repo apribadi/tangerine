@@ -17,7 +17,7 @@ fn main() {
       for _ in 0 .. c {
         let _ = t.insert(g.non_zero_u32(), ());
       }
-      for (i, &x) in tangerine::map::internal::displacement_histogram(&t).iter().enumerate() {
+      for (i, &x) in tangerine::map::internal::probe_count_histogram(&t).iter().enumerate() {
         stats[i] += x;
       }
     }

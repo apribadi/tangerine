@@ -1,16 +1,17 @@
-//! This module provides a fast hash set containing types representable as
-//! `NonZeroU32` or `NonZeroU64`.
+//! This module provides a high performance hash set containing types
+//! representable as non-zero integers.
 
 use alloc::boxed::Box;
 use core::fmt::Debug;
+use core::fmt::Formatter;
+use core::fmt;
 use core::iter::ExactSizeIterator;
 use rand_core::Rng;
-
 use crate::key::Key;
 use crate::map::IntMap;
 
-/// A fast hash set containing types representable as `NonZeroU32` or
-/// `NonZeroU64`.
+/// A high performance hash set containing types representable as non-zero
+/// integers.
 pub struct IntSet<T: Key> {
   map: IntMap<T, ()>,
 }
@@ -86,12 +87,12 @@ impl<T: Key> IntSet<T> {
 
 impl<T: Key> Clone for IntSet<T> {
   fn clone(&self) -> Self {
-    Self { map: self.map.clone() }
+    Self::from_iter(self.iter())
   }
 }
 
 impl <T: Key + Debug + Ord> Debug for IntSet<T> {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     let mut a = self.iter().collect::<Box<[T]>>();
     a.sort();
     f.debug_set().entries(a).finish()

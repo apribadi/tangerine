@@ -158,8 +158,8 @@ pub fn num_slots(t: &IntMap<NonZeroU8, NonZeroU8>) -> usize {
 }
 
 #[inline(never)]
-pub fn displacement_histogram(t: &IntMap<NonZeroU8, NonZeroU8>) -> [usize; 10] {
-  tangerine::map::internal::displacement_histogram(t)
+pub fn probe_count_histogram(t: &IntMap<NonZeroU8, NonZeroU8>) -> [usize; 20] {
+  tangerine::map::internal::probe_count_histogram(t)
 }
 
 #[inline(never)]
