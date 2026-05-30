@@ -7,7 +7,7 @@ keys representable as non-zero integers.
 use core::num::NonZeroU32;
 use tangerine::map::IntMap;
 
-let mut t: IntMap<NonZeroU32, u64> = IntMap::new();
+let mut t: IntMap<NonZeroU32, u32> = IntMap::new();
 let _ = t.insert(NonZeroU32::MIN, 4);
 assert!(t.get(NonZeroU32::MIN) == Some(&4));
 assert!(t.get(NonZeroU32::MAX) == None);
@@ -151,6 +151,25 @@ sentinel slot at the end of the table.
 
 # Insertion and Removal
 
+Insertion uses the same search procedure as lookup to find the insertion slot.
+
+The only non-obvious point is that after insertion, in addition to checking the
+load factor, we also need to check whether we have filled the *last* slot in
+the table.
+
+Removal, again, uses the same search procedure. Items are removed using
+backward shift deletion rather than tombstones.
+
+TODO: rewrite, add diagrams
+
+# Prefetching
+
+TODO:
+
+# Full Size Tables
+
+TODO:
+
 # Hashing and Universal Hashing
 
 The hashing strategies used by this library have the following goals and
@@ -180,20 +199,19 @@ enough for linear probing, which requires either 5-independence or something
 like tabulation hashing. However, it is plausible to me that one could prove a
 weaker result.
 
-# Interface Differences from `std::collections::HashMap`
+# Code Sizes
 
-- Keys are integer-like, so we expect that they will be `Copy`. Because of
-  that, methods throughout take keys by value rather than by reference.
+TODO: inlining, etc
 
-- Hashing strategies are not customizable.
+# Allocation Sizes
 
-- Sizing hint operations like `with_capacity` and `shrink_to` are not currently
-  implemented.
+TODO:
 
-- Some iterator operations like `drain` and `extract_if` are not currently
-  implemented.
+# On Traversals and Being Accidentally Quadratic
 
-# Ghosts of Hash Maps Past
+TODO:
+
+# A Ghost of Hash Maps Past
 
 A person familiar with the landscape of hash map implementations might note
 that the design of this hash map has some high level similarities with the
@@ -215,7 +233,32 @@ speculative.)
 
 # Benchmarks
 
+It seems that the Rust ecosystem has remarkably few independent hash map
+implementations (in sharp contrast to, say, C++).
+
+TODO: talk about benchmarks and methodology
+
+# Interface Differences from `std::collections::HashMap`
+
+- Keys are integer-like, so we expect that they will be `Copy`. Because of
+  that, methods throughout take keys by value rather than by reference.
+
+- Hashing strategies are not customizable.
+
+- Sizing hint operations like `with_capacity` and `shrink_to` are not currently
+  implemented.
+
+- Some iterator operations like `drain` and `extract_if` are not currently
+  implemented.
+
+# Architecture Specific Code
+
+TODO: crc32c, etc
+
 # References
+
+- High Speed Hashing for Integers and Strings (Mikkel Thorup)  
+  <https://arxiv.org/abs/1504.06804>
 
 - On the k-Independence Required by Linear Probing and Minwise Independence
   (Mikkel Thorup)  
@@ -232,3 +275,6 @@ speculative.)
 
 - inverse of crc32c (Marc B Reynolds)  
   <https://github.com/skeeto/hash-prospector/issues/19#issuecomment-3748781340>
+
+- Rust hash iteration+reinsertion
+  <https://accidentallyquadratic.tumblr.com/post/153545455987/rust-hash-iteration-reinsertion>
