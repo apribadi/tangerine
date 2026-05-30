@@ -199,19 +199,9 @@ fn slot<U: UInt>(hash: U, shift: usize) -> usize {
 
 #[inline(always)]
 fn num_slots<K: Key, V>(t: *mut Slot<K, V>, z: *mut Slot<K, V>) -> usize {
-  if const { K::UInt::BITS < usize::BITS as usize } && false {
-    if z.is_null() {
-      1 << K::UInt::BITS
-    } else {
-      let z = z.wrapping_add(1);
-      let n = unsafe { z.offset_from_unsigned(t) };
-      n
-    }
-  } else {
-    let z = z.wrapping_add(1);
-    let n = unsafe { z.offset_from_unsigned(t) };
-    n
-  }
+  let z = z.wrapping_add(1);
+  let n = unsafe { z.offset_from_unsigned(t) };
+  n
 }
 
 #[inline(always)]
@@ -453,8 +443,8 @@ impl<K: Key, V> IntMap<K, V> {
     let old_z = self.limit.cast_mut();
     debug_assert!(1 <= old_s && old_s <= K::UInt::BITS - 1);
     // Compute old sizes.
-    let old_d = 1 << K::UInt::BITS - old_s;
     let old_w = num_slots(old_t, old_z);
+    let old_d = 1 << K::UInt::BITS - old_s;
     let old_e = old_w - old_d;
     // Compute new sizes.
     let new_s = old_s - 1;

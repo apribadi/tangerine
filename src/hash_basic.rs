@@ -14,14 +14,14 @@ impl Hash<u8> for HashU8 {
   fn new(g: &mut impl Rng) -> Self {
     let a = 1 | g.next_u32() as u8;
     let b = invert_u8(a);
-    Self(&HASH_U8_PERM, a, b)
+    Self(&HASH_U8_SHUFFLE, a, b)
   }
 
   #[inline(always)]
   fn new_nondet() -> Self {
     let a = 1 | dandelion::thread_local::u32() as u8;
     let b = invert_u8(a);
-    Self(&HASH_U8_PERM, a, b)
+    Self(&HASH_U8_SHUFFLE, a, b)
   }
 
   #[inline(always)]
@@ -150,7 +150,7 @@ impl Hash<u64> for HashU64 {
   }
 }
 
-static HASH_U8_PERM: [[u8; 256]; 2] = [
+static HASH_U8_SHUFFLE: [[u8; 256]; 2] = [
   [
     0x00, 0xf2, 0xe1, 0x13, 0xc7, 0x35, 0x26, 0xd4, 0x8a, 0x78, 0x6b, 0x99, 0x4d, 0xbf, 0xac, 0x5e,
     0x10, 0xe2, 0xf1, 0x03, 0xd7, 0x25, 0x36, 0xc4, 0x9a, 0x68, 0x7b, 0x89, 0x5d, 0xaf, 0xbc, 0x4e,

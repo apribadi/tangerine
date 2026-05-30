@@ -37,38 +37,38 @@ impl<T: IntoKey> Key for T {
 ///
 /// # Safety
 ///
-/// It must be sound to `retract` the result of any `inject`, possibly multiple
-/// times, e.g.
+/// It must be sound apply `from_key` to the result of `into_key`, possibly
+/// multiple times, e.g.
 ///
 /// ```text
-/// let y = T::inject(x);
-/// let ... = unsafe { T::retract(y) };
-/// let ... = unsafe { T::retract(y) };
+/// let a = T::into_key(x);
+/// let b = unsafe { T::from_key(a) };
+/// let c = unsafe { T::from_key(a) };
 /// ```
 pub unsafe trait IntoKey {
   /// A codomain key type.
   type Key: Key;
 
   /// An injective transformation.
-  fn inject(_: Self) -> Self::Key;
+  fn into_key(_: Self) -> Self::Key;
 
-  /// The inverse of `inject`.
-  unsafe fn retract(_: Self::Key) -> Self;
+  /// The inverse of `into_key`.
+  unsafe fn from_key(_: Self::Key) -> Self;
 }
 
-unsafe impl<K: private::Key, T: IntoKey<Key = K>> private::Key for T {
-  type UInt = K::UInt;
+unsafe impl<T: IntoKey> private::Key for T {
+  type UInt = <T::Key as private::Key>::UInt;
 
-  type Hash = K::Hash;
+  type Hash = <T::Key as private::Key>::Hash;
 
   #[inline(always)]
   fn into_uint(x: Self) -> Self::UInt {
-    K::into_uint(T::inject(x))
+    <T::Key as private::Key>::into_uint(T::into_key(x))
   }
 
   #[inline(always)]
   unsafe fn from_uint(x: Self::UInt) -> Self {
-    unsafe { T::retract(K::from_uint(x)) }
+    unsafe { T::from_key(<T::Key as private::Key>::from_uint(x)) }
   }
 }
 
@@ -102,7 +102,6 @@ key_impls! {
 
 pub(crate) mod private {
   use crate::uint::UInt;
-
   use crate::hash::Hash;
 
   pub(crate) unsafe trait Key: Sized {

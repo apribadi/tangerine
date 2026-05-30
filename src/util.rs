@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-// For an exposition of the algorithm for computing the multiplicative inverse,
-// see the following.
+// For an exposition of the algorithm for computing a multiplicative inverse,
+// see the following:
 //
 // - https://jeffhurchalla.com/2022/04/25/a-faster-multiplicative-inverse-mod-a-power-of-2/
 // - https://arxiv.org/abs/2204.04342
