@@ -83,7 +83,7 @@ While the previously described search procedure is correct, we actually use a
 modified procedure for improved performance.
 
 We keep the load factor of the hash table between 25% and 50%. At those load
-factors, we can measure the CDFs of items' displacements from their desired
+factors, we can measure the CDFs of items' probe distance from their desired
 slots.
 
 ```text
@@ -96,7 +96,7 @@ slots.
 4 │  0.999  │  0.997
 ```
 
-For the common case where the search terminates at displacement 0 or 1, we
+For the common case where the search terminates at probe distance 0 or 1, we
 execute a fast path with branch-free select operations in order to reduce the
 number of branch mispredictions.
 
@@ -153,12 +153,65 @@ sentinel slot at the end of the table.
 
 # Hashing and Universal Hashing
 
+The hashing strategies used by this library have the following goals and
+non-goals:
+
+- Excellent performance for input data distributions one might "organically"
+  encounter.
+
+  For example, the `rustc_hash` hash fails at this goal because it has
+  catastrophic performance for 64-bit integer keys that only vary in the high
+  bits.
+
+- Adequate performance for adversarial but seed-independent input. In
+  particular, operations degrading from `O(1)` expected amortized performance
+  to `O(log(n))` would be acceptable.
+
+  It is unknown whether we currently achieve this goal.
+
+- No performance requirements for interactive adversarial input, e.g. for an
+  adversary able to access side-channel timing information.
+
+Our hashing strategies generally use an ad-hoc mixer followed by the
+Dietzfelbinger multiply-shift scheme. The multiply-shift is 2-approximately
+universal. That would be enough under a universal hashing model to guarantee
+`O(1)` expected performance for a separate chaining hash table, but is not
+enough for linear probing, which requires either 5-independence or something
+like tabulation hashing. However, it is plausible to me that one could prove a
+weaker result.
+
 # Interface Differences from `std::collections::HashMap`
 
 - Keys are integer-like, so we expect that they will be `Copy`. Because of
-  that, hash map methods take keys by value rather than by reference.
+  that, methods throughout take keys by value rather than by reference.
+
+- Hashing strategies are not customizable.
+
+- Sizing hint operations like `with_capacity` and `shrink_to` are not currently
+  implemented.
+
+- Some iterator operations like `drain` and `extract_if` are not currently
+  implemented.
 
 # Ghosts of Hash Maps Past
+
+A person familiar with the landscape of hash map implementations might note
+that the design of this hash map has some high level similarities with the
+design of Rust's previous "Robin Hood" standard library hash map. Why might
+this library be better? (Some of the following is obviously subjective or
+speculative.)
+
+- My impression is that the old design erroneously used a theoretical result
+  that applied to a Robin Hood hash map with random probing to justify a high
+  load factor for a Robin Hood hash map with linear probing. My opinion is that
+  the clustering produced by linear probing (even Robin Hood linear probing)
+  means that high load factors are generally inappropriate.
+
+  [comment from the old standard library hash map about load factor](https://github.com/rust-lang/rust/blob/5531c314a2855aec368e811da6fcd9e98365af51/src/libstd/collections/hash/map.rs#L89-L197)
+
+- This library's precise design choices, e.g. integer keys, an invertible hash
+  function, and strict ordering by hash, enable a bunch of low level
+  efficiencies.
 
 # Benchmarks
 
@@ -176,3 +229,6 @@ sentinel slot at the end of the table.
 
 - My favourite small hash table (Peter Cawley)  
   <https://www.corsix.org/content/my-favourite-small-hash-table>
+
+- inverse of crc32c (Marc B Reynolds)
+  <https://github.com/skeeto/hash-prospector/issues/19#issuecomment-3748781340>
