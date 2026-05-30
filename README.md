@@ -159,7 +159,7 @@ non-goals:
 - Excellent performance for input data distributions one might "organically"
   encounter.
 
-  For example, the `rustc_hash` hash fails at this goal because it has
+  For comparision, the `rustc_hash` hash fails at this goal because it has
   catastrophic performance for 64-bit integer keys that only vary in the high
   bits.
 
@@ -170,7 +170,7 @@ non-goals:
   It is unknown whether we currently achieve this goal.
 
 - No performance requirements for interactive adversarial input, e.g. for an
-  adversary able to access side-channel timing information.
+  adversary able to access hash ordering or side-channel timing information.
 
 Our hashing strategies generally use an ad-hoc mixer followed by the
 Dietzfelbinger multiply-shift scheme. The multiply-shift is 2-approximately
@@ -230,5 +230,5 @@ speculative.)
 - My favourite small hash table (Peter Cawley)  
   <https://www.corsix.org/content/my-favourite-small-hash-table>
 
-- inverse of crc32c (Marc B Reynolds)
+- inverse of crc32c (Marc B Reynolds)  
   <https://github.com/skeeto/hash-prospector/issues/19#issuecomment-3748781340>
