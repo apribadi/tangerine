@@ -274,7 +274,7 @@ unsafe fn init_span<K: Key, V>(p: *mut Slot<K, V>, z: *mut Slot<K, V>) {
       unsafe { slot_hash(p.add(i)).write(K::Word::MAX) };
     }
     p = p.wrapping_add(CHUNK); // inhibit loop "optimizations"
-    if p >= z { break }
+    if p >= z { break } // sometimes `z` is placed a bit before the end of the span
   }
 }
 

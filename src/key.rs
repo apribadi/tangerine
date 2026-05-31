@@ -11,6 +11,7 @@ use core::num::NonZeroU16;
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
 use core::num::NonZeroUsize;
+use crate::hash::Hash;
 use crate::hash::backend::HashU8;
 use crate::hash::backend::HashU16;
 use crate::hash::backend::HashU32;
@@ -30,7 +31,7 @@ impl<T: IntoKey> Key for T {
 }
 
 macro_rules! key_impls {
-  ($($nzint:ty => $word:ty, $hash:ty;)*) => {
+  ($($nzint:ty => $hash:ty;)*) => {
     $(
       impl Key for $nzint {
       }
@@ -38,9 +39,9 @@ macro_rules! key_impls {
       unsafe impl private::Key for $nzint {
         #![allow(trivial_numeric_casts)]
 
-        type Word = $word;
-
         type Hash = $hash;
+
+        type Word = <$hash as Hash>::Word;
 
         #[inline(always)]
         fn into_word(x: Self) -> Self::Word {
@@ -57,27 +58,27 @@ macro_rules! key_impls {
 }
 
 key_impls! {
-  NonZeroI8 => u8, HashU8;
-  NonZeroI16 => u16, HashU16;
-  NonZeroI32 => u32, HashU32;
-  NonZeroI64 => u64, HashU64;
-  NonZeroU8 => u8, HashU8;
-  NonZeroU16 => u16, HashU16;
-  NonZeroU32 => u32, HashU32;
-  NonZeroU64 => u64, HashU64;
+  NonZeroI8 => HashU8;
+  NonZeroI16 => HashU16;
+  NonZeroI32 => HashU32;
+  NonZeroI64 => HashU64;
+  NonZeroU8 => HashU8;
+  NonZeroU16 => HashU16;
+  NonZeroU32 => HashU32;
+  NonZeroU64 => HashU64;
 }
 
 cfg_select! {
   target_pointer_width = "32" => {
     key_impls! {
-      NonZeroIsize => u32, HashU32;
-      NonZeroUsize => u32, HashU32;
+      NonZeroIsize => HashU32;
+      NonZeroUsize => HashU32;
     }
   }
   target_pointer_width = "64" => {
     key_impls! {
-      NonZeroIsize => u64, HashU64;
-      NonZeroUsize => u64, HashU64;
+      NonZeroIsize => HashU64;
+      NonZeroUsize => HashU64;
     }
   }
   _ => {
@@ -131,9 +132,9 @@ pub(crate) mod private {
   use crate::hash::Hash;
 
   pub(crate) unsafe trait Key: Sized {
-    type Word: Word;
-
     type Hash: Hash<Word = Self::Word>;
+
+    type Word: Word;
 
     fn into_word(_: Self) -> Self::Word;
 
