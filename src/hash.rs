@@ -3,9 +3,13 @@
 use rand_core::Rng;
 
 pub(crate) trait Hash<T> {
-  fn new(_: &mut impl Rng) -> Self;
+  type Seed;
 
-  fn new_nondet() -> Self;
+  fn seed(_: &mut impl Rng) -> Self::Seed;
+
+  fn seed_nondet() -> Self::Seed;
+
+  fn new(_: Self::Seed) -> Self;
 
   fn forward(&self) -> impl Copy + Fn(T) -> T;
 
@@ -64,7 +68,7 @@ pub mod internal {
 
   impl Hash<u8> for HashU8 {
     fn new(g: &mut impl Rng) -> Self {
-      Self(super::backend::HashU8::new(g))
+      Self(super::backend::HashU8::new(super::backend::HashU8::seed(g)))
     }
 
     fn hash(&self, x: u8) -> u8 {
@@ -78,7 +82,7 @@ pub mod internal {
 
   impl Hash<u16> for HashU16 {
     fn new(g: &mut impl Rng) -> Self {
-      Self(super::backend::HashU16::new(g))
+      Self(super::backend::HashU16::new(super::backend::HashU16::seed(g)))
     }
 
     fn hash(&self, x: u16) -> u16 {
@@ -92,7 +96,7 @@ pub mod internal {
 
   impl Hash<u32> for HashU32 {
     fn new(g: &mut impl Rng) -> Self {
-      Self(super::backend::HashU32::new(g))
+      Self(super::backend::HashU32::new(super::backend::HashU32::seed(g)))
     }
 
     fn hash(&self, x: u32) -> u32 {
@@ -106,7 +110,7 @@ pub mod internal {
 
   impl Hash<u64> for HashU64 {
     fn new(g: &mut impl Rng) -> Self {
-      Self(super::backend::HashU64::new(g))
+      Self(super::backend::HashU64::new(super::backend::HashU64::seed(g)))
     }
 
     fn hash(&self, x: u64) -> u64 {

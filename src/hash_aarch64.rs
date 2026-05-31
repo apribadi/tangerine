@@ -59,16 +59,21 @@ fn invert_crc32cw(x: u32) -> u32 {
 pub(crate) struct HashU8(u8, u8, &'static [u8; 256]);
 
 impl Hash<u8> for HashU8 {
+  type Seed = u8;
+
   #[inline(always)]
-  fn new(g: &mut impl Rng) -> Self {
-    let a = 1 | g.next_u32() as u8;
-    let b = invert_u8(a);
-    Self(a, b, &HASH_U8_SHUFFLE_INV)
+  fn seed(g: &mut impl Rng) -> Self::Seed {
+    g.next_u32() as u8
   }
 
   #[inline(always)]
-  fn new_nondet() -> Self {
-    let a = 1 | dandelion::thread_local::u32() as u8;
+  fn seed_nondet() -> Self::Seed {
+    dandelion::thread_local::u32() as u8
+  }
+
+  #[inline(always)]
+  fn new(seed: Self::Seed) -> Self {
+    let a = 1 | seed;
     let b = invert_u8(a);
     Self(a, b, &HASH_U8_SHUFFLE_INV)
   }
@@ -98,16 +103,21 @@ impl Hash<u8> for HashU8 {
 pub(crate) struct HashU16(u16, u16, &'static [[u16; 256]; 2]);
 
 impl Hash<u16> for HashU16 {
+  type Seed = u16;
+
   #[inline(always)]
-  fn new(g: &mut impl Rng) -> Self {
-    let a = 1 | g.next_u32() as u16;
-    let b = invert_u16(a);
-    Self(a, b, &HASH_U16_SHUFFLE_INV)
+  fn seed(g: &mut impl Rng) -> Self::Seed {
+    g.next_u32() as u16
   }
 
   #[inline(always)]
-  fn new_nondet() -> Self {
-    let a = 1 | dandelion::thread_local::u32() as u16;
+  fn seed_nondet() -> Self::Seed {
+    dandelion::thread_local::u32() as u16
+  }
+
+  #[inline(always)]
+  fn new(seed: Self::Seed) -> Self {
+    let a = 1 | seed;
     let b = invert_u16(a);
     Self(a, b, &HASH_U16_SHUFFLE_INV)
   }
@@ -137,16 +147,21 @@ impl Hash<u16> for HashU16 {
 pub(crate) struct HashU32(u32, u32);
 
 impl Hash<u32> for HashU32 {
+  type Seed = u32;
+
   #[inline(always)]
-  fn new(g: &mut impl Rng) -> Self {
-    let a = 1 | g.next_u32();
-    let b = invert_u32(a);
-    Self(a, b)
+  fn seed(g: &mut impl Rng) -> Self::Seed {
+    g.next_u32()
   }
 
   #[inline(always)]
-  fn new_nondet() -> Self {
-    let a = 1 | dandelion::thread_local::u32();
+  fn seed_nondet() -> Self::Seed {
+    dandelion::thread_local::u32()
+  }
+
+  #[inline(always)]
+  fn new(seed: Self::Seed) -> Self {
+    let a = 1 | seed;
     let b = invert_u32(a);
     Self(a, b)
   }
@@ -175,16 +190,21 @@ impl Hash<u32> for HashU32 {
 pub(crate) struct HashU64(u64, u64);
 
 impl Hash<u64> for HashU64 {
+  type Seed = u64;
+
   #[inline(always)]
-  fn new(g: &mut impl Rng) -> Self {
-    let a = 1 | g.next_u64();
-    let b = invert_u64(a);
-    Self(a, b)
+  fn seed(g: &mut impl Rng) -> Self::Seed {
+    g.next_u64()
   }
 
   #[inline(always)]
-  fn new_nondet() -> Self {
-    let a = 1 | dandelion::thread_local::u64();
+  fn seed_nondet() -> Self::Seed {
+    dandelion::thread_local::u64()
+  }
+
+  #[inline(always)]
+  fn new(seed: Self::Seed) -> Self {
+    let a = 1 | seed;
     let b = invert_u64(a);
     Self(a, b)
   }

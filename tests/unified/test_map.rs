@@ -6,6 +6,7 @@ use std::fmt::Write;
 use std::num::NonZeroU128;
 use std::num::NonZeroU32;
 use std::num::NonZeroU8;
+use std::num::NonZeroU16;
 use std::write;
 use tangerine::map::IntMap;
 use tangerine::map;
@@ -524,5 +525,45 @@ fn test_255u8() {
       len = 17, num_slots = 72, allocation_size = 72
       len = 33, num_slots = 136, allocation_size = 136
       len = 65, num_slots = 256, allocation_size = 256
+  "#]].assert_eq(&s.drain(..).as_str());
+}
+
+#[cfg(not(miri))]
+#[test]
+fn test_65535u16() {
+  let mut s = String::new();
+  let mut g = Rng::new(NonZeroU128::MIN);
+  let mut t = IntMap::with_seed(&mut g);
+
+  let mut n = 0;
+  for k in NonZeroU16::MIN ..= NonZeroU16::MAX {
+    let None = t.insert(k, ()) else { panic!() };
+    let m = map::internal::allocation_size(&t);
+    if m != n || k == NonZeroU16::MAX {
+      n = m;
+      write!(s,
+          "len = {}, num_slots = {}, allocation_size = {}\n",
+          t.len(),
+          map::internal::num_slots(&t),
+          map::internal::allocation_size(&t)
+        );
+    }
+  }
+
+  expect![[r#"
+      len = 1, num_slots = 20, allocation_size = 40
+      len = 9, num_slots = 40, allocation_size = 80
+      len = 17, num_slots = 72, allocation_size = 144
+      len = 33, num_slots = 136, allocation_size = 272
+      len = 65, num_slots = 264, allocation_size = 528
+      len = 129, num_slots = 524, allocation_size = 1048
+      len = 257, num_slots = 1036, allocation_size = 2072
+      len = 513, num_slots = 2060, allocation_size = 4120
+      len = 1025, num_slots = 4108, allocation_size = 8216
+      len = 2049, num_slots = 8208, allocation_size = 16416
+      len = 4097, num_slots = 16400, allocation_size = 32800
+      len = 8193, num_slots = 32784, allocation_size = 65568
+      len = 16385, num_slots = 65536, allocation_size = 131072
+      len = 65535, num_slots = 65536, allocation_size = 131072
   "#]].assert_eq(&s.drain(..).as_str());
 }

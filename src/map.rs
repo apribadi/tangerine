@@ -294,13 +294,13 @@ impl<K: Key, V> IntMap<K, V> {
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
   pub fn new() -> Self {
-    Self::with_hash(K::Hash::new_nondet())
+    Self::with_hash(K::Hash::new(K::Hash::seed_nondet()))
   }
 
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
-  pub fn with_seed(rng: &mut impl Rng) -> Self {
-    Self::with_hash(K::Hash::new(rng))
+  pub fn with_seed(g: &mut impl Rng) -> Self {
+    Self::with_hash(K::Hash::new(K::Hash::seed(g)))
   }
 
   /// Returns the number of items.
