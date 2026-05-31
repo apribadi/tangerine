@@ -1,20 +1,20 @@
 //! This module provides traits for hashable keys representable as non-zero
 //! integers.
 
+use core::num::NonZeroI8;
 use core::num::NonZeroI16;
 use core::num::NonZeroI32;
 use core::num::NonZeroI64;
-use core::num::NonZeroI8;
 use core::num::NonZeroIsize;
+use core::num::NonZeroU8;
 use core::num::NonZeroU16;
 use core::num::NonZeroU32;
 use core::num::NonZeroU64;
-use core::num::NonZeroU8;
 use core::num::NonZeroUsize;
+use crate::hash::backend::HashU8;
 use crate::hash::backend::HashU16;
 use crate::hash::backend::HashU32;
 use crate::hash::backend::HashU64;
-use crate::hash::backend::HashU8;
 
 /// A sealed trait for hashable keys representable as non-zero integers. The
 /// only way to implement this trait for additional types is to implement the

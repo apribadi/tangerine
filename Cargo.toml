@@ -22,6 +22,10 @@ name = "asm8"
 crate-type = ["lib"]
 
 [[example]]
+name = "asm16"
+crate-type = ["lib"]
+
+[[example]]
 name = "asm32"
 crate-type = ["lib"]
 

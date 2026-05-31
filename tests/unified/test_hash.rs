@@ -10,6 +10,7 @@ use tangerine::hash::internal::BACKEND;
 use tangerine::hash::internal::Backend;
 use tangerine::hash::internal::Hash;
 use tangerine::hash::internal::HashU8;
+use tangerine::hash::internal::HashU16;
 use tangerine::hash::internal::HashU32;
 use tangerine::hash::internal::HashU64;
 
@@ -78,6 +79,50 @@ fn test_hash_u8() {
   }
 }
 
+#[test]
+fn test_hash_u16() {
+  let mut s = String::new();
+  let mut g = Rng::new(NonZeroU128::MIN);
+
+  let t = HashU16::new(&mut g);
+
+  for x in iter::chain(0 .. 10, iter::repeat_with(|| g.u32() as u16).take(10)) {
+    let y = t.hash(x);
+    let z = t.invert_hash(y);
+    write!(s, "{:#06x} {:#06x} {:#06x}\n", x, y, x ^ z);
+  }
+
+  match BACKEND {
+    Backend::AArch64 => {
+      expect![[r#"
+          0x0000 0xffff 0x0000
+          0x0001 0x3961 0x0000
+          0x0002 0x2fa4 0x0000
+          0x0003 0x2306 0x0000
+          0x0004 0x5f49 0x0000
+          0x0005 0x4027 0x0000
+          0x0006 0x02ee 0x0000
+          0x0007 0xa5cc 0x0000
+          0x0008 0xbe93 0x0000
+          0x0009 0x15f5 0x0000
+          0x5a84 0x73cd 0x0000
+          0xb224 0xcf4e 0x0000
+          0xc4ae 0x5803 0x0000
+          0x6ba4 0xf9ec 0x0000
+          0xf146 0xc53c 0x0000
+          0xa478 0x801b 0x0000
+          0x073a 0x9534 0x0000
+          0xaa19 0x4f99 0x0000
+          0x77b7 0x3871 0x0000
+          0x5229 0xf3c2 0x0000
+      "#]].assert_eq(&s.drain(..).as_str());
+    }
+    Backend::Basic => {
+      expect![[r#"
+      "#]].assert_eq(&s.drain(..).as_str());
+    }
+  }
+}
 #[test]
 fn test_hash_u32() {
   let mut s = String::new();
