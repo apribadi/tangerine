@@ -30,7 +30,7 @@ impl<T: IntoKey> Key for T {
 }
 
 macro_rules! key_impls {
-  ($($nzint:ty => $uint:ty, $hash:ty;)*) => {
+  ($($nzint:ty => $word:ty, $hash:ty;)*) => {
     $(
       impl Key for $nzint {
       }
@@ -38,17 +38,17 @@ macro_rules! key_impls {
       unsafe impl private::Key for $nzint {
         #![allow(trivial_numeric_casts)]
 
-        type UInt = $uint;
+        type Word = $word;
 
         type Hash = $hash;
 
         #[inline(always)]
-        fn into_uint(x: Self) -> Self::UInt {
+        fn into_word(x: Self) -> Self::Word {
           x.get() as _
         }
 
         #[inline(always)]
-        unsafe fn from_uint(x: Self::UInt) -> Self {
+        unsafe fn from_word(x: Self::Word) -> Self {
           unsafe { Self::new_unchecked(x as _) }
         }
       }
@@ -111,32 +111,32 @@ pub unsafe trait IntoKey {
 }
 
 unsafe impl<T: IntoKey> private::Key for T {
-  type UInt = <T::Key as private::Key>::UInt;
+  type Word = <T::Key as private::Key>::Word;
 
   type Hash = <T::Key as private::Key>::Hash;
 
   #[inline(always)]
-  fn into_uint(x: Self) -> Self::UInt {
-    <T::Key as private::Key>::into_uint(T::into_key(x))
+  fn into_word(x: Self) -> Self::Word {
+    <T::Key as private::Key>::into_word(T::into_key(x))
   }
 
   #[inline(always)]
-  unsafe fn from_uint(x: Self::UInt) -> Self {
-    unsafe { T::from_key(<T::Key as private::Key>::from_uint(x)) }
+  unsafe fn from_word(x: Self::Word) -> Self {
+    unsafe { T::from_key(<T::Key as private::Key>::from_word(x)) }
   }
 }
 
 pub(crate) mod private {
-  use crate::uint::UInt;
+  use crate::word::Word;
   use crate::hash::Hash;
 
   pub(crate) unsafe trait Key: Sized {
-    type UInt: UInt;
+    type Word: Word;
 
-    type Hash: Hash<Self::UInt>;
+    type Hash: Hash<Word = Self::Word>;
 
-    fn into_uint(_: Self) -> Self::UInt;
+    fn into_word(_: Self) -> Self::Word;
 
-    unsafe fn from_uint(_: Self::UInt) -> Self;
+    unsafe fn from_word(_: Self::Word) -> Self;
   }
 }

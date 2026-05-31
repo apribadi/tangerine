@@ -4,7 +4,7 @@ use crate::cast::CastInto;
 use crate::cast::CastSigned;
 use crate::cast::CastUnsigned;
 
-pub(crate) unsafe trait UInt
+pub(crate) trait Word
   : Copy
   + Ord
   + Cast
@@ -15,28 +15,23 @@ pub(crate) unsafe trait UInt
   + core::ops::Not<Output = Self>
   + core::ops::Shr<usize, Output = Self>
 {
-  const BITS: usize = 8 * size_of::<Self>();
+  const BITS: u32 = (8 * size_of::<Self>()) as u32;
 
   const MAX: Self;
-
-  #[inline(always)]
-  fn asr(x: Self, n: usize) -> Self {
-    (x.cast_signed() >> n).cast_unsigned()
-  }
 }
 
-unsafe impl UInt for u8 {
+impl Word for u8 {
   const MAX: Self = u8::MAX;
 }
 
-unsafe impl UInt for u16 {
+impl Word for u16 {
   const MAX: Self = u16::MAX;
 }
 
-unsafe impl UInt for u32 {
+impl Word for u32 {
   const MAX: Self = u32::MAX;
 }
 
-unsafe impl UInt for u64 {
+impl Word for u64 {
   const MAX: Self = u64::MAX;
 }

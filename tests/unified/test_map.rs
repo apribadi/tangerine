@@ -421,6 +421,7 @@ impl KeyGen {
   }
 }
 
+#[cfg(not(miri))]
 #[test]
 fn test_foo() {
   let mut s = String::new();

@@ -58,8 +58,10 @@ fn invert_crc32cw(x: u32) -> u32 {
 
 pub(crate) struct HashU8(u8, u8, &'static [u8; 256]);
 
-impl Hash<u8> for HashU8 {
+impl Hash for HashU8 {
   type Seed = u8;
+
+  type Word = u8;
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
@@ -102,8 +104,10 @@ impl Hash<u8> for HashU8 {
 
 pub(crate) struct HashU16(u16, u16, &'static [[u16; 256]; 2]);
 
-impl Hash<u16> for HashU16 {
+impl Hash for HashU16 {
   type Seed = u16;
+
+  type Word = u16;
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
@@ -146,8 +150,10 @@ impl Hash<u16> for HashU16 {
 
 pub(crate) struct HashU32(u32, u32);
 
-impl Hash<u32> for HashU32 {
+impl Hash for HashU32 {
   type Seed = u32;
+
+  type Word = u32;
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
@@ -189,8 +195,10 @@ impl Hash<u32> for HashU32 {
 
 pub(crate) struct HashU64(u64, u64);
 
-impl Hash<u64> for HashU64 {
+impl Hash for HashU64 {
   type Seed = u64;
+
+  type Word = u64;
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {

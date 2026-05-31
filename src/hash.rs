@@ -2,8 +2,10 @@
 
 use rand_core::Rng;
 
-pub(crate) trait Hash<T> {
+pub(crate) trait Hash {
   type Seed;
+
+  type Word;
 
   fn seed(_: &mut impl Rng) -> Self::Seed;
 
@@ -11,9 +13,9 @@ pub(crate) trait Hash<T> {
 
   fn new(_: Self::Seed) -> Self;
 
-  fn forward(&self) -> impl Copy + Fn(T) -> T;
+  fn forward(&self) -> impl Copy + Fn(Self::Word) -> Self::Word;
 
-  fn inverse(&self) -> impl Copy + Fn(T) -> T;
+  fn inverse(&self) -> impl Copy + Fn(Self::Word) -> Self::Word;
 }
 
 // TODO: x86-64
