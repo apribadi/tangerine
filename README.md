@@ -199,19 +199,19 @@ enough for linear probing, which requires either 5-independence or something
 like tabulation hashing. However, it is plausible to me that one could prove a
 weaker result.
 
-# Code Sizes
+# Code Size
 
 TODO: inlining, etc
 
-# Allocation Sizes
+# Memory Usage
 
 TODO:
 
-# On Traversals and Being Accidentally Quadratic
+# On Traversal and Being Accidentally Quadratic
 
 TODO:
 
-# A Ghost of Hash Maps Past
+# Ghosts of Hash Maps Past
 
 A person familiar with the landscape of hash map implementations might note
 that the design of this hash map has some high level similarities with the
@@ -238,6 +238,10 @@ implementations (in sharp contrast to, say, C++).
 
 TODO: talk about benchmarks and methodology
 
+# Architecture Specific Code
+
+TODO: crc32c, etc
+
 # Interface Differences from `std::collections::HashMap`
 
 - Keys are integer-like, so we expect that they will be `Copy`. Because of
@@ -250,10 +254,6 @@ TODO: talk about benchmarks and methodology
 
 - Some iterator operations like `drain` and `extract_if` are not currently
   implemented.
-
-# Architecture Specific Code
-
-TODO: crc32c, etc
 
 # References
 

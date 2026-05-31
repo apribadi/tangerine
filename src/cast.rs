@@ -1,3 +1,5 @@
+//! traits for generic casting of primitive types
+
 pub(crate) trait CastFrom<T> {
   fn cast_from(x: T) -> Self;
 }
@@ -27,7 +29,7 @@ pub(crate) trait Cast: Sized {
   }
 }
 
-macro_rules! cast_impls {
+macro_rules! cast_from_into_impls {
   ($($src:ty => $($dst:ty)*;)*) => {
     $(
       impl Cast for $src {
@@ -44,12 +46,53 @@ macro_rules! cast_impls {
   };
 }
 
-cast_impls! {
-  i8 => u8;
-  i32 => u32;
-  i64 => u64;
-  u8 => i8 usize;
-  u32 => i32 usize;
-  u64 => i64 usize;
-  usize => u8 u32 u64;
+cast_from_into_impls! {
+  u8 => usize;
+  u16 => usize;
+  u32 => usize;
+  u64 => usize;
+  usize => u8 u16 u32 u64;
+}
+
+pub(crate) trait CastSigned {
+  type Output;
+
+  fn cast_signed(self) -> Self::Output;
+}
+
+pub(crate) trait CastUnsigned {
+  type Output;
+
+  fn cast_unsigned(self) -> Self::Output;
+}
+
+macro_rules! cast_signed_unsigned_impls {
+  ($($sint:ty, $uint:ty;)*) => {
+    $(
+      impl CastSigned for $uint {
+        type Output = $sint;
+
+        #[inline(always)]
+        fn cast_signed(self) -> Self::Output {
+          self as $sint
+        }
+      }
+
+      impl CastUnsigned for $sint {
+        type Output = $uint;
+
+        #[inline(always)]
+        fn cast_unsigned(self) -> Self::Output {
+          self as $uint
+        }
+      }
+    )*
+  };
+}
+
+cast_signed_unsigned_impls! {
+  i8, u8;
+  i16, u16;
+  i32, u32;
+  i64, u64;
 }

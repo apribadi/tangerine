@@ -1,48 +1,42 @@
 use crate::cast::Cast;
-use crate::cast::CastInto;
 use crate::cast::CastFrom;
+use crate::cast::CastInto;
+use crate::cast::CastSigned;
+use crate::cast::CastUnsigned;
 
 pub(crate) unsafe trait UInt
   : Copy
   + Ord
   + Cast
-  + CastFrom<Self::SInt>
   + CastFrom<usize>
-  + CastInto<Self::SInt>
   + CastInto<usize>
+  + CastSigned<Output: CastUnsigned<Output = Self> + core::ops::Shr<usize, Output = <Self as CastSigned>::Output>>
   + core::ops::BitOr<Self, Output = Self>
   + core::ops::Not<Output = Self>
   + core::ops::Shr<usize, Output = Self>
 {
-  type SInt
-    : Copy
-    + Cast
-    + core::ops::Shr<usize, Output = Self::SInt>;
-
   const BITS: usize = 8 * size_of::<Self>();
 
   const MAX: Self;
 
   #[inline(always)]
   fn asr(x: Self, n: usize) -> Self {
-    (x.cast::<Self::SInt>() >> n).cast()
+    (x.cast_signed() >> n).cast_unsigned()
   }
 }
 
 unsafe impl UInt for u8 {
-  type SInt = i8;
-
   const MAX: Self = u8::MAX;
 }
 
-unsafe impl UInt for u32 {
-  type SInt = i32;
+unsafe impl UInt for u16 {
+  const MAX: Self = u16::MAX;
+}
 
+unsafe impl UInt for u32 {
   const MAX: Self = u32::MAX;
 }
 
 unsafe impl UInt for u64 {
-  type SInt = i64;
-
   const MAX: Self = u64::MAX;
 }

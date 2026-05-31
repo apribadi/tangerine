@@ -2,6 +2,7 @@ use rand_core::Rng;
 use crate::hash::internal::Backend;
 use crate::hash::Hash;
 use crate::util::invert_u8;
+use crate::util::invert_u16;
 use crate::util::invert_u32;
 use crate::util::invert_u64;
 
@@ -25,6 +26,11 @@ fn concat(x: u32, y: u32) -> u64 {
 #[inline(always)]
 fn crc32cb(a: u32, x: u8) -> u32 {
   unsafe { core::arch::aarch64::__crc32cb(a, x) }
+}
+
+#[inline(always)]
+fn crc32ch(a: u32, x: u16) -> u32 {
+  unsafe { core::arch::aarch64::__crc32ch(a, x) }
 }
 
 #[inline(always)]
@@ -85,6 +91,41 @@ impl Hash<u8> for HashU8 {
       let x = x.wrapping_mul(m).wrapping_add(m);
       let x = p[x as usize];
       x
+    }
+  }
+}
+
+pub(crate) struct HashU16(u16, u16);
+
+impl Hash<u16> for HashU16 {
+  #[inline(always)]
+  fn new(g: &mut impl Rng) -> Self {
+    let a = 1 | g.next_u32() as u16;
+    let b = invert_u16(a);
+    Self(a, b)
+  }
+
+  #[inline(always)]
+  fn new_nondet() -> Self {
+    let a = 1 | dandelion::thread_local::u32() as u16;
+    let b = invert_u16(a);
+    Self(a, b)
+  }
+
+  #[inline(always)]
+  fn forward(&self) -> impl Copy + Fn(u16) -> u16 {
+    let m = self.0;
+    move |x| {
+      let x = (crc32ch(0, x) >> 16) as u16;
+      let x = x.wrapping_mul(m).wrapping_sub(1);
+      x
+    }
+  }
+
+  #[inline(always)]
+  fn inverse(&self) -> impl Copy + Fn(u16) -> u16 {
+    move |_| {
+      unimplemented!()
     }
   }
 }

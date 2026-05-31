@@ -10,6 +10,11 @@ fn crc32cb(a: u32, x: u8) -> u32 {
 }
 
 #[inline(always)]
+fn crc32ch(a: u32, x: u16) -> u32 {
+  unsafe { core::arch::aarch64::__crc32ch(a, x) }
+}
+
+#[inline(always)]
 fn crc32cw(a: u32, x: u32) -> u32 {
   unsafe { core::arch::aarch64::__crc32cw(a, x) }
 }
@@ -35,20 +40,20 @@ fn uncrc32w_b(x: u32) -> u32 {
 }
 
 fn main() {
-  for a in 24 ..= 24 {
-    let mut m = [false; 256];
-    for i in 0 ..= 255u8 {
-      let x = crc32cb(0, i);
-      let x = (x >> a) as u8;
+  for a in 0 ..= 16 {
+    let mut m = [false; 65536];
+    for i in 0 ..= u16::MAX {
+      let x = crc32ch(0, i);
+      let x = (x >> a) as u16;
       m[x as usize] = true;
     }
     let mut n = 0;
-    for i in 0 ..= 255u8 {
+    for i in 0 ..= u16::MAX {
       if m[i as usize] {
         n += 1;
       }
     }
-    print!("{}\n", n);
+    print!("{}: {}\n", a, n);
   }
 }
 

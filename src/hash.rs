@@ -56,6 +56,8 @@ pub mod internal {
 
   pub struct HashU8(super::backend::HashU8);
 
+  pub struct HashU16(super::backend::HashU16);
+
   pub struct HashU32(super::backend::HashU32);
 
   pub struct HashU64(super::backend::HashU64);
@@ -70,6 +72,20 @@ pub mod internal {
     }
 
     fn invert_hash(&self, x: u8) -> u8 {
+      self.0.inverse()(x)
+    }
+  }
+
+  impl Hash<u16> for HashU16 {
+    fn new(g: &mut impl Rng) -> Self {
+      Self(super::backend::HashU16::new(g))
+    }
+
+    fn hash(&self, x: u16) -> u16 {
+      self.0.forward()(x)
+    }
+
+    fn invert_hash(&self, x: u16) -> u16 {
       self.0.inverse()(x)
     }
   }
