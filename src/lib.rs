@@ -9,7 +9,7 @@ pub mod map;
 pub mod set;
 
 mod cast;
-mod util;
+mod invert_word;
 mod word;
 
 extern crate alloc;

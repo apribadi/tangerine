@@ -1,9 +1,9 @@
 use rand_core::Rng;
-use crate::hash::internal::Backend;
 use crate::hash::Hash;
-use crate::util::invert_u8;
-use crate::util::invert_u32;
-use crate::util::invert_u64;
+use crate::hash::internal::Backend;
+use crate::invert_word::invert_u32;
+use crate::invert_word::invert_u64;
+use crate::invert_word::invert_u8;
 
 pub(crate) const BACKEND: Backend = Backend::Basic;
 

@@ -13,7 +13,6 @@ use core::hint::assert_unchecked;
 use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
-use core::mem::offset_of;
 use core::ops::Index;
 use core::ptr::null;
 use core::ptr::null_mut;
@@ -82,12 +81,12 @@ struct Slot<K: Key, V> {
 
 #[inline(always)]
 unsafe fn slot_hash<K: Key, V>(p: *mut Slot<K, V>) -> *mut K::Word {
-  unsafe { p.byte_add(offset_of!(Slot<K, V>, hash)).cast() }
+  unsafe { &raw mut (*p).hash }
 }
 
 #[inline(always)]
 unsafe fn slot_data<K: Key, V>(p: *mut Slot<K, V>) -> *mut V {
-  unsafe { p.byte_add(offset_of!(Slot<K, V>, data)).cast() }
+  unsafe { &raw mut (*p).data }.cast()
 }
 
 #[inline(always)]
@@ -479,20 +478,18 @@ impl<K: Key, V> IntMap<K, V> {
     unsafe { slot_hash(stashed_slot).write(stashed_hash) };
     // Copy slots.
     let mut p = old_t;
-    let mut i = old_w;
-    let mut j = 0;
+    let mut i = 0;
     loop {
       let x = unsafe { slot_hash(p).read() };
       let y = unsafe { slot_data(p).cast::<MaybeUninit<V>>().read() };
       let k = slot(x, new_s);
-      let k = select_unpredictable(j > k, j, k);
+      let k = select_unpredictable(i > k, i, k);
       let a = unsafe { new_t.add(k) };
       unsafe { slot_hash(a).write(x) };
       unsafe { slot_data(a).cast::<MaybeUninit<V>>().write(y) };
       p = unsafe { p.add(1) };
-      i = i - 1;
-      j = select_unpredictable(x != K::Word::MAX, k + 1, j);
-      if i == 0 { break }
+      i = select_unpredictable(x != K::Word::MAX, k + 1, i);
+      if p > old_z { break }
     }
     // The map is now in a valid state, even if deallocating panics.
     unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_w)) };
