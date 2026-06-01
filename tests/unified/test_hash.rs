@@ -6,24 +6,25 @@ use std::fmt::Write;
 use std::iter;
 use std::num::NonZeroU128;
 use std::write;
-use tangerine::hash::internal::BACKEND;
-use tangerine::hash::internal::Backend;
-use tangerine::hash::internal::Hash;
-use tangerine::hash::internal::HashU8;
-use tangerine::hash::internal::HashU16;
-use tangerine::hash::internal::HashU32;
-use tangerine::hash::internal::HashU64;
+use tangerine::key::internal::BACKEND;
+use tangerine::key::internal::Backend;
+use tangerine::key::internal::hash_u8;
+use tangerine::key::internal::hash_u16;
+use tangerine::key::internal::hash_u32;
+use tangerine::key::internal::hash_u64;
+use tangerine::key::internal::invert_hash_u8;
+use tangerine::key::internal::invert_hash_u16;
+use tangerine::key::internal::invert_hash_u32;
+use tangerine::key::internal::invert_hash_u64;
 
 #[test]
 fn test_hash_u8() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
 
-  let t = HashU8::new(&mut g);
-
   for x in iter::chain(0 .. 10, iter::repeat_with(|| g.u32() as u8).take(10)) {
-    let y = t.hash(x);
-    let z = t.invert_hash(y);
+    let y = hash_u8(x);
+    let z = invert_hash_u8(y);
     write!(s, "{:#04x} {:#04x} {:#04x}\n", x, y, x ^ z);
   }
 
@@ -84,11 +85,9 @@ fn test_hash_u16() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
 
-  let t = HashU16::new(&mut g);
-
   for x in iter::chain(0 .. 10, iter::repeat_with(|| g.u32() as u16).take(10)) {
-    let y = t.hash(x);
-    let z = t.invert_hash(y);
+    let y = hash_u16(x);
+    let z = invert_hash_u16(y);
     write!(s, "{:#06x} {:#06x} {:#06x}\n", x, y, x ^ z);
   }
 
@@ -128,11 +127,9 @@ fn test_hash_u32() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
 
-  let t = HashU32::new(&mut g);
-
   for x in iter::chain(0 .. 10, iter::repeat_with(|| g.u32()).take(10)) {
-    let y = t.hash(x);
-    let z = t.invert_hash(y);
+    let y = hash_u32(x);
+    let z = invert_hash_u32(y);
     write!(s, "{:#010x} {:#010x} {:#010x}\n", x, y, x ^ z);
   }
 
@@ -193,11 +190,9 @@ fn test_hash_u64() {
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
 
-  let t = HashU64::new(&mut g);
-
   for x in iter::chain(0 .. 10, iter::repeat_with(|| g.u64()).take(10)) {
-    let y = t.hash(x);
-    let z = t.invert_hash(y);
+    let y = hash_u64(x);
+    let z = invert_hash_u64(y);
     write!(s, "{:#018x} {:#018x} {:#018x}\n", x, y, x ^ z);
   }
 

@@ -280,26 +280,26 @@ unsafe fn init_span<K: Key, V>(p: *mut Slot<K, V>, z: *mut Slot<K, V>) {
 
 impl<K: Key, V> IntMap<K, V> {
   #[inline(always)]
-  fn with_hash(m: K::Hash) -> Self {
+  fn from_seed(seed: <K::Hash as Hash<K::Word>>::Seed) -> Self {
     Self {
       table: initial_table::<K, V>(),
       shift: initial_shift::<K, V>(),
       slack: initial_slack::<K, V>(),
       limit: initial_limit::<K, V>(),
-      hash: m,
+      hash: K::Hash::new(seed),
     }
   }
 
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
   pub fn new() -> Self {
-    Self::with_hash(K::Hash::new(K::Hash::seed_nondet()))
+    Self::from_seed(K::Hash::seed_nondet())
   }
 
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
   pub fn with_seed(g: &mut impl Rng) -> Self {
-    Self::with_hash(K::Hash::new(K::Hash::seed(g)))
+    Self::from_seed(K::Hash::seed(g))
   }
 
   /// Returns the number of items.

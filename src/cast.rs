@@ -1,4 +1,4 @@
-//! traits for generic casting of primitive types
+// traits for generic casting of primitive types
 
 pub(crate) trait CastFrom<T> {
   fn cast_from(x: T) -> Self;

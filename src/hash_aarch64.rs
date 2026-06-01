@@ -1,10 +1,10 @@
 use rand_core::Rng;
 use crate::hash::Hash;
-use crate::hash::internal::Backend;
-use crate::invert_word::invert_u16;
-use crate::invert_word::invert_u32;
-use crate::invert_word::invert_u64;
-use crate::invert_word::invert_u8;
+use crate::key::internal::Backend;
+use crate::util::invert_u16;
+use crate::util::invert_u32;
+use crate::util::invert_u64;
+use crate::util::invert_u8;
 
 pub(crate) const BACKEND: Backend = Backend::AArch64;
 
@@ -58,10 +58,8 @@ fn invert_crc32cw(x: u32) -> u32 {
 
 pub(crate) struct HashU8(u8, u8, &'static [u8; 256]);
 
-impl Hash for HashU8 {
+impl Hash<u8> for HashU8 {
   type Seed = u8;
-
-  type Word = u8;
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
@@ -104,10 +102,8 @@ impl Hash for HashU8 {
 
 pub(crate) struct HashU16(u16, u16, &'static [[u16; 256]; 2]);
 
-impl Hash for HashU16 {
+impl Hash<u16> for HashU16 {
   type Seed = u16;
-
-  type Word = u16;
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
@@ -142,7 +138,8 @@ impl Hash for HashU16 {
     let p = self.2;
     move |x| {
       let x = x.wrapping_mul(m).wrapping_add(m);
-      let x = p[0][x as u8 as usize] ^ p[1][(x >> 8) as u8 as usize];
+      let u = x.to_le_bytes();
+      let x = p[0][u[0] as usize] ^ p[1][u[1] as usize];
       x
     }
   }
@@ -150,10 +147,8 @@ impl Hash for HashU16 {
 
 pub(crate) struct HashU32(u32, u32);
 
-impl Hash for HashU32 {
+impl Hash<u32> for HashU32 {
   type Seed = u32;
-
-  type Word = u32;
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
@@ -195,10 +190,8 @@ impl Hash for HashU32 {
 
 pub(crate) struct HashU64(u64, u64);
 
-impl Hash for HashU64 {
+impl Hash<u64> for HashU64 {
   type Seed = u64;
-
-  type Word = u64;
 
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
