@@ -4,6 +4,7 @@
 use dandelion::Rng;
 use tangerine::map::IntMap;
 use std::num::NonZeroU128;
+use std::num::NonZeroU32;
 
 fn main() {
   let mut g = Rng::new(NonZeroU128::MIN);
@@ -15,7 +16,7 @@ fn main() {
     for _ in 0 .. N {
       let mut t = IntMap::with_seed(&mut g);
       for _ in 0 .. c {
-        let _ = t.insert(g.non_zero_u32(), ());
+        let _ = t.insert(g.uniform::<NonZeroU32>(), ());
       }
       for (i, &x) in tangerine::map::internal::probe_count_histogram(&t).iter().enumerate() {
         stats[i] += x;

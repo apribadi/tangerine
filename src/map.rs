@@ -293,7 +293,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
   pub fn new() -> Self {
-    Self::from_seed(K::Hash::seed_nondet())
+    Self::from_seed(dandelion::thread_local::with(|g| K::Hash::seed(g)))
   }
 
   /// Creates an empty map, seeding the hash function from the given random

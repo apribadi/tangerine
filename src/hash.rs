@@ -5,8 +5,6 @@ pub(crate) trait Hash<T> {
 
   fn seed(_: &mut impl Rng) -> Self::Seed;
 
-  fn seed_nondet() -> Self::Seed;
-
   fn new(_: Self::Seed) -> Self;
 
   fn forward(&self) -> impl Copy + Fn(T) -> T;

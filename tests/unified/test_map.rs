@@ -10,7 +10,7 @@ use std::num::NonZeroU16;
 use std::write;
 use tangerine::map::IntMap;
 use tangerine::map;
-use tangerine::hash;
+use tangerine::key;
 
 /*
 #[test]
@@ -342,8 +342,8 @@ fn test_probe_count() {
     write!(s, "{}: {}\n", i, c);
   }
 
-  match hash::internal::BACKEND {
-    hash::internal::Backend::AArch64 => {
+  match key::internal::BACKEND {
+    key::internal::Backend::AArch64 => {
       expect![[r#"
           num_slots = 1036
           len = 512
@@ -370,7 +370,7 @@ fn test_probe_count() {
           19: 0
       "#]].assert_eq(&s.drain(..).as_str());
     }
-    hash::internal::Backend::Basic => {
+    key::internal::Backend::Basic => {
       expect![[r#"
           num_slots = 1036
           len = 512

@@ -34,7 +34,11 @@ name = "asm64"
 crate-type = ["lib"]
 
 [dependencies]
-dandelion-random = { version = "0.3.1", features = ["rand_core", "thread_local"] }
+# dandelion-random = { version = "0.3.1", features = ["rand_core", "thread_local"] }
+dandelion-random = {
+    git = "https://github.com/apribadi/dandelion.git",
+    features = ["rand_core", "thread_local"]
+  }
 rand_core = "0.10.1"
 
 [dev-dependencies]

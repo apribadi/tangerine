@@ -67,11 +67,6 @@ impl Hash<u8> for HashU8 {
   }
 
   #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    dandelion::thread_local::u32() as u8
-  }
-
-  #[inline(always)]
   fn new(seed: Self::Seed) -> Self {
     let a = 1 | seed;
     let b = invert_u8(a);
@@ -108,11 +103,6 @@ impl Hash<u16> for HashU16 {
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
     g.next_u32() as u16
-  }
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    dandelion::thread_local::u32() as u16
   }
 
   #[inline(always)]
@@ -156,11 +146,6 @@ impl Hash<u32> for HashU32 {
   }
 
   #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    dandelion::thread_local::u32()
-  }
-
-  #[inline(always)]
   fn new(seed: Self::Seed) -> Self {
     let a = 1 | seed;
     let b = invert_u32(a);
@@ -196,11 +181,6 @@ impl Hash<u64> for HashU64 {
   #[inline(always)]
   fn seed(g: &mut impl Rng) -> Self::Seed {
     g.next_u64()
-  }
-
-  #[inline(always)]
-  fn seed_nondet() -> Self::Seed {
-    dandelion::thread_local::u64()
   }
 
   #[inline(always)]

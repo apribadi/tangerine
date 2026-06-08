@@ -97,7 +97,7 @@ cfg_select! {
 /// let c = unsafe { T::from_key(a) };
 /// ```
 pub unsafe trait IntoKey {
-  /// A codomain key type.
+  /// Target key type.
   type Key: Key;
 
   /// An injective transformation.
