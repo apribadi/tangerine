@@ -14,7 +14,8 @@ pub(crate) trait Map<K, V> {
 
 impl<T, U, V> Map<T, V> for tangerine::map::IntMap<U, V>
 where
-  U: tangerine::key::Key + From<T>
+  T: Into<U>,
+  U: tangerine::key::Key,
 {
   #[inline(always)]
   fn new() -> Self {
@@ -28,17 +29,17 @@ where
 
   #[inline(always)]
   fn get(&self, k: T) -> Option<&V> {
-    tangerine::map::IntMap::get(self, U::from(k))
+    tangerine::map::IntMap::get(self, k.into())
   }
 
   #[inline(always)]
   fn insert(&mut self, k: T, v: V) -> Option<V> {
-    tangerine::map::IntMap::insert(self, U::from(k), v)
+    tangerine::map::IntMap::insert(self, k.into(), v)
   }
 
   #[inline(always)]
   fn remove(&mut self, k: T) -> Option<V> {
-    tangerine::map::IntMap::remove(self, U::from(k))
+    tangerine::map::IntMap::remove(self, k.into())
   }
 
   #[inline(always)]
@@ -49,7 +50,8 @@ where
 
 impl<T, U, V, S> Map<T, V> for std::collections::HashMap<U, V, S>
 where
-  U: std::hash::Hash + Copy + Eq + From<T>,
+  T: Into<U>,
+  U: std::hash::Hash + Copy + Eq,
   S: std::hash::BuildHasher + Default,
 {
   #[inline(always)]
@@ -64,17 +66,17 @@ where
 
   #[inline(always)]
   fn get(&self, k: T) -> Option<&V> {
-    std::collections::HashMap::get(self, &U::from(k))
+    std::collections::HashMap::get(self, &k.into())
   }
 
   #[inline(always)]
   fn insert(&mut self, k: T, v: V) -> Option<V> {
-    std::collections::HashMap::insert(self, U::from(k), v)
+    std::collections::HashMap::insert(self, k.into(), v)
   }
 
   #[inline(always)]
   fn remove(&mut self, k: T) -> Option<V> {
-    std::collections::HashMap::remove(self, &U::from(k))
+    std::collections::HashMap::remove(self, &k.into())
   }
 
   #[inline(always)]

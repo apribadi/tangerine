@@ -9,18 +9,18 @@ use crate::util::invert_u8;
 pub(crate) const BACKEND: Backend = Backend::AArch64;
 
 #[inline(always)]
-fn lo(x: u64) -> u32 {
+fn catenate(x: u32, y: u32) -> u64 {
+  (x as u64) ^ ((y as u64) << 32)
+}
+
+#[inline(always)]
+fn lower(x: u64) -> u32 {
   x as u32
 }
 
 #[inline(always)]
-fn hi(x: u64) -> u32 {
+fn upper(x: u64) -> u32 {
   (x >> 32) as u32
-}
-
-#[inline(always)]
-fn concat(x: u32, y: u32) -> u64 {
-  (x as u64) ^ ((y as u64) << 32)
 }
 
 #[inline(always)]
@@ -44,7 +44,7 @@ fn crc32cd(a: u32, x: u64) -> u32 {
 }
 
 #[inline(always)]
-fn widening_carryless_mul_u32(x: u32, y: u32) -> u64 {
+fn widening_carryless_mul(x: u32, y: u32) -> u64 {
   #[cfg(not(miri))]
   unsafe { core::arch::aarch64::vmull_p64(x as u64, y as u64) as u64 }
   #[cfg(miri)]
@@ -53,7 +53,7 @@ fn widening_carryless_mul_u32(x: u32, y: u32) -> u64 {
 
 #[inline(always)]
 fn invert_crc32cw(x: u32) -> u32 {
-  crc32cd(0, widening_carryless_mul_u32(x, 0xc915_ea3b))
+  crc32cd(0, widening_carryless_mul(x, 0xc915_ea3b))
 }
 
 pub(crate) struct HashU8(u8, u8, &'static [u8; 256]);
@@ -194,7 +194,7 @@ impl Hash<u64> for HashU64 {
   fn forward(&self) -> impl Copy + Fn(u64) -> u64 {
     let m = self.0;
     move |x| {
-      let x = concat(lo(x), crc32cd(0, x));
+      let x = catenate(lower(x), crc32cd(0, x));
       let x = x.wrapping_mul(m).wrapping_sub(1);
       x
     }
@@ -205,7 +205,7 @@ impl Hash<u64> for HashU64 {
     let m = self.1;
     move |x| {
       let x = x.wrapping_mul(m).wrapping_add(m);
-      let x = concat(lo(x), invert_crc32cw(hi(x)) ^ crc32cw(0, lo(x)));
+      let x = catenate(lower(x), invert_crc32cw(upper(x)) ^ crc32cw(0, lower(x)));
       x
     }
   }
