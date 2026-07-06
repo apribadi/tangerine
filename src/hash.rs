@@ -1,7 +1,7 @@
 use rand_core::Rng;
 
 pub(crate) trait Hash<T>: Copy {
-  fn new(_: &mut impl Rng) -> Self;
+  fn seed(_: &mut impl Rng) -> Self;
 
   fn hash(&self, _: T) -> T;
 

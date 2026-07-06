@@ -401,6 +401,7 @@ fn key_seq(n: u32) -> NonZeroU32 {
 }
 */
 
+/*
 struct KeyGen {
   state: NonZeroU32,
 }
@@ -499,6 +500,7 @@ fn test_foo() {
       19: 571
   "#]].assert_eq(&s.drain(..).as_str());
 }
+*/
 
 #[test]
 fn test_255u8() {

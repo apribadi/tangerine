@@ -54,7 +54,7 @@ pub(crate) struct HashB(u8, u8, &'static [u8; 256]);
 
 impl Hash<u8> for HashB {
   #[inline(always)]
-  fn new(g: &mut impl rand_core::Rng) -> Self {
+  fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u32() as u8;
     let b = invert_mul_b(a);
     Self(a, b, &HASH_B_SHUFFLE_INV)
@@ -82,7 +82,7 @@ pub(crate) struct HashH(u16, u16, &'static [[u16; 256]; 2]);
 
 impl Hash<u16> for HashH {
   #[inline(always)]
-  fn new(g: &mut impl rand_core::Rng) -> Self {
+  fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u32() as u16;
     let b = invert_mul_h(a);
     Self(a, b, &HASH_H_SHUFFLE_INV)
@@ -107,30 +107,33 @@ impl Hash<u16> for HashH {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct HashW(u32, u32);
+#[repr(C)]
+pub(crate) struct HashW(u32, u32, u32);
 
 impl Hash<u32> for HashW {
   #[inline(always)]
-  fn new(g: &mut impl rand_core::Rng) -> Self {
+  fn seed(g: &mut impl rand_core::Rng) -> Self {
+    // crc32cw(b, 0) * a == MAX
+    // crc32cw(b, 0) == MAX * c
+    // b = invert_crc32cw(MAX * c);
     let a = 1 | g.next_u32();
-    let b = invert_mul_w(a);
-    Self(a, b)
+    let c = invert_mul_w(a);
+    let b = invert_crc32cw(u32::MAX.wrapping_mul(c));
+    Self(a, b, c)
   }
 
   #[inline(always)]
   fn hash(&self, x: u32) -> u32 {
-    let m = self.0;
-    let x = crc32cw(0, x);
-    let x = x.wrapping_mul(m).wrapping_sub(1);
-    x
+    let a = self.0;
+    let b = self.1;
+    crc32cw(b, x).wrapping_mul(a)
   }
 
   #[inline(always)]
   fn invert_hash(&self, x: u32) -> u32 {
-    let m = self.1;
-    let x = x.wrapping_mul(m).wrapping_add(m);
-    let x = invert_crc32cw(x);
-    x
+    let b = self.1;
+    let c = self.2;
+    b ^ invert_crc32cw(x.wrapping_mul(c))
   }
 }
 
@@ -139,7 +142,7 @@ pub(crate) struct HashD(u64, u64);
 
 impl Hash<u64> for HashD {
   #[inline(always)]
-  fn new(g: &mut impl rand_core::Rng) -> Self {
+  fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u64();
     let b = invert_mul_d(a);
     Self(a, b)

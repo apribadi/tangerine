@@ -155,12 +155,12 @@ const fn is_uninit<K:Key, V>(table: *mut Slot<K, V>, shift: usize) -> bool {
 }
 
 #[inline(always)]
-fn hash<K: Key, H: Hash<K::Word>>(key: K, m: H) -> K::Word {
+fn hash<K: Key, H: Hash<K::Word>>(key: K, m: &H) -> K::Word {
   m.hash(K::into_word(key))
 }
 
 #[inline(always)]
-unsafe fn invert_hash<K: Key, H: Hash<K::Word>>(x: K::Word, m: H) -> K {
+unsafe fn invert_hash<K: Key, H: Hash<K::Word>>(x: K::Word, m: &H) -> K {
   unsafe { K::from_word(m.invert_hash(x)) }
 }
 
@@ -293,7 +293,7 @@ impl<K: Key, V> IntMap<K, V> {
       shift: initial_shift::<K, V>(),
       slack: initial_slack::<K, V>(),
       limit: initial_limit::<K, V>(),
-      hash: K::Hash::new(g),
+      hash: K::Hash::seed(g),
     }
   }
 
@@ -316,8 +316,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn prefetch(&self, key: K) {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash;
-    let h = hash(key, m);
+    let h = hash(key, &self.hash);
     if is_uninit_null(t, s) { return }
     let k = slot(h, s);
     let _: K::Word = unsafe { slot_hash(t.add(k)).read_volatile() };
@@ -329,8 +328,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn contains_key(&self, key: K) -> bool {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash;
-    let h = hash(key, m);
+    let h = hash(key, &self.hash);
     if is_uninit_null(t, s) { return false }
     unsafe { search(t, s, h) }.1 == h
   }
@@ -341,9 +339,8 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get(&self, key: K) -> Option<&V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash;
     if is_uninit_null(t, s) { return None }
-    let h = hash(key, m);
+    let h = hash(key, &self.hash);
     let p = unsafe { search(t, s, h) };
     if p.1 != h {
       None
@@ -358,8 +355,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash;
-    let h = hash(key, m);
+    let h = hash(key, &self.hash);
     if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
     if p.1 != h {
@@ -378,8 +374,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash;
-    let hs = keys.map(move |key| hash(key, m));
+    let hs = keys.map(|key| hash(key, &self.hash));
     let mut is_disjoint = true;
     for i in 0 .. N {
       for j in 0 .. i {
@@ -510,8 +505,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash;
-    let h = hash(key, m);
+    let h = hash(key, &self.hash);
     if is_uninit_null(t, s) {
       let _: *mut V = self.insert_init(h, value);
       None
@@ -543,8 +537,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn remove(&mut self, key: K) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash;
-    let h = hash(key, m);
+    let h = hash(key, &self.hash);
     if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
     if p.1 != h {
@@ -561,8 +554,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash;
-    let h = hash(key, m);
+    let h = hash(key, &self.hash);
     if is_uninit_null(t, s) {
       Entry::Vacant(VacantEntry { map: self, pos: null_mut(), occupant: K::Word::MAX, hash: h })
     } else {
@@ -699,7 +691,7 @@ impl<K: Key, V> IntMap<K, V> {
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
-      f: move |a, x| unsafe { (invert_hash(x, m), &*slot_data(a)) }
+      f: move |a, x| unsafe { (invert_hash(x, &m), &*slot_data(a)) }
     }
   }
 
@@ -714,7 +706,7 @@ impl<K: Key, V> IntMap<K, V> {
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
-      f: move |a, x| unsafe { (invert_hash(x, m), &mut *slot_data(a)) }
+      f: move |a, x| unsafe { (invert_hash(x, &m), &mut *slot_data(a)) }
     }
   }
 
@@ -728,7 +720,7 @@ impl<K: Key, V> IntMap<K, V> {
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
-      f: move |_, x| unsafe { invert_hash(x, m) }
+      f: move |_, x| unsafe { invert_hash(x, &m) }
     }
   }
 

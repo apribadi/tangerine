@@ -64,8 +64,13 @@ key_impls! {
   NonZeroU64 => u64;
 }
 
-/*
 cfg_select! {
+  target_pointer_width = "16" => {
+    key_impls! {
+      NonZeroIsize => u16;
+      NonZeroUsize => u16;
+    }
+  }
   target_pointer_width = "32" => {
     key_impls! {
       NonZeroIsize => u32;
@@ -81,7 +86,6 @@ cfg_select! {
   _ => {
   }
 }
-*/
 
 /// A trait for representing keys as non-zero integers.
 ///
