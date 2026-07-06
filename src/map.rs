@@ -155,13 +155,13 @@ const fn is_uninit<K:Key, V>(table: *mut Slot<K, V>, shift: usize) -> bool {
 }
 
 #[inline(always)]
-fn hash<K: Key>(key: K, m: impl Fn(K::Word) -> K::Word) -> K::Word {
-  m(K::into_word(key))
+fn hash<K: Key, H: Hash<K::Word>>(key: K, m: H) -> K::Word {
+  m.hash(K::into_word(key))
 }
 
 #[inline(always)]
-unsafe fn invert_hash<K: Key>(x: K::Word, m: impl Fn(K::Word) -> K::Word) -> K {
-  unsafe { K::from_word(m(x)) }
+unsafe fn invert_hash<K: Key, H: Hash<K::Word>>(x: K::Word, m: H) -> K {
+  unsafe { K::from_word(m.invert_hash(x)) }
 }
 
 // NOTE: A "full size" table configuration has `shift == 0`. It requires zero
@@ -279,27 +279,22 @@ unsafe fn init_span<K: Key, V>(p: *mut Slot<K, V>, z: *mut Slot<K, V>) {
 
 
 impl<K: Key, V> IntMap<K, V> {
-  #[inline(always)]
-  fn from_seed(seed: <K::Hash as Hash<K::Word>>::Seed) -> Self {
-    Self {
-      table: initial_table::<K, V>(),
-      shift: initial_shift::<K, V>(),
-      slack: initial_slack::<K, V>(),
-      limit: initial_limit::<K, V>(),
-      hash: K::Hash::new(seed),
-    }
-  }
-
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
   pub fn new() -> Self {
-    Self::from_seed(dandelion::thread_local::with(|g| K::Hash::seed(g)))
+    dandelion::thread_local::with(|g| Self::with_seed(g))
   }
 
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
   pub fn with_seed(g: &mut impl Rng) -> Self {
-    Self::from_seed(K::Hash::seed(g))
+    Self {
+      table: initial_table::<K, V>(),
+      shift: initial_shift::<K, V>(),
+      slack: initial_slack::<K, V>(),
+      limit: initial_limit::<K, V>(),
+      hash: K::Hash::new(g),
+    }
   }
 
   /// Returns the number of items.
@@ -321,7 +316,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn prefetch(&self, key: K) {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash.forward();
+    let m = self.hash;
     let h = hash(key, m);
     if is_uninit_null(t, s) { return }
     let k = slot(h, s);
@@ -334,7 +329,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn contains_key(&self, key: K) -> bool {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash.forward();
+    let m = self.hash;
     let h = hash(key, m);
     if is_uninit_null(t, s) { return false }
     unsafe { search(t, s, h) }.1 == h
@@ -346,7 +341,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get(&self, key: K) -> Option<&V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash.forward();
+    let m = self.hash;
     if is_uninit_null(t, s) { return None }
     let h = hash(key, m);
     let p = unsafe { search(t, s, h) };
@@ -363,7 +358,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_mut(&mut self, key: K) -> Option<&mut V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash.forward();
+    let m = self.hash;
     let h = hash(key, m);
     if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
@@ -383,7 +378,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn get_disjoint_mut<const N: usize>(&mut self, keys: [K; N]) -> [Option<&mut V>; N] {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash.forward();
+    let m = self.hash;
     let hs = keys.map(move |key| hash(key, m));
     let mut is_disjoint = true;
     for i in 0 .. N {
@@ -515,7 +510,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn insert(&mut self, key: K, value: V) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash.forward();
+    let m = self.hash;
     let h = hash(key, m);
     if is_uninit_null(t, s) {
       let _: *mut V = self.insert_init(h, value);
@@ -548,7 +543,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn remove(&mut self, key: K) -> Option<V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash.forward();
+    let m = self.hash;
     let h = hash(key, m);
     if is_uninit_null(t, s) { return None }
     let p = unsafe { search(t, s, h) };
@@ -566,7 +561,7 @@ impl<K: Key, V> IntMap<K, V> {
   pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
-    let m = self.hash.forward();
+    let m = self.hash;
     let h = hash(key, m);
     if is_uninit_null(t, s) {
       Entry::Vacant(VacantEntry { map: self, pos: null_mut(), occupant: K::Word::MAX, hash: h })
@@ -700,7 +695,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.hash.inverse();
+    let m = self.hash;
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -715,7 +710,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.hash.inverse();
+    let m = self.hash;
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
@@ -729,7 +724,7 @@ impl<K: Key, V> IntMap<K, V> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.hash.inverse();
+    let m = self.hash;
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,

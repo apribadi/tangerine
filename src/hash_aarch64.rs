@@ -1,6 +1,8 @@
-use rand_core::Rng;
 use crate::hash::Hash;
-use crate::minv;
+use crate::minv::invert_mul_b;
+use crate::minv::invert_mul_d;
+use crate::minv::invert_mul_h;
+use crate::minv::invert_mul_w;
 
 #[inline(always)]
 const fn widening_cat(x: u32, y: u32) -> u64 {
@@ -47,162 +49,120 @@ fn invert_crc32cw(x: u32) -> u32 {
   crc32cd(0, widening_carryless_mul(x, 0xc915_ea3b))
 }
 
-pub(crate) struct HashU8(u8, u8, &'static [u8; 256]);
+#[derive(Clone, Copy)]
+pub(crate) struct HashB(u8, u8, &'static [u8; 256]);
 
-impl Hash<u8> for HashU8 {
-  type Seed = u8;
-
+impl Hash<u8> for HashB {
   #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
-    g.next_u32() as u8
+  fn new(g: &mut impl rand_core::Rng) -> Self {
+    let a = 1 | g.next_u32() as u8;
+    let b = invert_mul_b(a);
+    Self(a, b, &HASH_B_SHUFFLE_INV)
   }
 
   #[inline(always)]
-  fn new(seed: Self::Seed) -> Self {
-    let a = 1 | seed;
-    let b = minv::invert_mul_b(a);
-    Self(a, b, &HASH_U8_SHUFFLE_INV)
-  }
-
-  #[inline(always)]
-  fn forward(&self) -> impl Copy + Fn(u8) -> u8 {
+  fn hash(&self, x: u8) -> u8 {
     let m = self.0;
-    move |x| {
-      let x = (crc32cb(0, x) >> 24) as u8;
-      let x = x.wrapping_mul(m).wrapping_sub(1);
-      x
-    }
+    let x = (crc32cb(0, x) >> 24) as u8;
+    let x = x.wrapping_mul(m).wrapping_sub(1);
+    x
   }
 
   #[inline(always)]
-  fn inverse(&self) -> impl Copy + Fn(u8) -> u8 {
+  fn invert_hash(&self, x: u8) -> u8 {
     let m = self.1;
-    let p = self.2;
-    move |x| {
-      let x = x.wrapping_mul(m).wrapping_add(m);
-      let x = p[x as usize];
-      x
-    }
+    let x = x.wrapping_mul(m).wrapping_add(m);
+    let x = self.2[x as usize];
+    x
   }
 }
 
-pub(crate) struct HashU16(u16, u16, &'static [[u16; 256]; 2]);
+#[derive(Clone, Copy)]
+pub(crate) struct HashH(u16, u16, &'static [[u16; 256]; 2]);
 
-impl Hash<u16> for HashU16 {
-  type Seed = u16;
-
+impl Hash<u16> for HashH {
   #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
-    g.next_u32() as u16
+  fn new(g: &mut impl rand_core::Rng) -> Self {
+    let a = 1 | g.next_u32() as u16;
+    let b = invert_mul_h(a);
+    Self(a, b, &HASH_H_SHUFFLE_INV)
   }
 
   #[inline(always)]
-  fn new(seed: Self::Seed) -> Self {
-    let a = 1 | seed;
-    let b = minv::invert_mul_h(a);
-    Self(a, b, &HASH_U16_SHUFFLE_INV)
-  }
-
-  #[inline(always)]
-  fn forward(&self) -> impl Copy + Fn(u16) -> u16 {
+  fn hash(&self, x: u16) -> u16 {
     let m = self.0;
-    move |x| {
-      let x = (crc32ch(0, x) >> 16) as u16;
-      let x = x.wrapping_mul(m).wrapping_sub(1);
-      x
-    }
+    let x = (crc32ch(0, x) >> 16) as u16;
+    let x = x.wrapping_mul(m).wrapping_sub(1);
+    x
   }
 
   #[inline(always)]
-  fn inverse(&self) -> impl Copy + Fn(u16) -> u16 {
+  fn invert_hash(&self, x: u16) -> u16 {
     let m = self.1;
     let p = self.2;
-    move |x| {
-      let x = x.wrapping_mul(m).wrapping_add(m);
-      let u = x.to_le_bytes();
-      let x = p[0][u[0] as usize] ^ p[1][u[1] as usize];
-      x
-    }
+    let x = x.wrapping_mul(m).wrapping_add(m);
+    let x = p[0][x as u8 as usize] ^ p[1][(x >> 8) as u8 as usize];
+    x
   }
 }
 
-pub(crate) struct HashU32(u32, u32);
+#[derive(Clone, Copy)]
+pub(crate) struct HashW(u32, u32);
 
-impl Hash<u32> for HashU32 {
-  type Seed = u32;
-
+impl Hash<u32> for HashW {
   #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
-    g.next_u32()
-  }
-
-  #[inline(always)]
-  fn new(seed: Self::Seed) -> Self {
-    let a = 1 | seed;
-    let b = minv::invert_mul_w(a);
+  fn new(g: &mut impl rand_core::Rng) -> Self {
+    let a = 1 | g.next_u32();
+    let b = invert_mul_w(a);
     Self(a, b)
   }
 
   #[inline(always)]
-  fn forward(&self) -> impl Copy + Fn(u32) -> u32 {
+  fn hash(&self, x: u32) -> u32 {
     let m = self.0;
-    move |x| {
-      let x = crc32cw(0, x);
-      let x = x.wrapping_mul(m).wrapping_sub(1);
-      x
-    }
+    let x = crc32cw(0, x);
+    let x = x.wrapping_mul(m).wrapping_sub(1);
+    x
   }
 
   #[inline(always)]
-  fn inverse(&self) -> impl Copy + Fn(u32) -> u32 {
+  fn invert_hash(&self, x: u32) -> u32 {
     let m = self.1;
-    move |x| {
-      let x = x.wrapping_mul(m).wrapping_add(m);
-      let x = invert_crc32cw(x);
-      x
-    }
+    let x = x.wrapping_mul(m).wrapping_add(m);
+    let x = invert_crc32cw(x);
+    x
   }
 }
 
-pub(crate) struct HashU64(u64, u64);
+#[derive(Clone, Copy)]
+pub(crate) struct HashD(u64, u64);
 
-impl Hash<u64> for HashU64 {
-  type Seed = u64;
-
+impl Hash<u64> for HashD {
   #[inline(always)]
-  fn seed(g: &mut impl Rng) -> Self::Seed {
-    g.next_u64()
-  }
-
-  #[inline(always)]
-  fn new(seed: Self::Seed) -> Self {
-    let a = 1 | seed;
-    let b = minv::invert_mul_d(a);
+  fn new(g: &mut impl rand_core::Rng) -> Self {
+    let a = 1 | g.next_u64();
+    let b = invert_mul_d(a);
     Self(a, b)
   }
 
   #[inline(always)]
-  fn forward(&self) -> impl Copy + Fn(u64) -> u64 {
+  fn hash(&self, x: u64) -> u64 {
     let m = self.0;
-    move |x| {
-      let x = widening_cat(lower(x), crc32cd(0, x));
-      let x = x.wrapping_mul(m).wrapping_sub(1);
-      x
-    }
+    let x = widening_cat(lower(x), crc32cd(0, x));
+    let x = x.wrapping_mul(m).wrapping_sub(1);
+    x
   }
 
   #[inline(always)]
-  fn inverse(&self) -> impl Copy + Fn(u64) -> u64 {
+  fn invert_hash(&self, x: u64) -> u64 {
     let m = self.1;
-    move |x| {
-      let x = x.wrapping_mul(m).wrapping_add(m);
-      let x = widening_cat(lower(x), invert_crc32cw(upper(x)) ^ crc32cw(0, lower(x)));
-      x
-    }
+    let x = x.wrapping_mul(m).wrapping_add(m);
+    let x = widening_cat(lower(x), invert_crc32cw(upper(x)) ^ crc32cw(0, lower(x)));
+    x
   }
 }
 
-static HASH_U8_SHUFFLE_INV: [u8; 256] = [
+static HASH_B_SHUFFLE_INV: [u8; 256] = [
   0x00, 0xf1, 0xe2, 0x13, 0xc4, 0x35, 0x26, 0xd7,
   0x88, 0x79, 0x6a, 0x9b, 0x4c, 0xbd, 0xae, 0x5f,
   0x10, 0xe1, 0xf2, 0x03, 0xd4, 0x25, 0x36, 0xc7,
@@ -237,7 +197,7 @@ static HASH_U8_SHUFFLE_INV: [u8; 256] = [
   0x6b, 0x9a, 0x89, 0x78, 0xaf, 0x5e, 0x4d, 0xbc,
 ];
 
-static HASH_U16_SHUFFLE_INV: [[u16; 256]; 2] = [
+static HASH_H_SHUFFLE_INV: [[u16; 256]; 2] = [
   [
     0x0000, 0x76f1, 0xede2, 0x9b13, 0xdbc4, 0xad35, 0x3626, 0x40d7,
     0xb788, 0xc179, 0x5a6a, 0x2c9b, 0x6c4c, 0x1abd, 0x81ae, 0xf75f,

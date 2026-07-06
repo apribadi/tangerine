@@ -26,25 +26,25 @@ pub(crate) trait Word
 }
 
 impl Word for u8 {
-  type Hash = crate::hash::backend::HashU8;
+  type Hash = crate::hash::backend::HashB;
 
   const MAX: Self = u8::MAX;
 }
 
 impl Word for u16 {
-  type Hash = crate::hash::backend::HashU16;
+  type Hash = crate::hash::backend::HashH;
 
   const MAX: Self = u16::MAX;
 }
 
 impl Word for u32 {
-  type Hash = crate::hash::backend::HashU32;
+  type Hash = crate::hash::backend::HashW;
 
   const MAX: Self = u32::MAX;
 }
 
 impl Word for u64 {
-  type Hash = crate::hash::backend::HashU64;
+  type Hash = crate::hash::backend::HashD;
 
   const MAX: Self = u64::MAX;
 }

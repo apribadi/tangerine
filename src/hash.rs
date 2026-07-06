@@ -1,23 +1,11 @@
 use rand_core::Rng;
 
-pub(crate) trait Hasher<T> {
+pub(crate) trait Hash<T>: Copy {
   fn new(_: &mut impl Rng) -> Self;
 
   fn hash(&self, _: T) -> T;
 
   fn invert_hash(&self, _: T) -> T;
-}
-
-pub(crate) trait Hash<T> {
-  type Seed;
-
-  fn seed(_: &mut impl Rng) -> Self::Seed;
-
-  fn new(_: Self::Seed) -> Self;
-
-  fn forward(&self) -> impl Copy + Fn(T) -> T;
-
-  fn inverse(&self) -> impl Copy + Fn(T) -> T;
 }
 
 // TODO: x86-64
@@ -33,7 +21,7 @@ cfg_select! {
     pub(crate) mod backend;
   }
   _ => {
-    #[path = "hash_basic.rs"]
+    #[path = "hash_unknown.rs"]
     pub(crate) mod backend;
   }
 }
