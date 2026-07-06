@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 
+// Each function computes a multiplicative inverse of an odd integer. The result
+// given an even integer is unspecified.
+//
 // For an exposition of the algorithm we use for computing a multiplicative
 // inverse, see the following:
 //
@@ -7,17 +10,17 @@
 // - https://arxiv.org/abs/2204.04342
 
 #[inline(always)]
-pub(crate) fn invert_u8(x: u8) -> u8 {
+pub(crate) fn invert_mul_b(x: u8) -> u8 {
   let u = x.wrapping_mul(3) ^ 2;
-  let v = 1u8.wrapping_sub(x.wrapping_mul(u));
+  let v = x.wrapping_mul(u).wrapping_sub(1).wrapping_neg();
   let u = u.wrapping_mul(v.wrapping_add(1));
   u
 }
 
 #[inline(always)]
-pub(crate) fn invert_u16(x: u16) -> u16 {
+pub(crate) fn invert_mul_h(x: u16) -> u16 {
   let u = x.wrapping_mul(3) ^ 2;
-  let v = 1u16.wrapping_sub(x.wrapping_mul(u));
+  let v = x.wrapping_mul(u).wrapping_sub(1).wrapping_neg();
   let u = u.wrapping_mul(v.wrapping_add(1));
   let v = v.wrapping_mul(v);
   let u = u.wrapping_mul(v.wrapping_add(1));
@@ -25,9 +28,9 @@ pub(crate) fn invert_u16(x: u16) -> u16 {
 }
 
 #[inline(always)]
-pub(crate) fn invert_u32(x: u32) -> u32 {
+pub(crate) fn invert_mul_w(x: u32) -> u32 {
   let u = x.wrapping_mul(3) ^ 2;
-  let v = 1u32.wrapping_sub(x.wrapping_mul(u));
+  let v = x.wrapping_mul(u).wrapping_sub(1).wrapping_neg();
   let u = u.wrapping_mul(v.wrapping_add(1));
   let v = v.wrapping_mul(v);
   let u = u.wrapping_mul(v.wrapping_add(1));
@@ -37,9 +40,9 @@ pub(crate) fn invert_u32(x: u32) -> u32 {
 }
 
 #[inline(always)]
-pub(crate) fn invert_u64(x: u64) -> u64 {
+pub(crate) fn invert_mul_d(x: u64) -> u64 {
   let u = x.wrapping_mul(3) ^ 2;
-  let v = 1u64.wrapping_sub(x.wrapping_mul(u));
+  let v = x.wrapping_mul(u).wrapping_sub(1).wrapping_neg();
   let u = u.wrapping_mul(v.wrapping_add(1));
   let v = v.wrapping_mul(v);
   let u = u.wrapping_mul(v.wrapping_add(1));

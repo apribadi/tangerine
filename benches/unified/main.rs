@@ -7,7 +7,6 @@ use divan::Bencher;
 use std::hint::black_box;
 use std::num::NonZeroU8;
 use std::num::NonZeroU32;
-use std::num::NonZeroU64;
 
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

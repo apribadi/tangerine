@@ -1,5 +1,13 @@
 use rand_core::Rng;
 
+pub(crate) trait Hasher<T> {
+  fn new(_: &mut impl Rng) -> Self;
+
+  fn hash(&self, _: T) -> T;
+
+  fn invert_hash(&self, _: T) -> T;
+}
+
 pub(crate) trait Hash<T> {
   type Seed;
 
@@ -15,7 +23,6 @@ pub(crate) trait Hash<T> {
 // TODO: x86-64
 cfg_select! {
   all(
-      not(feature = "use-basic-hash"),
       target_arch = "aarch64",
       target_feature = "aes",
       target_feature = "crc",

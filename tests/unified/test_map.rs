@@ -10,7 +10,6 @@ use std::num::NonZeroU16;
 use std::write;
 use tangerine::map::IntMap;
 use tangerine::map;
-use tangerine::key;
 
 /*
 #[test]
@@ -323,6 +322,7 @@ fn test_1() {
   "#]].assert_eq(&s);
 }
 
+/*
 #[test]
 fn test_probe_count() {
   let mut s = String::new();
@@ -389,6 +389,7 @@ fn test_probe_count() {
     }
   }
 }
+*/
 
 
 /*

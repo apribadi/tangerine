@@ -1,25 +1,19 @@
 use rand_core::Rng;
 use crate::hash::Hash;
-use crate::key::internal::Backend;
-use crate::util::invert_u16;
-use crate::util::invert_u32;
-use crate::util::invert_u64;
-use crate::util::invert_u8;
-
-pub(crate) const BACKEND: Backend = Backend::AArch64;
+use crate::minv;
 
 #[inline(always)]
-fn catenate(x: u32, y: u32) -> u64 {
+const fn widening_cat(x: u32, y: u32) -> u64 {
   (x as u64) ^ ((y as u64) << 32)
 }
 
 #[inline(always)]
-fn lower(x: u64) -> u32 {
+const fn lower(x: u64) -> u32 {
   x as u32
 }
 
 #[inline(always)]
-fn upper(x: u64) -> u32 {
+const fn upper(x: u64) -> u32 {
   (x >> 32) as u32
 }
 
@@ -45,10 +39,7 @@ fn crc32cd(a: u32, x: u64) -> u32 {
 
 #[inline(always)]
 fn widening_carryless_mul(x: u32, y: u32) -> u64 {
-  #[cfg(not(miri))]
   unsafe { core::arch::aarch64::vmull_p64(x as u64, y as u64) as u64 }
-  #[cfg(miri)]
-  x.widening_carryless_mul(y)
 }
 
 #[inline(always)]
@@ -69,7 +60,7 @@ impl Hash<u8> for HashU8 {
   #[inline(always)]
   fn new(seed: Self::Seed) -> Self {
     let a = 1 | seed;
-    let b = invert_u8(a);
+    let b = minv::invert_mul_b(a);
     Self(a, b, &HASH_U8_SHUFFLE_INV)
   }
 
@@ -108,7 +99,7 @@ impl Hash<u16> for HashU16 {
   #[inline(always)]
   fn new(seed: Self::Seed) -> Self {
     let a = 1 | seed;
-    let b = invert_u16(a);
+    let b = minv::invert_mul_h(a);
     Self(a, b, &HASH_U16_SHUFFLE_INV)
   }
 
@@ -148,7 +139,7 @@ impl Hash<u32> for HashU32 {
   #[inline(always)]
   fn new(seed: Self::Seed) -> Self {
     let a = 1 | seed;
-    let b = invert_u32(a);
+    let b = minv::invert_mul_w(a);
     Self(a, b)
   }
 
@@ -186,7 +177,7 @@ impl Hash<u64> for HashU64 {
   #[inline(always)]
   fn new(seed: Self::Seed) -> Self {
     let a = 1 | seed;
-    let b = invert_u64(a);
+    let b = minv::invert_mul_d(a);
     Self(a, b)
   }
 
@@ -194,7 +185,7 @@ impl Hash<u64> for HashU64 {
   fn forward(&self) -> impl Copy + Fn(u64) -> u64 {
     let m = self.0;
     move |x| {
-      let x = catenate(lower(x), crc32cd(0, x));
+      let x = widening_cat(lower(x), crc32cd(0, x));
       let x = x.wrapping_mul(m).wrapping_sub(1);
       x
     }
@@ -205,7 +196,7 @@ impl Hash<u64> for HashU64 {
     let m = self.1;
     move |x| {
       let x = x.wrapping_mul(m).wrapping_add(m);
-      let x = catenate(lower(x), invert_crc32cw(upper(x)) ^ crc32cw(0, lower(x)));
+      let x = widening_cat(lower(x), invert_crc32cw(upper(x)) ^ crc32cw(0, lower(x)));
       x
     }
   }
