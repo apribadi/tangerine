@@ -161,16 +161,6 @@ unsafe fn invert_hash<K: Key, H: Hash<K::Word>>(x: K::Word, m: &H) -> K {
   unsafe { K::from_word(m.invert_hash(x)) }
 }
 
-// NOTE: A "full size" table configuration has `shift == 0`. It requires zero
-// overflow space, as the last slot would be occupied by `MAX`. The capacity
-// can be `2 ** BITS - 1`
-//
-// It is only possible to allocate a table this large when the key size is
-// strictly less than the pointer size.
-
-// NOTE: For `capacity` and `slot`, it can improve code generation to operate on
-// `usize`s when possible.
-
 #[inline(always)]
 fn capacity<K: Key, V>(shift: usize) -> usize {
   K::Word::capacity(shift)

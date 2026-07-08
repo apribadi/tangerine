@@ -22,11 +22,21 @@ macro_rules! impl_word_for {
     impl Word for $word {
       type Hash = $hash;
 
-      const BITS: usize = <$word>::BITS as usize;
+      const BITS: usize = 8 * size_of::<Self>();
 
-      const MAX: Self = <$word>::MAX;
+      const MAX: Self = ! 0;
 
-      const MSB: Self = 1 << Self::BITS - 1;
+      const MSB: Self = ! (! 0 >> 1);
+
+      // NOTE: A "full size" table configuration has `shift == 0`. It requires zero
+      // overflow space, as the last slot would be occupied by `MAX`. The capacity
+      // can be `2 ** BITS - 1`
+      //
+      // It is only possible to allocate a table this large when the key size is
+      // strictly less than the pointer size.
+
+      // NOTE: For `capacity` and `slot`, it can improve code generation to operate on
+      // `usize`s when possible.
 
       #[inline(always)]
       fn capacity(shift: usize) -> usize {
