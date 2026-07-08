@@ -7,7 +7,6 @@ pub mod key;
 pub mod map;
 pub mod set;
 
-mod cast;
 mod minv;
 mod word;
 mod hash;

@@ -18,9 +18,6 @@ use core::ptr::null;
 use core::ptr::null_mut;
 use rand_core::Rng;
 
-use crate::cast::Cast;
-use crate::cast::CastSigned;
-use crate::cast::CastUnsigned;
 use crate::hash::Hash;
 use crate::key::Key;
 use crate::word::Word;
@@ -120,7 +117,7 @@ const fn initial_table<K:Key, V>() -> *const Slot<K, V> {
 
 #[inline(always)]
 const fn initial_shift<K: Key, V>() -> usize {
-  K::Word::BITS as usize - 1
+  K::Word::BITS - 1
 }
 
 #[inline(always)]
@@ -176,25 +173,12 @@ unsafe fn invert_hash<K: Key, H: Hash<K::Word>>(x: K::Word, m: &H) -> K {
 
 #[inline(always)]
 fn capacity<K: Key, V>(shift: usize) -> usize {
-  if const { K::Word::BITS < usize::BITS } {
-    let n = ! (K::Word::MAX >> 1);
-    let n = (n.cast::<usize>() >> shift).cast::<K::Word>();
-    let n = n | (n.cast_signed() >> K::Word::BITS as usize - 1).cast_unsigned();
-    n.cast::<usize>()
-  } else {
-    let n = ! (K::Word::MAX >> 1);
-    let n = n >> shift;
-    n.cast::<usize>()
-  }
+  K::Word::capacity(shift)
 }
 
 #[inline(always)]
-fn slot<U: Word>(hash: U, shift: usize) -> usize {
-  if const { U::BITS < usize::BITS } {
-    hash.cast::<usize>() >> shift
-  } else {
-    (hash >> shift).cast::<usize>()
-  }
+fn slot<W: Word>(hash: W, shift: usize) -> usize {
+  W::slot(hash, shift)
 }
 
 #[inline(always)]
@@ -206,7 +190,7 @@ fn num_slots<K: Key, V>(t: *mut Slot<K, V>, z: *mut Slot<K, V>) -> usize {
 
 #[inline(always)]
 unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
-  unsafe { assert_unchecked(s <= K::Word::BITS as usize - 1) };
+  unsafe { assert_unchecked(s <= K::Word::BITS - 1) };
   let k = slot(h, s);
   let b = unsafe { t.add(k + 1) };
   let v = unsafe { slot_hash(b).read() };
@@ -399,7 +383,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_d = 4 * CHUNK;
     let new_e = CHUNK;
     let new_w = new_d + new_e;
-    let new_s = (K::Word::BITS - new_d.trailing_zeros()) as usize;
+    let new_s = K::Word::BITS - new_d.trailing_zeros() as usize;
     let new_r = capacity::<K, V>(new_s) - 1;
     assert!(new_w <= allocation_max_num_slots::<K, V>());
     let new_l = unsafe { allocation_layout::<K, V>(new_w) };
@@ -430,21 +414,21 @@ impl<K: Key, V> IntMap<K, V> {
     let old_s = self.shift;
     let old_r = self.slack;
     let old_z = self.limit.cast_mut();
-    debug_assert!(1 <= old_s && old_s <= K::Word::BITS as usize - 1);
+    debug_assert!(1 <= old_s && old_s <= K::Word::BITS - 1);
     // Compute old sizes.
     let old_w = num_slots(old_t, old_z);
-    let old_d = 1 << K::Word::BITS as usize - old_s;
+    let old_d = 1 << K::Word::BITS - old_s;
     let old_e = old_w - old_d;
     // Compute new sizes.
     let new_s = old_s - 1;
     let new_r = old_r + (capacity::<K, V>(new_s) - capacity::<K, V>(old_s)) - 1;
-    let new_d = 1 << K::Word::BITS as usize - new_s;
+    let new_d = 1 << K::Word::BITS - new_s;
     let new_e =
       if new_s == 0 {
         0 // special case, we can store every possible key
       } else if p == old_z {
         old_e * 2 // if we wrote in the final slot
-      } else if old_e < K::Word::BITS as usize - new_s {
+      } else if old_e < K::Word::BITS - new_s {
         old_e + CHUNK // we maintain e >= log2(w)
       } else {
         old_e
@@ -570,6 +554,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// Ensures that there is a value associated with the given key by inserting
   /// the provided default value if the key was previously absent. Returns a
   /// mutable reference to the value in the entry.
+  #[inline(always)]
   pub fn get_or_insert(&mut self, key: K, default: V) -> &mut V {
     match self.entry(key) {
       Entry::Occupied(entry) => entry.into_mut(),
@@ -580,6 +565,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// Ensures that there is a value associated with the given key by inserting
   /// the result of calling the provided default function if the key was
   /// previously absent. Returns a mutable reference to the value in the entry.
+  #[inline(always)]
   pub fn get_or_insert_with(&mut self, key: K, default: impl FnOnce() -> V) -> &mut V {
     match self.entry(key) {
       Entry::Occupied(entry) => entry.into_mut(),
@@ -591,6 +577,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// the result of calling [`V::default`](Default::default) if the key was
   /// previously absent.  Returns a mutable reference to the value in the
   /// entry.
+  #[inline(always)]
   pub fn get_or_default(&mut self, key: K) -> &mut V where V: Default {
     match self.entry(key) {
       Entry::Occupied(entry) => entry.into_mut(),
@@ -613,7 +600,7 @@ impl<K: Key, V> IntMap<K, V> {
     let n = c - r;
     if needs_drop::<V>() {
       if n != 0 {
-        // UARNING!
+        // WARNING!
         //
         // We must be careful to leave the map in a valid state even if a call
         // to `drop` panics.
