@@ -63,8 +63,8 @@ macro_rules! impl_word_for {
 }
 
 impl_word_for! {
-  u8 => crate::hash::backend::HashB;
-  u16 => crate::hash::backend::HashH;
-  u32 => crate::hash::backend::HashW;
-  u64 => crate::hash::backend::HashD;
+  u8 => crate::hash::backend::HashU8;
+  u16 => crate::hash::backend::HashU16;
+  u32 => crate::hash::backend::HashU32;
+  u64 => crate::hash::backend::HashU64;
 }

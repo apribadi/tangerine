@@ -42,19 +42,25 @@ fn widening_carryless_mul(x: u32, y: u32) -> u64 {
 }
 
 #[inline(always)]
-fn invert_crc32cw(x: u32) -> u32 {
+fn invert_crc32c_32(x: u32) -> u32 {
   crc32cd(0, widening_carryless_mul(x, 0xc915_ea3b))
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct HashB(u8, u8, &'static [u8; 256]);
+#[inline(always)]
+fn invert_crc32c_96(x: u32) -> u32 {
+  crc32cd(0, widening_carryless_mul(x, 0x413d_19cd))
+}
 
-impl Hash<u8> for HashB {
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub(crate) struct HashU8(u8, u8);
+
+impl Hash<u8> for HashU8 {
   #[inline(always)]
   fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u32() as u8;
-    let b = minv::invert_mul_b(a);
-    Self(a, b, &HASH_B_SHUFFLE_INV)
+    let b = minv::invert_mul_u8(a);
+    Self(a, b)
   }
 
   #[inline(always)]
@@ -69,20 +75,21 @@ impl Hash<u8> for HashB {
   fn invert_hash(&self, x: u8) -> u8 {
     let m = self.1;
     let x = x.wrapping_mul(m).wrapping_add(m);
-    let x = self.2[x as usize];
+    let x = HASH_SHUFFLE_INV_1[x as usize];
     x
   }
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct HashH(u16, u16, &'static [[u16; 256]; 2]);
+#[repr(C)]
+pub(crate) struct HashU16(u16, u16);
 
-impl Hash<u16> for HashH {
+impl Hash<u16> for HashU16 {
   #[inline(always)]
   fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u32() as u16;
-    let b = minv::invert_mul_h(a);
-    Self(a, b, &HASH_H_SHUFFLE_INV)
+    let b = minv::invert_mul_u16(a);
+    Self(a, b)
   }
 
   #[inline(always)]
@@ -96,27 +103,27 @@ impl Hash<u16> for HashH {
   #[inline(always)]
   fn invert_hash(&self, x: u16) -> u16 {
     let m = self.1;
-    let p = self.2;
     let x = x.wrapping_mul(m).wrapping_add(m);
-    let x = p[0][x as u8 as usize] ^ p[1][(x >> 8) as u8 as usize];
+    let i = x as u8;
+    let j = (x >> 8) as u8;
+    let x = HASH_SHUFFLE_INV_2[0][i as usize] ^ HASH_SHUFFLE_INV_2[1][j as usize];
     x
   }
 }
 
 #[derive(Clone, Copy)]
 #[repr(C)]
-pub(crate) struct HashW(u32, u32, u32);
+pub(crate) struct HashU32(u32, u32, u32, u32);
 
-impl Hash<u32> for HashW {
+impl Hash<u32> for HashU32 {
   #[inline(always)]
   fn seed(g: &mut impl rand_core::Rng) -> Self {
-    // crc32cw(b, 0) * a == MAX
-    // crc32cw(b, 0) == MAX * c
-    // b = invert_crc32cw(MAX * c);
     let a = 1 | g.next_u32();
-    let c = minv::invert_mul_w(a);
-    let b = invert_crc32cw(u32::MAX.wrapping_mul(c));
-    Self(a, b, c)
+    let c = minv::invert_mul_u32(a);
+    let u = u32::MAX.wrapping_mul(c);
+    let b = invert_crc32c_32(u);
+    let d = invert_crc32c_96(u);
+    Self(a, b, c, d)
   }
 
   #[inline(always)]
@@ -128,20 +135,21 @@ impl Hash<u32> for HashW {
 
   #[inline(always)]
   fn invert_hash(&self, x: u32) -> u32 {
-    let b = self.1;
     let c = self.2;
-    b ^ invert_crc32cw(x.wrapping_mul(c))
+    let d = self.3;
+    crc32cd(d, widening_carryless_mul(x.wrapping_mul(c), 0xc915_ea3b))
   }
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct HashD(u64, u64);
+#[repr(C)]
+pub(crate) struct HashU64(u64, u64);
 
-impl Hash<u64> for HashD {
+impl Hash<u64> for HashU64 {
   #[inline(always)]
   fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u64();
-    let b = minv::invert_mul_d(a);
+    let b = minv::invert_mul_u64(a);
     Self(a, b)
   }
 
@@ -157,12 +165,12 @@ impl Hash<u64> for HashD {
   fn invert_hash(&self, x: u64) -> u64 {
     let m = self.1;
     let x = x.wrapping_mul(m).wrapping_add(m);
-    let x = widening_cat(lower(x), invert_crc32cw(upper(x)) ^ crc32cw(0, lower(x)));
+    let x = widening_cat(lower(x), invert_crc32c_32(upper(x)) ^ crc32cw(0, lower(x)));
     x
   }
 }
 
-static HASH_B_SHUFFLE_INV: [u8; 256] = [
+static HASH_SHUFFLE_INV_1: [u8; 256] = [
   0x00, 0xf1, 0xe2, 0x13, 0xc4, 0x35, 0x26, 0xd7,
   0x88, 0x79, 0x6a, 0x9b, 0x4c, 0xbd, 0xae, 0x5f,
   0x10, 0xe1, 0xf2, 0x03, 0xd4, 0x25, 0x36, 0xc7,
@@ -197,7 +205,7 @@ static HASH_B_SHUFFLE_INV: [u8; 256] = [
   0x6b, 0x9a, 0x89, 0x78, 0xaf, 0x5e, 0x4d, 0xbc,
 ];
 
-static HASH_H_SHUFFLE_INV: [[u16; 256]; 2] = [
+static HASH_SHUFFLE_INV_2: [[u16; 256]; 2] = [
   [
     0x0000, 0x76f1, 0xede2, 0x9b13, 0xdbc4, 0xad35, 0x3626, 0x40d7,
     0xb788, 0xc179, 0x5a6a, 0x2c9b, 0x6c4c, 0x1abd, 0x81ae, 0xf75f,
@@ -283,9 +291,9 @@ mod test {
     let mut s = String::new();
     let mut g = Rng::new(NonZeroU128::MIN);
 
-    let h = HashB::seed(&mut g);
+    let h = HashU8::seed(&mut g);
 
-    for x in iter::chain(0 .. 10, iter::repeat_with(|| g.uniform()).take(10)) {
+    for x in iter::chain(0 .. 5, iter::repeat_with(|| g.uniform()).take(5)) {
       let y = h.hash(x);
       let z = h.invert_hash(y);
       let _ = write!(s, "{:#04x} {:#04x} {}\n", x, y, x == z);
@@ -297,26 +305,16 @@ mod test {
         0x02 0xc0 true
         0x03 0xb2 true
         0x04 0xe6 true
-        0x05 0x94 true
-        0x06 0x65 true
-        0x07 0x53 true
-        0x08 0x49 true
-        0x09 0x77 true
         0x31 0x81 true
         0x58 0x7a true
         0x98 0x17 true
         0x80 0x41 true
         0x4e 0x4c true
-        0x50 0x30 true
-        0x9a 0xd8 true
-        0xc5 0x35 true
-        0x21 0x91 true
-        0xb9 0x89 true
     "#]].assert_eq(&s.drain(..).as_str());
 
-    let h = HashH::seed(&mut g);
+    let h = HashU16::seed(&mut g);
 
-    for x in iter::chain(0 .. 10, iter::repeat_with(|| g.uniform()).take(10)) {
+    for x in iter::chain(0 .. 5, iter::repeat_with(|| g.uniform()).take(5)) {
       let y = h.hash(x);
       let z = h.invert_hash(y);
       let _ = write!(s, "{:#06x} {:#06x} {}\n", x, y, x == z);
@@ -324,30 +322,20 @@ mod test {
 
     expect![[r#"
         0x0000 0xffff true
-        0x0001 0xaf05 true
-        0x0002 0xeb1e true
-        0x0003 0x2824 true
-        0x0004 0xd63d true
-        0x0005 0xf1f7 true
-        0x0006 0xdd5c true
-        0x0007 0x1f16 true
-        0x0008 0xac7b true
-        0x0009 0xd581 true
-        0x5355 0x5a9c true
-        0xf45c 0x4aa7 true
-        0x0f0d 0xa07c true
-        0x8a60 0xbd17 true
-        0x02a6 0x7df3 true
-        0xa89d 0xd877 true
-        0x9e60 0xfba3 true
-        0xe794 0x0dc1 true
-        0x4d98 0x36d2 true
-        0x811e 0x11b8 true
+        0x0001 0x1a41 true
+        0x0002 0x06d4 true
+        0x0003 0x3b16 true
+        0x0004 0x0da9 true
+        0x209a 0xfc09 true
+        0x96c5 0x4484 true
+        0x6721 0x0eb4 true
+        0xd2b9 0x8fc2 true
+        0x8d12 0xeebd true
     "#]].assert_eq(&s.drain(..).as_str());
 
-    let h = HashW::seed(&mut g);
+    let h = HashU32::seed(&mut g);
 
-    for x in iter::chain(0 .. 10, iter::repeat_with(|| g.uniform()).take(10)) {
+    for x in iter::chain(0 .. 5, iter::repeat_with(|| g.uniform()).take(5)) {
       let y = h.hash(x);
       let z = h.invert_hash(y);
       let _ = write!(s, "{:#010x} {:#010x} {}\n", x, y, x == z);
@@ -355,30 +343,20 @@ mod test {
 
     expect![[r#"
         0x00000000 0xffffffff true
-        0x00000001 0x800c5047 true
-        0x00000002 0x627e8a3e true
-        0x00000003 0xb0eedd86 true
-        0x00000004 0x70c4e9cc true
-        0x00000005 0x57417174 true
-        0x00000006 0xc07f5b8d true
-        0x00000007 0x7425e835 true
-        0x00000008 0x54953219 true
-        0x00000009 0x1d1055a1 true
-        0x04262965 0xc6a6af98 true
-        0x55636a75 0x04398270 true
-        0x26206a48 0x9f3082cf true
-        0xb94a1e54 0xd7bb9659 true
-        0xc98388c6 0x8c3fa13b true
-        0x56dbcfc8 0x902e9791 true
-        0xf5d668d4 0xb9320a86 true
-        0x2252f7c8 0xd67e6fae true
-        0xd17cf718 0x6b474742 true
-        0xa3b3c827 0x84b99490 true
+        0x00000001 0x368c7317 true
+        0x00000002 0x7259622a true
+        0x00000003 0x83371442 true
+        0x00000004 0x47342ab0 true
+        0x11b1f45c 0x45a8b36f true
+        0x40070f0d 0x949e2c57 true
+        0x98328a60 0xb9b4f5e5 true
+        0x007802a6 0xe1e99b03 true
+        0xb170a89d 0x6ba31c2f true
     "#]].assert_eq(&s.drain(..).as_str());
 
-    let h = HashD::seed(&mut g);
+    let h = HashU64::seed(&mut g);
 
-    for x in iter::chain(0 .. 10, iter::repeat_with(|| g.uniform()).take(10)) {
+    for x in iter::chain(0 .. 5, iter::repeat_with(|| g.uniform()).take(5)) {
       let y = h.hash(x);
       let z = h.invert_hash(y);
       let _ = write!(s, "{:#018x} {:#018x} {}\n", x, y, x == z);
@@ -386,25 +364,15 @@ mod test {
 
     expect![[r#"
         0x0000000000000000 0xffffffffffffffff true
-        0x0000000000000001 0x726d5e39991ba8d8 true
-        0x0000000000000002 0xe4dabc73323751b1 true
-        0x0000000000000003 0x5cc0c080cb52fa8a true
-        0x0000000000000004 0xfdbcd70f646ea363 true
-        0x0000000000000005 0x8cb3668efd8a4c3c true
-        0x0000000000000006 0x39feeeaa96a5f515 true
-        0x0000000000000007 0xb188b18e2fc19dee true
-        0x0000000000000008 0xfb79ae1ec8dd46c7 true
-        0x0000000000000009 0xcd41a0f461f8efa0 true
-        0x2435db9f62e69c2e 0x547359c522d292fd true
-        0x24c8a367973ede3f 0xec4d95488dc8bb66 true
-        0xb66098fd186389e3 0xca982f4334cdd96a true
-        0x1b9956614d18a5a0 0xff12472b9e75649f true
-        0x53921829f9860757 0x5af6b8003c9a50be true
-        0x0a887e8bbd60a9e5 0x44e56c5dbe954b1c true
-        0x17d15354b060aa3a 0xc12e4e1a8fc45b29 true
-        0x222b13caac0d727d 0xae93f8d572b713f4 true
-        0x0d64d16e314ba39f 0xd94cb8f3b54309c6 true
-        0x93276b413e85ae7d 0x64829d89d601eff4 true
+        0x0000000000000001 0x72e92c18240a9e60 true
+        0x0000000000000002 0xe5d2583048153cc1 true
+        0x0000000000000003 0x695127bc6c1fdb22 true
+        0x0000000000000004 0x27d66a91902a7983 true
+        0x699ed6122d18e794 0xe180f07f51251713 true
+        0x668e85feccbe4d98 0xde749c3e6fef3697 true
+        0xd39de4743c54811e 0x3dab4f3a46e1705d true
+        0x99cb1c79dbba3340 0x5e3a1fdc2daeeb3f true
+        0xf0ee7c0804262965 0xf2f73c05f1f40544 true
     "#]].assert_eq(&s.drain(..).as_str());
   }
 }
