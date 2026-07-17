@@ -211,6 +211,12 @@ TODO:
 
 TODO:
 
+# Things That This Library Is Not Optimized For
+
+- fast iteration
+
+- large values
+
 # Ghosts of Hash Maps Past
 
 A person familiar with the landscape of hash map implementations might note

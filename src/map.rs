@@ -1,6 +1,21 @@
 //! This module provides a high performance hash map keyed by types
 //! representable as non-zero integers.
 
+// TODO:
+//
+// two empty slots at the end
+//
+// full map size is 2**k + 1
+//
+// search loop stride 2
+//
+// remove loop stride 2
+
+
+// TODO:
+//
+// consider unrolling grow loop
+
 use alloc::alloc::Layout;
 use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
@@ -182,6 +197,56 @@ fn num_slots<K: Key, V>(t: *mut Slot<K, V>, z: *mut Slot<K, V>) -> usize {
 unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
   unsafe { assert_unchecked(s <= K::Word::BITS - 1) };
   let k = slot(h, s);
+  let mut a = unsafe { t.add(k) };
+  let mut b = unsafe { a.add(1) };
+  let mut v = unsafe { slot_hash(b).read() };
+  while ! (v >= h) {
+    a = unsafe { a.add(2) };
+    b = unsafe { b.add(2) };
+    v = unsafe { slot_hash(b).read() };
+  }
+  let u = unsafe { slot_hash(a).read() };
+  let p = select_unpredictable(u >= h, a, b);
+  let x = select_unpredictable(u >= h, u, v);
+  (p, x)
+}
+
+/*
+#[inline(always)]
+unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
+  unsafe { assert_unchecked(s <= K::Word::BITS - 1) };
+  let k = slot(h, s);
+  let a = unsafe { t.add(k) };
+  let b = unsafe { a.add(1) };
+  let v = unsafe { slot_hash(b).read() };
+  if v >= h {
+    let u = unsafe { slot_hash(a).read() };
+    let p = select_unpredictable(u >= h, a, b);
+    let x = select_unpredictable(u >= h, u, v);
+    (p, x)
+  } else {
+    let mut a = a;
+    let mut b;
+    let mut v;
+    loop {
+      a = unsafe { a.add(2) };
+      b = unsafe { a.add(1) };
+      v = unsafe { slot_hash(b).read() };
+      if v >= h { break }
+    }
+    let u = unsafe { slot_hash(a).read() };
+    let p = select_unpredictable(u >= h, a, b);
+    let x = select_unpredictable(u >= h, u, v);
+    (p, x)
+  }
+}
+*/
+
+/*
+#[inline(always)]
+unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
+  unsafe { assert_unchecked(s <= K::Word::BITS - 1) };
+  let k = slot(h, s);
   let b = unsafe { t.add(k + 1) };
   let v = unsafe { slot_hash(b).read() };
   if v >= h {
@@ -201,9 +266,45 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut S
     (p, x)
   }
 }
+*/
 
 #[inline(always)]
 unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>) -> V {
+  let value = unsafe { slot_data(p).read() };
+  let mut i = unsafe { p.offset_from_unsigned(t) } + 1;
+  let mut a;
+  let mut b = p;
+  let mut c = unsafe { p.add(1) };
+  let mut d = unsafe { p.add(2) };
+  let mut x = unsafe { slot_hash(c).read() };
+  let mut y = unsafe { slot_hash(d).read() };
+  unsafe { slot_hash(b).write(x) };
+  unsafe { slot_data(b).copy_from_nonoverlapping(slot_data(c), 1) };
+  let mut u = slot(x, s);
+  let mut v = slot(y, s);
+  let mut p = select_unpredictable(u < i, c, b);
+  while u < i && v <= i && y != K::Word::MAX {
+    i = i + 2;
+    a = c;
+    b = d;
+    c = unsafe { c.add(2) };
+    d = unsafe { d.add(2) };
+    unsafe { slot_hash(a).write(y) };
+    unsafe { slot_data(a).copy_from_nonoverlapping(slot_data(b), 1) };
+    x = unsafe { slot_hash(c).read() };
+    y = unsafe { slot_hash(d).read() };
+    unsafe { slot_hash(b).write(x) };
+    unsafe { slot_data(b).copy_from_nonoverlapping(slot_data(c), 1) };
+    u = slot(x, s);
+    v = slot(y, s);
+    p = select_unpredictable(u < i, c, b);
+  }
+  unsafe { slot_hash(p).write(K::Word::MAX) };
+  value
+}
+
+#[inline(always)]
+unsafe fn remove_at0<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>) -> V {
   let value = unsafe { slot_data(p).read() };
   let mut p = p;
   let mut q;
@@ -225,6 +326,21 @@ unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>)
 
 #[inline(always)]
 unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::Word, h: K::Word, value: V) -> *mut Slot<K, V> {
+  unsafe { slot_hash(p).write(h) };
+  let mut p = p;
+  let mut x = x;
+  let mut y = value;
+  while x != K::Word::MAX {
+    y = unsafe { slot_data(p).replace(y) };
+    p = unsafe { p.add(1) };
+    x = unsafe { slot_hash(p).replace(x) };
+  }
+  unsafe { slot_data(p).write(y) };
+  p
+}
+
+#[inline(always)]
+unsafe fn insert_at0<K: Key, V>(p: *mut Slot<K, V>, x: K::Word, h: K::Word, value: V) -> *mut Slot<K, V> {
   unsafe { slot_hash(p).write(h) };
   let mut p = p;
   let mut x = x;
@@ -293,8 +409,10 @@ impl<K: Key, V> IntMap<K, V> {
     let h = hash(key, &self.hash);
     if is_uninit_null(t, s) { return }
     let k = slot(h, s);
-    let _: K::Word = unsafe { slot_hash(t.add(k)).read_volatile() };
-    let _: K::Word = unsafe { slot_hash(t.add(k + 1)).read_volatile() };
+    let a = unsafe { t.add(k) };
+    let b = unsafe { a.add(1) };
+    let _: K::Word = unsafe { slot_hash(a).read_volatile() };
+    let _: K::Word = unsafe { slot_hash(b).read_volatile() };
   }
 
   /// Returns whether the map contains the given key.
@@ -379,7 +497,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_l = unsafe { allocation_layout::<K, V>(new_w) };
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
-    let new_z = unsafe { new_t.add(new_w - 1) };
+    let new_z = unsafe { new_t.add(new_w - 2) };
     unsafe { init_span(new_t, new_z) };
     let k = slot(h, new_s);
     let a = unsafe { new_t.add(k) };
@@ -415,7 +533,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_d = 1 << K::Word::BITS - new_s;
     let new_e =
       if new_s == 0 {
-        0 // special case, we can store every possible key
+        CHUNK // special case for a full size table
       } else if p == old_z {
         old_e * 2 // if we wrote in the final slot
       } else if old_e < K::Word::BITS - new_s {
@@ -430,7 +548,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_l = unsafe { allocation_layout::<K, V>(new_w) };
     let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
     if new_t.is_null() { match handle_alloc_error(new_l) { } }
-    let new_z = unsafe { new_t.add(new_w - 1) };
+    let new_z = unsafe { new_t.add(new_w - 2) };
     // Update struct fields.
     self.table = new_t;
     self.shift = new_s;
@@ -505,6 +623,44 @@ impl<K: Key, V> IntMap<K, V> {
     }
   }
 
+  /// Inserts the given key and value into the map. Returns the previous value
+  /// associated with given key, if one was present.
+  ///
+  /// # Panics
+  ///
+  /// Panics if the table would be too large or allocation fails. If that
+  /// happens, it is possible for the map to leak an arbitrary set of items,
+  /// but the map will remain in a valid state.
+  #[inline(always)]
+  pub fn insert0(&mut self, key: K, value: V) -> Option<V> {
+    let t = self.table.cast_mut();
+    let s = self.shift;
+    let h = hash(key, &self.hash);
+    if is_uninit_null(t, s) {
+      let _: *mut V = self.insert_init(h, value);
+      None
+    } else {
+      let p = unsafe { search(t, s, h) };
+      if p.1 == h {
+        Some(unsafe { slot_data(p.0).replace(value) })
+      } else {
+        if is_uninit_stub(t, s) {
+          let _: *mut V = self.insert_init(h, value);
+        } else {
+          let p = unsafe { insert_at0(p.0, p.1, h, value) };
+          let r = self.slack;
+          let z = self.limit.cast_mut();
+          if p == z || r == 0 {
+            let _: *mut V = self.insert_grow(p, h);
+          } else {
+            self.slack = r - 1;
+          }
+        }
+        None
+      }
+    }
+  }
+
   /// Removes the given key from the map. Returns the previous value associated
   /// with the given key, if one was present.
   #[inline(always)]
@@ -519,6 +675,23 @@ impl<K: Key, V> IntMap<K, V> {
     } else {
       self.slack += 1;
       Some(unsafe { remove_at(t, s, p.0) })
+    }
+  }
+
+  /// Removes the given key from the map. Returns the previous value associated
+  /// with the given key, if one was present.
+  #[inline(always)]
+  pub fn remove0(&mut self, key: K) -> Option<V> {
+    let t = self.table.cast_mut();
+    let s = self.shift;
+    let h = hash(key, &self.hash);
+    if is_uninit_null(t, s) { return None }
+    let p = unsafe { search(t, s, h) };
+    if p.1 != h {
+      None
+    } else {
+      self.slack += 1;
+      Some(unsafe { remove_at0(t, s, p.0) })
     }
   }
 

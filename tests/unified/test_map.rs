@@ -528,7 +528,7 @@ fn test_255u8() {
       len = 9, num_slots = 40, allocation_size = 40
       len = 17, num_slots = 72, allocation_size = 72
       len = 33, num_slots = 136, allocation_size = 136
-      len = 65, num_slots = 256, allocation_size = 256
+      len = 65, num_slots = 260, allocation_size = 260
   "#]].assert_eq(&s.drain(..).as_str());
 }
 
@@ -567,7 +567,7 @@ fn test_65535u16() {
       len = 2049, num_slots = 8208, allocation_size = 16416
       len = 4097, num_slots = 16400, allocation_size = 32800
       len = 8193, num_slots = 32784, allocation_size = 65568
-      len = 16385, num_slots = 65536, allocation_size = 131072
-      len = 65535, num_slots = 65536, allocation_size = 131072
+      len = 16385, num_slots = 65540, allocation_size = 131080
+      len = 65535, num_slots = 65540, allocation_size = 131080
   "#]].assert_eq(&s.drain(..).as_str());
 }

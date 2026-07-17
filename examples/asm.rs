@@ -92,8 +92,18 @@ pub fn insert(t: &mut IntMap<Key, Value>, k: Key, v: Value) -> Option<Value> {
 }
 
 #[inline(never)]
+pub fn insert0(t: &mut IntMap<Key, Value>, k: Key, v: Value) -> Option<Value> {
+  t.insert0(k, v)
+}
+
+#[inline(never)]
 pub fn remove(t: &mut IntMap<Key, Value>, k: Key) -> Option<Value> {
   t.remove(k)
+}
+
+#[inline(never)]
+pub fn remove0(t: &mut IntMap<Key, Value>, k: Key) -> Option<Value> {
+  t.remove0(k)
 }
 
 #[inline(never)]
@@ -239,4 +249,9 @@ pub fn entry_dec(t: &mut IntMap<Key, Value>, key: Key) {
     Entry::Vacant(_) => {
     }
   }
+}
+
+#[inline(never)]
+pub fn std_remove(t: &mut std::collections::HashMap<Key, Value, foldhash::fast::RandomState>, k: Key) -> Option<Value> {
+  t.remove(&k)
 }
