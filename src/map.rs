@@ -213,28 +213,29 @@ unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>)
   let mut b = p;
   let mut c = unsafe { p.add(1) };
   let mut d = unsafe { p.add(2) };
-  let mut x = unsafe { slot_hash(c).read() };
-  let mut y = unsafe { slot_hash(d).read() };
-  unsafe { slot_hash(b).write(x) };
+  let mut u = unsafe { slot_hash(c).read() };
+  let mut v = unsafe { slot_hash(d).read() };
+  unsafe { slot_hash(b).write(u) };
   unsafe { slot_data(b).copy_from_nonoverlapping(slot_data(c), 1) };
-  let mut u = slot(x, s);
-  let mut v = slot(y, s);
-  while u < i && v <= i && y != K::Word::MAX {
+  let mut f = slot(u, s);
+  let mut g = slot(v, s);
+  let mut p = select_unpredictable(f < i, c, b);
+  while f < i && g <= i && v != K::Word::MAX {
     i = i + 2;
     a = c;
     b = d;
     c = unsafe { c.add(2) };
     d = unsafe { d.add(2) };
-    unsafe { slot_hash(a).write(y) };
+    unsafe { slot_hash(a).write(v) };
     unsafe { slot_data(a).copy_from_nonoverlapping(slot_data(b), 1) };
-    x = unsafe { slot_hash(c).read() };
-    y = unsafe { slot_hash(d).read() };
-    unsafe { slot_hash(b).write(x) };
+    u = unsafe { slot_hash(c).read() };
+    v = unsafe { slot_hash(d).read() };
+    unsafe { slot_hash(b).write(u) };
     unsafe { slot_data(b).copy_from_nonoverlapping(slot_data(c), 1) };
-    u = slot(x, s);
-    v = slot(y, s);
+    f = slot(u, s);
+    g = slot(v, s);
+    p = select_unpredictable(f < i, c, b);
   }
-  let mut p = select_unpredictable(u < i, c, b);
   unsafe { slot_hash(p).write(K::Word::MAX) };
   value
 }
