@@ -3,18 +3,12 @@
 
 // TODO:
 //
-// two empty slots at the end
+// consider unrolling grow loop
 //
-// full map size is 2**k + 1
-//
-// search loop stride 2
-//
-// remove loop stride 2
-
 
 // TODO:
 //
-// consider unrolling grow loop
+// unroll insert loop
 
 use alloc::alloc::Layout;
 use alloc::alloc::alloc;
@@ -211,63 +205,6 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut S
   (p, x)
 }
 
-/*
-#[inline(always)]
-unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
-  unsafe { assert_unchecked(s <= K::Word::BITS - 1) };
-  let k = slot(h, s);
-  let a = unsafe { t.add(k) };
-  let b = unsafe { a.add(1) };
-  let v = unsafe { slot_hash(b).read() };
-  if v >= h {
-    let u = unsafe { slot_hash(a).read() };
-    let p = select_unpredictable(u >= h, a, b);
-    let x = select_unpredictable(u >= h, u, v);
-    (p, x)
-  } else {
-    let mut a = a;
-    let mut b;
-    let mut v;
-    loop {
-      a = unsafe { a.add(2) };
-      b = unsafe { a.add(1) };
-      v = unsafe { slot_hash(b).read() };
-      if v >= h { break }
-    }
-    let u = unsafe { slot_hash(a).read() };
-    let p = select_unpredictable(u >= h, a, b);
-    let x = select_unpredictable(u >= h, u, v);
-    (p, x)
-  }
-}
-*/
-
-/*
-#[inline(always)]
-unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
-  unsafe { assert_unchecked(s <= K::Word::BITS - 1) };
-  let k = slot(h, s);
-  let b = unsafe { t.add(k + 1) };
-  let v = unsafe { slot_hash(b).read() };
-  if v >= h {
-    let a = unsafe { t.add(k) };
-    let u = unsafe { slot_hash(a).read() };
-    let p = select_unpredictable(u >= h, a, b);
-    let x = select_unpredictable(u >= h, u, v);
-    (p, x)
-  } else {
-    let mut p = b;
-    let mut x;
-    loop {
-      p = unsafe { p.add(1) };
-      x = unsafe { slot_hash(p).read() };
-      if x >= h { break }
-    }
-    (p, x)
-  }
-}
-*/
-
 #[inline(always)]
 unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>) -> V {
   let value = unsafe { slot_data(p).read() };
@@ -282,7 +219,6 @@ unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>)
   unsafe { slot_data(b).copy_from_nonoverlapping(slot_data(c), 1) };
   let mut u = slot(x, s);
   let mut v = slot(y, s);
-  let mut p = select_unpredictable(u < i, c, b);
   while u < i && v <= i && y != K::Word::MAX {
     i = i + 2;
     a = c;
@@ -297,30 +233,9 @@ unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>)
     unsafe { slot_data(b).copy_from_nonoverlapping(slot_data(c), 1) };
     u = slot(x, s);
     v = slot(y, s);
-    p = select_unpredictable(u < i, c, b);
   }
+  let mut p = select_unpredictable(u < i, c, b);
   unsafe { slot_hash(p).write(K::Word::MAX) };
-  value
-}
-
-#[inline(always)]
-unsafe fn remove_at0<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>) -> V {
-  let value = unsafe { slot_data(p).read() };
-  let mut p = p;
-  let mut q;
-  let mut i = unsafe { p.offset_from_unsigned(t) };
-  loop {
-    q = p;
-    p = unsafe { p.add(1) };
-    i = i + 1;
-    let x = unsafe { slot_hash(p).read() };
-    if ! (slot(x, s) < i && /* likely */ x != K::Word::MAX) { break }
-    unsafe { slot_hash(q).write(x) };
-    unsafe { slot_data(q).write(slot_data(p).read()) };
-    // NOTE: We could do the loop exit test here instead, with the modification
-    // that we read data as MaybeUninit<V>.
-  }
-  unsafe { slot_hash(q).write(K::Word::MAX) };
   value
 }
 
@@ -675,23 +590,6 @@ impl<K: Key, V> IntMap<K, V> {
     } else {
       self.slack += 1;
       Some(unsafe { remove_at(t, s, p.0) })
-    }
-  }
-
-  /// Removes the given key from the map. Returns the previous value associated
-  /// with the given key, if one was present.
-  #[inline(always)]
-  pub fn remove0(&mut self, key: K) -> Option<V> {
-    let t = self.table.cast_mut();
-    let s = self.shift;
-    let h = hash(key, &self.hash);
-    if is_uninit_null(t, s) { return None }
-    let p = unsafe { search(t, s, h) };
-    if p.1 != h {
-      None
-    } else {
-      self.slack += 1;
-      Some(unsafe { remove_at0(t, s, p.0) })
     }
   }
 

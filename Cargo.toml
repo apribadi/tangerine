@@ -34,10 +34,14 @@ ahash = "0.8.12"
 divan = "0.1.21"
 expect-test = "1.5.1"
 foldhash = "0.2.0"
-rustc-hash = "2.1.2"
-mimalloc = "0.1.50"
-# probemap = "0.1.10"
 intmap = "3.1.3"
+mimalloc = "0.1.50"
+rustc-hash = "2.1.2"
+sparse-hash-map = "0.1.0"
+# probemap = "0.1.10"
+# hop-hash = "0.1.0"
+# leapfrog = "0.3.3"
+# bathroom = { git = "https://github.com/minikin/bathroom.git" }
 
 [profile.release]
 

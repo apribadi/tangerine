@@ -102,11 +102,6 @@ pub fn remove(t: &mut IntMap<Key, Value>, k: Key) -> Option<Value> {
 }
 
 #[inline(never)]
-pub fn remove0(t: &mut IntMap<Key, Value>, k: Key) -> Option<Value> {
-  t.remove0(k)
-}
-
-#[inline(never)]
 pub fn clear(t: &mut IntMap<Key, Value>) {
   t.clear();
 }

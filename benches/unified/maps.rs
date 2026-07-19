@@ -5,7 +5,7 @@ pub(crate) trait Map<K, V> {
 
   fn get(&self, _: K) -> Option<&V>;
 
-  fn insert(&mut self, _: K, _: V) -> Option<V>;
+  fn insert(&mut self, _: K, _: V);
 
   fn remove(&mut self, _: K) -> Option<V>;
 
@@ -33,8 +33,8 @@ where
   }
 
   #[inline(always)]
-  fn insert(&mut self, k: T, v: V) -> Option<V> {
-    tangerine::map::IntMap::insert(self, k.into(), v)
+  fn insert(&mut self, k: T, v: V) {
+    let _: Option<_> = tangerine::map::IntMap::insert(self, k.into(), v);
   }
 
   #[inline(always)]
@@ -70,8 +70,8 @@ where
   }
 
   #[inline(always)]
-  fn insert(&mut self, k: T, v: V) -> Option<V> {
-    std::collections::HashMap::insert(self, k.into(), v)
+  fn insert(&mut self, k: T, v: V) {
+    let _: Option<_> = std::collections::HashMap::insert(self, k.into(), v);
   }
 
   #[inline(always)]
@@ -105,8 +105,8 @@ where
   }
 
   #[inline(always)]
-  fn insert(&mut self, k: K, v: V) -> Option<V> {
-    intmap::IntMap::insert(self, K::from(k), v)
+  fn insert(&mut self, k: K, v: V) {
+    let _: Option<_> = intmap::IntMap::insert(self, K::from(k), v);
   }
 
   #[inline(always)]
@@ -117,5 +117,40 @@ where
   #[inline(always)]
   fn for_each_value<F: FnMut(&V)>(&self, f: F) {
     intmap::IntMap::values(self).for_each(f)
+  }
+}
+
+impl<K, V> Map<K, V> for sparse_hash_map::SparseMap<K, V>
+where
+  K: std::hash::Hash + Copy + Eq,
+{
+  #[inline(always)]
+  fn new() -> Self {
+    sparse_hash_map::SparseMap::new()
+  }
+
+  #[inline(always)]
+  fn len(&self) -> usize {
+    sparse_hash_map::SparseMap::len(self)
+  }
+
+  #[inline(always)]
+  fn get(&self, k: K) -> Option<&V> {
+    sparse_hash_map::SparseMap::get(self, &K::from(k))
+  }
+
+  #[inline(always)]
+  fn insert(&mut self, k: K, v: V) {
+    let _: (_, bool) = sparse_hash_map::SparseMap::insert_or_assign(self, K::from(k), v);
+  }
+
+  #[inline(always)]
+  fn remove(&mut self, k: K) -> Option<V> {
+    sparse_hash_map::SparseMap::remove(self, &K::from(k))
+  }
+
+  #[inline(always)]
+  fn for_each_value<F: FnMut(&V)>(&self, f: F) {
+    sparse_hash_map::SparseMap::values(self).for_each(f)
   }
 }
