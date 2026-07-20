@@ -96,6 +96,11 @@ unsafe fn slot_data<K: Key, V>(p: *mut Slot<K, V>) -> *mut V {
 }
 
 #[inline(always)]
+fn cast_uninit<T>(p: *mut T) -> *mut MaybeUninit<T> {
+  p.cast()
+}
+
+#[inline(always)]
 const fn allocation_max_num_slots<K: Key, V>() -> usize {
   isize::MAX as usize / size_of::<Slot<K, V>>()
 }
@@ -241,17 +246,34 @@ unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>)
 }
 
 #[inline(always)]
-unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, x: K::Word, h: K::Word, value: V) -> *mut Slot<K, V> {
-  unsafe { slot_hash(p).write(h) };
-  let mut p = p;
-  let mut x = x;
-  let mut y = value;
-  while x != K::Word::MAX {
-    y = unsafe { slot_data(p).replace(y) };
-    p = unsafe { p.add(1) };
-    x = unsafe { slot_hash(p).replace(x) };
+unsafe fn insert_at<K: Key, V>(p: *mut Slot<K, V>, u: K::Word, h: K::Word, value: V) -> *mut Slot<K, V> {
+  let mut x = h;
+  let mut y = MaybeUninit::new(value);
+  let mut a = p;
+  let mut b = unsafe { p.add(1) };
+  let mut u = u;
+  let mut f = unsafe { cast_uninit(slot_data(a)).read() };
+  let mut v = unsafe { slot_hash(b).read() };
+  let mut p = select_unpredictable(u == K::Word::MAX, a, b);
+  while u != K::Word::MAX && v != K::Word::MAX {
+    let g = unsafe { cast_uninit(slot_data(b)).read() };
+    unsafe { slot_hash(a).write(x) };
+    unsafe { cast_uninit(slot_data(a)).write(y) };
+    unsafe { slot_hash(b).write(u) };
+    unsafe { cast_uninit(slot_data(b)).write(f) };
+    x = v;
+    y = g;
+    a = unsafe { a.add(2) };
+    b = unsafe { b.add(2) };
+    u = unsafe { slot_hash(a).read() };
+    f = unsafe { cast_uninit(slot_data(a)).read() };
+    v = unsafe { slot_hash(b).read() };
+    p = select_unpredictable(u == K::Word::MAX, a, b);
   }
-  unsafe { slot_data(p).write(y) };
+  unsafe { slot_hash(p).write(u) };
+  unsafe { cast_uninit(slot_data(p)).write(f) };
+  unsafe { slot_hash(a).write(x) };
+  unsafe { cast_uninit(slot_data(a)).write(y) };
   p
 }
 
@@ -479,12 +501,12 @@ impl<K: Key, V> IntMap<K, V> {
     let mut i = 0;
     loop {
       let x = unsafe { slot_hash(p).read() };
-      let y = unsafe { slot_data(p).cast::<MaybeUninit<V>>().read() };
+      let y = unsafe { cast_uninit(slot_data(p)).read() };
       let k = slot(x, new_s);
       let k = select_unpredictable(i > k, i, k);
       let a = unsafe { new_t.add(k) };
       unsafe { slot_hash(a).write(x) };
-      unsafe { slot_data(a).cast::<MaybeUninit<V>>().write(y) };
+      unsafe { cast_uninit(slot_data(a)).write(y) };
       p = unsafe { p.add(1) };
       i = select_unpredictable(x != K::Word::MAX, k + 1, i);
       if p > old_z { break }
@@ -922,14 +944,14 @@ impl<'a, K: Key, V> VacantEntry<'a, K, V> {
     let t = self.map.table.cast_mut();
     let s = self.map.shift;
     let p = self.pos;
-    let x = self.occupant;
+    let u = self.occupant;
     let h = self.hash;
     let inserted_at =
       if is_uninit(t, s) {
         self.map.insert_init(h, value)
       } else {
         let q = p;
-        let p = unsafe { insert_at(p, x, h, value) };
+        let p = unsafe { insert_at(p, u, h, value) };
         let r = self.map.slack;
         let z = self.map.limit.cast_mut();
         if p == z || r == 0 {

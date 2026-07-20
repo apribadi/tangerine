@@ -250,3 +250,8 @@ pub fn entry_dec(t: &mut IntMap<Key, Value>, key: Key) {
 pub fn std_remove(t: &mut std::collections::HashMap<Key, Value, foldhash::fast::RandomState>, k: Key) -> Option<Value> {
   t.remove(&k)
 }
+
+#[inline(never)]
+pub fn std_insert(t: &mut std::collections::HashMap<Key, Value, foldhash::fast::RandomState>, k: Key, v: Value) -> Option<Value> {
+  t.insert(k, v)
+}
