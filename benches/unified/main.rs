@@ -230,20 +230,54 @@ fn bench_insert<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, working_set: 
   args = ARGS,
   sample_count = SAMPLE_COUNT,
   types = [
-    std::collections::HashMap<NonZeroU32, NonZeroU32, foldhash::fast::RandomState>,
-    // intmap::IntMap<NonZeroU32, NonZeroU32>,
-    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
-    // sparse_hash_map::SparseMap<NonZeroU32, NonZeroU32>,
+    std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
+    intmap::IntMap<NonZeroU32, u32>,
+    tangerine::map::IntMap<NonZeroU32, u32>,
   ])]
-fn bench_update<T: Map<NonZeroU32, NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
+fn bench_update_throughput<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
   #[inline(never)]
-  fn go<T: Map<NonZeroU32, NonZeroU32>>(t: &mut [(T, KeyGen, KeyGen)]) {
+  fn go<T: Map<NonZeroU32, u32>>(t: &mut [(T, KeyGen, KeyGen)]) -> u32 {
+    let mut x = 0u32;
     for _ in 0 .. 200 {
       for &mut (ref mut t, ref mut a, ref mut b) in t.iter_mut() {
         for _ in 0 .. 250 {
-          if let Some(y) = t.remove(a.next()) {
-            t.insert(y, b.next());
-          }
+          if let Some(y) = t.remove(a.next()) { x ^= y; } else { panic!() }
+          t.insert(b.next(), b.peek().get());
+        }
+      }
+    }
+    x
+  }
+  let sizes = sizes_from_working_set(working_set);
+  let mut t =
+    sizes.map(|m| {
+      let mut t = T::new();
+      let mut a = KeyGen::new();
+      for _ in 0 .. m {
+        t.insert(a.next(), a.peek().get());
+      }
+      (t, KeyGen::new(), a)
+    });
+  bencher.bench_local(|| go(black_box(&mut t)));
+}
+
+#[divan::bench(
+  args = ARGS,
+  sample_count = SAMPLE_COUNT,
+  types = [
+    std::collections::HashMap<NonZeroU32, NonZeroU32, foldhash::fast::RandomState>,
+    intmap::IntMap<NonZeroU32, NonZeroU32>,
+    tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
+    // sparse_hash_map::SparseMap<NonZeroU32, NonZeroU32>,
+  ])]
+fn bench_update_mixed<T: Map<NonZeroU32, NonZeroU32>>(bencher: Bencher<'_, '_>, working_set: usize) {
+  #[inline(never)]
+  fn go<T: Map<NonZeroU32, NonZeroU32>>(t: &mut [(T, NonZeroU32, KeyGen)]) {
+    for _ in 0 .. 200 {
+      for &mut (ref mut t, ref mut a, ref mut b) in t.iter_mut() {
+        for _ in 0 .. 250 {
+          if let Some(y) = t.remove(*a) { *a = y; } else { panic!() }
+          t.insert(b.next(), b.peek());
         }
       }
     }
@@ -253,14 +287,10 @@ fn bench_update<T: Map<NonZeroU32, NonZeroU32>>(bencher: Bencher<'_, '_>, workin
     sizes.map(|m| {
       let mut t = T::new();
       let mut a = KeyGen::new();
-      let mut b = KeyGen::new();
       for _ in 0 .. m {
-        let _ = a.next();
+        t.insert(a.next(), a.peek());
       }
-      for _ in 0 .. m {
-        t.insert(b.next(), a.next());
-      }
-      (t, KeyGen::new(), a)
+      (t, NonZeroU32::MIN, a)
     });
   bencher.bench_local(|| go(black_box(&mut t)));
 }
