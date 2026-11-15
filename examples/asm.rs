@@ -92,11 +92,6 @@ pub fn insert(t: &mut IntMap<Key, Value>, k: Key, v: Value) -> Option<Value> {
 }
 
 #[inline(never)]
-pub fn insert0(t: &mut IntMap<Key, Value>, k: Key, v: Value) -> Option<Value> {
-  t.insert0(k, v)
-}
-
-#[inline(never)]
 pub fn remove(t: &mut IntMap<Key, Value>, k: Key) -> Option<Value> {
   t.remove(k)
 }

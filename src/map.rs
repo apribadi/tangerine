@@ -6,10 +6,6 @@
 // consider unrolling grow loop
 //
 
-// TODO:
-//
-// unroll insert loop
-
 use alloc::alloc::Layout;
 use alloc::alloc::alloc;
 use alloc::alloc::dealloc;
@@ -18,7 +14,6 @@ use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::fmt::Formatter;
 use core::fmt;
-use core::hint::assert_unchecked;
 use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
@@ -75,7 +70,7 @@ pub struct VacantEntry<'a, K: Key, V> {
 }
 
 #[repr(C, align(64))]
-struct Stub([u8; 192]);
+struct Stub([u8; 256]);
 
 static STUB: Stub = Stub([0xff; _]);
 
@@ -146,8 +141,10 @@ const fn initial_limit<K:Key, V>() -> *const Slot<K, V> {
 
 #[inline(always)]
 const fn is_stub_ok<K: Key, V>() -> bool {
-  align_of::<[Slot<K, V>; 3]>() <= align_of::<Stub>()
-    && size_of::<[Slot<K, V>; 3]>() <= size_of::<Stub>()
+  // - two slots for index 0 & 1
+  // - two slots for overflow
+  align_of::<[Slot<K, V>; 4]>() <= align_of::<Stub>()
+    && size_of::<[Slot<K, V>; 4]>() <= size_of::<Stub>()
 }
 
 #[inline(always)]
@@ -192,9 +189,24 @@ fn num_slots<K: Key, V>(t: *mut Slot<K, V>, z: *mut Slot<K, V>) -> usize {
   n
 }
 
+
+#[cfg(feature = "compact-code")]
 #[inline(always)]
 unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
-  unsafe { assert_unchecked(s <= K::Word::BITS - 1) };
+  let k = slot(h, s);
+  let mut p = unsafe { t.add(k) };
+  let mut x;
+  loop {
+    x = unsafe { slot_hash(p).read() };
+    if x >= h { break }
+    p = unsafe { p.add(1) };
+  }
+  (p, x)
+}
+
+#[cfg(not(feature = "compact-code"))]
+#[inline(always)]
+unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut Slot<K, V>, K::Word) {
   let k = slot(h, s);
   let mut a = unsafe { t.add(k) };
   let mut b = unsafe { a.add(1) };
@@ -210,6 +222,26 @@ unsafe fn search<K: Key, V>(t: *mut Slot<K, V>, s: usize, h: K::Word) -> (*mut S
   (p, x)
 }
 
+#[cfg(feature = "compact-code")]
+#[inline(always)]
+unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>) -> V {
+  let value = unsafe { slot_data(p).read() };
+  let mut i = unsafe { p.offset_from_unsigned(t) };
+  let mut p = p;
+  loop {
+    let a = unsafe { p.add(1) };
+    let x = unsafe { slot_hash(a).read() };
+    if ! (slot(x, s) <= i && x != K::Word::MAX) { break }
+    unsafe { slot_hash(p).write(x) };
+    unsafe { slot_data(p).copy_from_nonoverlapping(slot_data(a), 1) };
+    i = i + 1;
+    p = a;
+  }
+  unsafe { slot_hash(p).write(K::Word::MAX) };
+  value
+}
+
+#[cfg(not(feature = "compact-code"))]
 #[inline(always)]
 unsafe fn remove_at<K: Key, V>(t: *mut Slot<K, V>, s: usize, p: *mut Slot<K, V>) -> V {
   let value = unsafe { slot_data(p).read() };

@@ -215,11 +215,15 @@ fn bench_insert<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, working_set: 
   let sizes = sizes_from_working_set(working_set);
   let mut t =
     sizes.map(|m| {
+      /*
       let mut t = T::new();
       let mut a = KeyGen::new();
       for _ in 0 .. m.saturating_sub(100_000) {
         t.insert(a.next(), a.peek().get());
       }
+      */
+      let t = T::new();
+      let a = KeyGen::new();
       let n = t.len();
       (t, a, n, m)
     });
