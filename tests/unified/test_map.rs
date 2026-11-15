@@ -6,7 +6,6 @@ use std::fmt::Write;
 use std::num::NonZeroU128;
 use std::num::NonZeroU32;
 use std::num::NonZeroU8;
-use std::num::NonZeroU16;
 use std::write;
 use tangerine::map::IntMap;
 use tangerine::map;
@@ -535,6 +534,7 @@ fn test_255u8() {
 #[cfg(not(miri))]
 #[test]
 fn test_65535u16() {
+  use std::num::NonZeroU16;
   let mut s = String::new();
   let mut g = Rng::new(NonZeroU128::MIN);
   let mut t = IntMap::with_seed(&mut g);

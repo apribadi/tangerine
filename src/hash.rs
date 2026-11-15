@@ -10,6 +10,10 @@ pub(crate) trait Hash<T>: Copy {
 
 // TODO: x86-64
 cfg_select! {
+  feature = "anyarch-hash" => {
+    #[path = "hash_anyarch.rs"]
+    pub(crate) mod backend;
+  }
   all(
       target_arch = "aarch64",
       target_feature = "aes",
@@ -21,7 +25,7 @@ cfg_select! {
     pub(crate) mod backend;
   }
   _ => {
-    #[path = "hash_unknown.rs"]
+    #[path = "hash_anyarch.rs"]
     pub(crate) mod backend;
   }
 }

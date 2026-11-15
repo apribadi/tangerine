@@ -79,6 +79,7 @@ impl KeyGen {
   sample_count = SAMPLE_COUNT,
   types = [
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
+    probemap::HashMap<NonZeroU32, u32>,
     // intmap::IntMap<NonZeroU32, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
     // sparse_hash_map::SparseMap<NonZeroU32, u32>,
@@ -117,6 +118,7 @@ fn bench_lookup_throughput<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, wo
   sample_count = SAMPLE_COUNT,
   types = [
     std::collections::HashMap<NonZeroU32, NonZeroU32, foldhash::fast::RandomState>,
+    probemap::HashMap<NonZeroU32, NonZeroU32>,
     // intmap::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     // sparse_hash_map::SparseMap<NonZeroU32, NonZeroU32>,
@@ -154,6 +156,7 @@ fn bench_lookup_latency<T: Map<NonZeroU32, NonZeroU32>>(bencher: Bencher<'_, '_>
   sample_count = SAMPLE_COUNT,
   types = [
     std::collections::HashMap<NonZeroU32, NonZeroU32, foldhash::fast::RandomState>,
+    probemap::HashMap<NonZeroU32, NonZeroU32>,
     // intmap::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
   ])]
@@ -193,7 +196,8 @@ fn bench_lookup_mixed<T: Map<NonZeroU32, NonZeroU32>>(bencher: Bencher<'_, '_>, 
   sample_count = SAMPLE_COUNT,
   types = [
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
-    intmap::IntMap<NonZeroU32, u32>,
+    probemap::HashMap<NonZeroU32, u32>,
+    // intmap::IntMap<NonZeroU32, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
   ])]
 fn bench_insert<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -235,7 +239,8 @@ fn bench_insert<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, working_set: 
   sample_count = SAMPLE_COUNT,
   types = [
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
-    intmap::IntMap<NonZeroU32, u32>,
+    probemap::HashMap<NonZeroU32, u32>,
+    // intmap::IntMap<NonZeroU32, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
   ])]
 fn bench_update_throughput<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, working_set: usize) {
@@ -270,7 +275,8 @@ fn bench_update_throughput<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>, wo
   sample_count = SAMPLE_COUNT,
   types = [
     std::collections::HashMap<NonZeroU32, NonZeroU32, foldhash::fast::RandomState>,
-    intmap::IntMap<NonZeroU32, NonZeroU32>,
+    probemap::HashMap<NonZeroU32, NonZeroU32>,
+    // intmap::IntMap<NonZeroU32, NonZeroU32>,
     tangerine::map::IntMap<NonZeroU32, NonZeroU32>,
     // sparse_hash_map::SparseMap<NonZeroU32, NonZeroU32>,
   ])]
@@ -303,6 +309,7 @@ fn bench_update_mixed<T: Map<NonZeroU32, NonZeroU32>>(bencher: Bencher<'_, '_>, 
   sample_count = SAMPLE_COUNT,
   types = [
     std::collections::HashMap<NonZeroU32, u32, foldhash::fast::RandomState>,
+    probemap::HashMap<NonZeroU32, u32>,
     // intmap::IntMap<NonZeroU32, u32>,
     tangerine::map::IntMap<NonZeroU32, u32>,
   ])]
@@ -323,6 +330,7 @@ fn bench_iter_value<T: Map<NonZeroU32, u32>>(bencher: Bencher<'_, '_>) {
   sample_count = SAMPLE_COUNT,
   types = [
     std::collections::HashMap<NonZeroU8, (), foldhash::fast::RandomState>,
+    probemap::HashMap<NonZeroU8, ()>,
     // intmap::IntMap<NonZeroU8, ()>,
     tangerine::map::IntMap<NonZeroU8, ()>,
   ])]

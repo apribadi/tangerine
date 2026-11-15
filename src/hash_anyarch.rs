@@ -1,11 +1,8 @@
 use rand_core::Rng;
 use crate::hash::Hash;
-use crate::hash::internal::Backend;
-use crate::util::invert_u32;
-use crate::util::invert_u64;
-use crate::util::invert_u8;
-
-pub(crate) const BACKEND: Backend = Backend::Basic;
+use crate::minv::invert_mul_u32;
+use crate::minv::invert_mul_u64;
+use crate::minv::invert_mul_u8;
 
 pub(crate) struct HashU8(&'static [[u8; 256]; 2], u8, u8);
 
@@ -13,14 +10,14 @@ impl Hash<u8> for HashU8 {
   #[inline(always)]
   fn new(g: &mut impl Rng) -> Self {
     let a = 1 | g.next_u32() as u8;
-    let b = invert_u8(a);
+    let b = invert_mul_u8(a);
     Self(&HASH_U8_SHUFFLE, a, b)
   }
 
   #[inline(always)]
   fn new_nondet() -> Self {
     let a = 1 | dandelion::thread_local::u32() as u8;
-    let b = invert_u8(a);
+    let b = invert_mul_u8(a);
     Self(&HASH_U8_SHUFFLE, a, b)
   }
 
@@ -55,7 +52,7 @@ impl Hash<u32> for HashU32 {
     let n = g.next_u64();
     let a = 1 | (n as u32);
     let b = 1 | ((n >> 32) as u32);
-    let x = invert_u32(a.wrapping_mul(b));
+    let x = invert_mul_u32(a.wrapping_mul(b));
     let c = x.wrapping_mul(a);
     let d = x.wrapping_mul(b);
     Self((a, b), (c, d))
@@ -66,7 +63,7 @@ impl Hash<u32> for HashU32 {
     let n = dandelion::thread_local::u64();
     let a = 1 | (n as u32);
     let b = 1 | ((n >> 32) as u32);
-    let x = invert_u32(a.wrapping_mul(b));
+    let x = invert_mul_u32(a.wrapping_mul(b));
     let c = x.wrapping_mul(a);
     let d = x.wrapping_mul(b);
     Self((a, b), (c, d))
@@ -106,7 +103,7 @@ impl Hash<u64> for HashU64 {
   fn new(g: &mut impl Rng) -> Self {
     let a = 1 | g.next_u64();
     let b = 1 | g.next_u64();
-    let x = invert_u64(a.wrapping_mul(b));
+    let x = invert_mul_u64(a.wrapping_mul(b));
     let c = x.wrapping_mul(a);
     let d = x.wrapping_mul(b);
     Self((a, b), (c, d))
@@ -117,7 +114,7 @@ impl Hash<u64> for HashU64 {
     let n = dandelion::thread_local::u128();
     let a = 1 | (n as u64);
     let b = 1 | ((n >> 64) as u64);
-    let x = invert_u64(a.wrapping_mul(b));
+    let x = invert_mul_u64(a.wrapping_mul(b));
     let c = x.wrapping_mul(a);
     let d = x.wrapping_mul(b);
     Self((a, b), (c, d))

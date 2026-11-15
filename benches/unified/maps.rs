@@ -101,17 +101,17 @@ where
 
   #[inline(always)]
   fn get(&self, k: K) -> Option<&V> {
-    intmap::IntMap::get(self, K::from(k))
+    intmap::IntMap::get(self, k)
   }
 
   #[inline(always)]
   fn insert(&mut self, k: K, v: V) {
-    let _: Option<_> = intmap::IntMap::insert(self, K::from(k), v);
+    let _: Option<_> = intmap::IntMap::insert(self, k, v);
   }
 
   #[inline(always)]
   fn remove(&mut self, k: K) -> Option<V> {
-    intmap::IntMap::remove(self, K::from(k))
+    intmap::IntMap::remove(self, k)
   }
 
   #[inline(always)]
@@ -136,21 +136,56 @@ where
 
   #[inline(always)]
   fn get(&self, k: K) -> Option<&V> {
-    sparse_hash_map::SparseMap::get(self, &K::from(k))
+    sparse_hash_map::SparseMap::get(self, &k)
   }
 
   #[inline(always)]
   fn insert(&mut self, k: K, v: V) {
-    let _: (_, bool) = sparse_hash_map::SparseMap::insert_or_assign(self, K::from(k), v);
+    let _: (_, bool) = sparse_hash_map::SparseMap::insert_or_assign(self, k, v);
   }
 
   #[inline(always)]
   fn remove(&mut self, k: K) -> Option<V> {
-    sparse_hash_map::SparseMap::remove(self, &K::from(k))
+    sparse_hash_map::SparseMap::remove(self, &k)
   }
 
   #[inline(always)]
   fn for_each_value<F: FnMut(&V)>(&self, f: F) {
     sparse_hash_map::SparseMap::values(self).for_each(f)
+  }
+}
+
+impl<K, V> Map<K, V> for probemap::HashMap<K, V>
+where
+  K: std::hash::Hash + Copy + Eq,
+{
+  #[inline(always)]
+  fn new() -> Self {
+    probemap::HashMap::new()
+  }
+
+  #[inline(always)]
+  fn len(&self) -> usize {
+    probemap::HashMap::len(self)
+  }
+
+  #[inline(always)]
+  fn get(&self, k: K) -> Option<&V> {
+    probemap::HashMap::get(self, &k)
+  }
+
+  #[inline(always)]
+  fn insert(&mut self, k: K, v: V) {
+    let _: Option<V> = probemap::HashMap::insert(self, k, v);
+  }
+
+  #[inline(always)]
+  fn remove(&mut self, k: K) -> Option<V> {
+    probemap::HashMap::remove(self, &k)
+  }
+
+  #[inline(always)]
+  fn for_each_value<F: FnMut(&V)>(&self, f: F) {
+    probemap::HashMap::values(self).for_each(f)
   }
 }

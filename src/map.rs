@@ -6,9 +6,9 @@
 // consider unrolling grow loop
 //
 
+use alloc::alloc::Allocator;
+use alloc::alloc::Global;
 use alloc::alloc::Layout;
-use alloc::alloc::alloc;
-use alloc::alloc::dealloc;
 use alloc::alloc::handle_alloc_error;
 use alloc::boxed::Box;
 use core::fmt::Debug;
@@ -18,6 +18,7 @@ use core::hint::select_unpredictable;
 use core::mem::MaybeUninit;
 use core::mem::needs_drop;
 use core::ops::Index;
+use core::ptr::NonNull;
 use core::ptr::null;
 use core::ptr::null_mut;
 use rand_core::Rng;
@@ -29,41 +30,42 @@ use crate::word::Word;
 /// A high performance hash map keyed by types representable as non-zero
 /// integers.
 #[repr(C)]
-pub struct IntMap<K: Key, V> {
+pub struct IntMap<K: Key, V, A: Allocator = Global> {
   table: *const Slot<K, V>,
   shift: usize,
   slack: usize,
   limit: *const Slot<K, V>,
   hash: K::Hash,
+  alloc: A,
 }
 
-unsafe impl<K: Key + Send, V: Send> Send for IntMap<K, V> {
+unsafe impl<K: Key + Send, V: Send, A: Allocator> Send for IntMap<K, V, A> {
 }
 
-unsafe impl<K: Key + Sync, V: Sync> Sync for IntMap<K, V> {
+unsafe impl<K: Key + Sync, V: Sync, A: Allocator> Sync for IntMap<K, V, A> {
 }
 
 /// A view of an entry in a map, produced by the [`IntMap::entry`] method. It
 /// may either be vacant or occupied.
 #[repr(usize)]
-pub enum Entry<'a, K: Key, V> {
+pub enum Entry<'a, K: Key, V, A: Allocator = Global> {
   /// An occupied entry.
-  Occupied(OccupiedEntry<'a, K, V>),
+  Occupied(OccupiedEntry<'a, K, V, A>),
   /// A vacant entry.
-  Vacant(VacantEntry<'a, K, V>),
+  Vacant(VacantEntry<'a, K, V, A>),
 }
 
 /// A view of an occupied entry in a map.
 #[repr(C)]
-pub struct OccupiedEntry<'a, K: Key, V> {
-  map: &'a mut IntMap<K, V>,
+pub struct OccupiedEntry<'a, K: Key, V, A: Allocator = Global> {
+  map: &'a mut IntMap<K, V, A>,
   pos: *mut Slot<K, V>,
 }
 
 /// A view of a vacant entry in a map.
 #[repr(C)]
-pub struct VacantEntry<'a, K: Key, V> {
-  map: &'a mut IntMap<K, V>,
+pub struct VacantEntry<'a, K: Key, V, A: Allocator = Global> {
+  map: &'a mut IntMap<K, V, A>,
   pos: *mut Slot<K, V>,
   occupant: K::Word,
   hash: K::Word,
@@ -106,6 +108,21 @@ const fn allocation_size<K: Key, V>(num_slots: usize) -> usize {
 }
 
 const CHUNK: usize = 4;
+
+#[inline(always)]
+unsafe fn allocate<A: Allocator>(alloc: &A, layout: Layout) -> *mut u8 {
+  if let Ok(p) = alloc.allocate(layout) {
+    p.as_ptr() as _
+  } else {
+    match handle_alloc_error(layout) {
+    }
+  }
+}
+
+#[inline(always)]
+unsafe fn deallocate<A: Allocator>(alloc: &A, p: *mut u8, layout: Layout) {
+  unsafe { alloc.deallocate(NonNull::new_unchecked(p), layout) }
+}
 
 #[inline(always)]
 const unsafe fn allocation_layout<K: Key, V>(num_slots: usize) -> Layout {
@@ -325,18 +342,33 @@ impl<K: Key, V> IntMap<K, V> {
   /// Creates an empty map, seeding the hash function from a thread-local
   /// random number generator.
   pub fn new() -> Self {
-    dandelion::thread_local::with(|g| Self::with_seed(g))
+    dandelion::thread_local::with(|g| Self::with_seed_in(g, Global))
   }
 
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
   pub fn with_seed(g: &mut impl Rng) -> Self {
+    Self::with_seed_in(g, Global)
+  }
+}
+
+impl<K: Key, V, A: Allocator> IntMap<K, V, A> {
+  /// Creates an empty map. The hash function is seeded from a thread-local
+  /// random number generator. The map uses the given allocator.
+  pub fn new_in(alloc: A) -> Self {
+    dandelion::thread_local::with(|g| Self::with_seed_in(g, alloc))
+  }
+
+  /// Creates an empty map. The hash function is seeded from the given random
+  /// number generator. The map uses the given allocator.
+  pub fn with_seed_in(g: &mut impl Rng, alloc: A) -> Self {
     Self {
       table: initial_table::<K, V>(),
       shift: initial_shift::<K, V>(),
       slack: initial_slack::<K, V>(),
       limit: initial_limit::<K, V>(),
       hash: K::Hash::seed(g),
+      alloc,
     }
   }
 
@@ -448,8 +480,7 @@ impl<K: Key, V> IntMap<K, V> {
     let new_r = capacity::<K, V>(new_s) - 1;
     assert!(new_w <= allocation_max_num_slots::<K, V>());
     let new_l = unsafe { allocation_layout::<K, V>(new_w) };
-    let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
-    if new_t.is_null() { match handle_alloc_error(new_l) { } }
+    let new_t = unsafe { allocate(&self.alloc, new_l) } as *mut Slot<K, V>;
     let new_z = unsafe { new_t.add(new_w - 2) };
     unsafe { init_span(new_t, new_z) };
     let k = slot(h, new_s);
@@ -499,8 +530,7 @@ impl<K: Key, V> IntMap<K, V> {
     assert!(new_w <= allocation_max_num_slots::<K, V>());
     // Allocate.
     let new_l = unsafe { allocation_layout::<K, V>(new_w) };
-    let new_t = unsafe { alloc(new_l) } as *mut Slot<K, V>;
-    if new_t.is_null() { match handle_alloc_error(new_l) { } }
+    let new_t = unsafe { allocate(&self.alloc, new_l) } as *mut Slot<K, V>;
     let new_z = unsafe { new_t.add(new_w - 2) };
     // Update struct fields.
     self.table = new_t;
@@ -527,7 +557,7 @@ impl<K: Key, V> IntMap<K, V> {
       if p > old_z { break }
     }
     // The map is now in a valid state, even if deallocating panics.
-    unsafe { dealloc(old_t as *mut u8, allocation_layout::<K, V>(old_w)) };
+    unsafe { deallocate(&self.alloc, old_t as *mut u8, allocation_layout::<K, V>(old_w)) };
     // Find the newly-inserted value. Note, this was not necessarily at
     // stashed_slot.
     let k = slot(h, new_s);
@@ -596,7 +626,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// Returns a view of the entry in the map corresponding to the given key for
   /// subsequent inspection and modification.
   #[inline(always)]
-  pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
+  pub fn entry(&mut self, key: K) -> Entry<'_, K, V, A> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let h = hash(key, &self.hash);
@@ -725,13 +755,13 @@ impl<K: Key, V> IntMap<K, V> {
         }
       }
     }
-    unsafe { dealloc(t as *mut u8, allocation_layout::<K, V>(w)) };
+    unsafe { deallocate(&self.alloc, t as *mut u8, allocation_layout::<K, V>(w)) };
   }
 
   /// Returns an iterator yielding each key and a reference to its associated
   /// value. The iterator item type is `(K, &V)`.
   #[inline(always)]
-  pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V> {
+  pub fn iter(&self) -> impl ExactSizeIterator<Item = (K, &V)> + use<'_, K, V, A> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
@@ -746,7 +776,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// Returns an iterator yielding each key and a mutable reference to its
   /// associated value. The iterator item type is `(K, &mut V)`.
   #[inline(always)]
-  pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V> {
+  pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (K, &mut V)> + use<'_, K, V, A> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
@@ -760,7 +790,7 @@ impl<K: Key, V> IntMap<K, V> {
 
   /// Returns an iterator yielding each key. The iterator item type is `K`.
   #[inline(always)]
-  pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V> {
+  pub fn keys(&self) -> impl ExactSizeIterator<Item = K> + use<'_, K, V, A> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
@@ -775,7 +805,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// Returns an iterator yielding a reference to each value. The iterator item
   /// type is `&V`.
   #[inline(always)]
-  pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, K, V> {
+  pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + use<'_, K, V, A> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
@@ -789,7 +819,7 @@ impl<K: Key, V> IntMap<K, V> {
   /// Returns an iterator yielding a mutable reference to each value. The
   /// iterator item type is `&mut V`.
   #[inline(always)]
-  pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V> {
+  pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> + use<'_, K, V, A> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
@@ -861,13 +891,13 @@ impl<K: Key, V> IntMap<K, V> {
   }
 }
 
-impl<K: Key, V> Drop for IntMap<K, V> {
+impl<K: Key, V, A: Allocator> Drop for IntMap<K, V, A> {
   fn drop(&mut self) {
     self.reset()
   }
 }
 
-impl<K: Key, V> Index<K> for IntMap<K, V> {
+impl<K: Key, V, A: Allocator> Index<K> for IntMap<K, V, A> {
   type Output = V;
 
   #[inline(always)]
@@ -876,7 +906,7 @@ impl<K: Key, V> Index<K> for IntMap<K, V> {
   }
 }
 
-impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
+impl<'a, K: Key, V, A: Allocator> OccupiedEntry<'a, K, V, A> {
   /// Gets a reference to the value in the entry.
   #[inline(always)]
   pub fn get(&self) -> &V {
@@ -913,7 +943,7 @@ impl<'a, K: Key, V> OccupiedEntry<'a, K, V> {
   }
 }
 
-impl<'a, K: Key, V> VacantEntry<'a, K, V> {
+impl<'a, K: Key, V, A: Allocator> VacantEntry<'a, K, V, A> {
   /// Inserts the given value into the entry, and returns a mutable reference
   /// to it.
   #[inline(always)]
@@ -1003,15 +1033,15 @@ impl<K: Key, V, T, F: FnMut(*mut Slot<K, V>, K::Word) -> T> ExactSizeIterator fo
   }
 }
 
-impl<K: Key, V: Clone> Clone for IntMap<K, V> {
+impl<K: Key, V: Clone, A: Allocator + Clone> Clone for IntMap<K, V, A> {
   fn clone(&self) -> Self {
-    let mut t = Self::new();
+    let mut t = Self::new_in(self.alloc.clone());
     self.iter().for_each(|(x, y)| { let _: Option<V> = t.insert(x, y.clone()); });
     t
   }
 }
 
-impl <K: Key + Debug + Ord, V: Debug> Debug for IntMap<K, V> {
+impl <K: Key + Debug + Ord, V: Debug, A: Allocator> Debug for IntMap<K, V, A> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     let mut a = self.iter().collect::<Box<[(K, &V)]>>();
     a.sort_by(|&(ref x, _), &(ref y, _)| x.cmp(y));
@@ -1019,13 +1049,13 @@ impl <K: Key + Debug + Ord, V: Debug> Debug for IntMap<K, V> {
   }
 }
 
-impl<K: Key, V> Default for IntMap<K, V> {
+impl<K: Key, V, A: Allocator + Default> Default for IntMap<K, V, A> {
   fn default() -> Self {
-    Self::new()
+    Self::new_in(A::default())
   }
 }
 
-impl<K: Key, V> Extend<(K, V)> for IntMap<K, V> {
+impl<K: Key, V, A: Allocator> Extend<(K, V)> for IntMap<K, V, A> {
   fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
     iter.into_iter().for_each(|(x, y)| { let _: Option<V> = self.insert(x, y); });
   }
@@ -1050,26 +1080,27 @@ pub mod internal {
 
   #![allow(missing_docs)]
 
+  use alloc::alloc::Allocator;
   use crate::map::IntMap;
   use crate::key::Key;
 
-  pub fn num_slots<K: Key, V>(t: &IntMap<K, V>) -> usize {
+  pub fn num_slots<K: Key, V, A: Allocator>(t: &IntMap<K, V, A>) -> usize {
     t.num_slots()
   }
 
-  pub fn allocation_size<K: Key, V>(t: &IntMap<K, V>) -> usize {
+  pub fn allocation_size<K: Key, V, A: Allocator>(t: &IntMap<K, V, A>) -> usize {
     t.allocation_size()
   }
 
-  pub fn load_factor<K: Key, V>(t: &IntMap<K, V>) -> f64 {
+  pub fn load_factor<K: Key, V, A: Allocator>(t: &IntMap<K, V, A>) -> f64 {
     t.load_factor()
   }
 
-  pub fn probe_count_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 20] {
+  pub fn probe_count_histogram<K: Key, V, A: Allocator>(t: &IntMap<K, V, A>) -> [usize; 20] {
     t.probe_count_histogram()
   }
 
-  pub fn shift_count_histogram<K: Key, V>(t: &IntMap<K, V>) -> [usize; 20] {
+  pub fn shift_count_histogram<K: Key, V, A: Allocator>(t: &IntMap<K, V, A>) -> [usize; 20] {
     t.shift_count_histogram()
   }
 }

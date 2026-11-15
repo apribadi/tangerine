@@ -8,7 +8,7 @@ name = "tangerine-intmap"
 version = "0.1.0"
 
 [features]
-# use-basic-hash = []
+anyarch-hash = []
 compact-code = []
 
 [lib]
@@ -36,10 +36,10 @@ divan = "0.1.21"
 expect-test = "1.5.1"
 foldhash = "0.2.0"
 intmap = "3.1.3"
-mimalloc = "0.1.50"
-rustc-hash = "2.1.2"
-sparse-hash-map = "0.1.0"
-# probemap = "0.1.10"
+mimalloc = "0.1.52"
+rustc-hash = "2.1.3"
+sparse-hash-map = "0.2.0"
+probemap = "0.1.12"
 # hop-hash = "0.1.0"
 # leapfrog = "0.3.3"
 # bathroom = { git = "https://github.com/minikin/bathroom.git" }
