@@ -1,6 +1,8 @@
 //! This module provides a high performance hash set containing types
 //! representable as non-zero integers.
 
+use alloc::alloc::Allocator;
+use alloc::alloc::Global;
 use alloc::boxed::Box;
 use core::fmt::Debug;
 use core::fmt::Formatter;
@@ -12,8 +14,8 @@ use crate::map::IntMap;
 
 /// A high performance hash set containing types representable as non-zero
 /// integers.
-pub struct IntSet<T: Key> {
-  map: IntMap<T, ()>,
+pub struct IntSet<T: Key, A: Allocator = Global> {
+  map: IntMap<T, (), A>,
 }
 
 impl<T: Key> IntSet<T> {
@@ -27,6 +29,20 @@ impl<T: Key> IntSet<T> {
   /// number generator.
   pub fn with_seed(rng: &mut impl Rng) -> Self {
     Self { map: IntMap::with_seed(rng) }
+  }
+}
+
+impl<T: Key, A: Allocator> IntSet<T, A> {
+  /// Creates an empty set. The hash function is seeded from a thread-local
+  /// random number generator. The set uses the given allocator.
+  pub fn new_in(alloc: A) -> Self {
+    Self { map: IntMap::new_in(alloc) }
+  }
+
+  /// Creates an empty set. The hash function is seeded from the given random
+  /// number generator. The set uses the given allocator.
+  pub fn with_seed_in(rng: &mut impl Rng, alloc: A) -> Self {
+    Self { map: IntMap::with_seed_in(rng, alloc) }
   }
 
   /// Returns the number of values.
@@ -80,18 +96,18 @@ impl<T: Key> IntSet<T> {
   /// Returns an iterator yielding each value from the set. The iterator item
   /// type is `T`.
   #[inline(always)]
-  pub fn iter(&self) -> impl ExactSizeIterator<Item = T> + use<'_, T> {
+  pub fn iter(&self) -> impl ExactSizeIterator<Item = T> + use<'_, T, A> {
     self.map.keys()
   }
 }
 
-impl<T: Key> Clone for IntSet<T> {
+impl<T: Key, A: Allocator + Clone> Clone for IntSet<T, A> {
   fn clone(&self) -> Self {
-    Self::from_iter(self.iter())
+    Self { map: self.map.clone() }
   }
 }
 
-impl <T: Key + Debug + Ord> Debug for IntSet<T> {
+impl<T: Key + Debug + Ord, A: Allocator> Debug for IntSet<T, A> {
   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     let mut a = self.iter().collect::<Box<[T]>>();
     a.sort();
@@ -99,13 +115,13 @@ impl <T: Key + Debug + Ord> Debug for IntSet<T> {
   }
 }
 
-impl<T: Key> Default for IntSet<T> {
+impl<T: Key, A: Allocator + Default> Default for IntSet<T, A> {
   fn default() -> Self {
-    Self::new()
+    Self { map: IntMap::default() }
   }
 }
 
-impl<T: Key> Extend<T> for IntSet<T> {
+impl<T: Key, A: Allocator> Extend<T> for IntSet<T, A> {
   fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
     iter.into_iter().for_each(|x| { let _: bool = self.insert(x); });
   }

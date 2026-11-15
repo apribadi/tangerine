@@ -347,8 +347,8 @@ impl<K: Key, V> IntMap<K, V> {
 
   /// Creates an empty map, seeding the hash function from the given random
   /// number generator.
-  pub fn with_seed(g: &mut impl Rng) -> Self {
-    Self::with_seed_in(g, Global)
+  pub fn with_seed(rng: &mut impl Rng) -> Self {
+    Self::with_seed_in(rng, Global)
   }
 }
 
@@ -361,13 +361,13 @@ impl<K: Key, V, A: Allocator> IntMap<K, V, A> {
 
   /// Creates an empty map. The hash function is seeded from the given random
   /// number generator. The map uses the given allocator.
-  pub fn with_seed_in(g: &mut impl Rng, alloc: A) -> Self {
+  pub fn with_seed_in(rng: &mut impl Rng, alloc: A) -> Self {
     Self {
       table: initial_table::<K, V>(),
       shift: initial_shift::<K, V>(),
       slack: initial_slack::<K, V>(),
       limit: initial_limit::<K, V>(),
-      hash: K::Hash::seed(g),
+      hash: K::Hash::seed(rng),
       alloc,
     }
   }
