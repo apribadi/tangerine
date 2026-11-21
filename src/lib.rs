@@ -5,7 +5,7 @@ pub mod key;
 pub mod map;
 pub mod set;
 
-mod minv;
+mod invert_mul;
 mod word;
 mod hash;
 

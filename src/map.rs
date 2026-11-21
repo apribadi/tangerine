@@ -109,6 +109,8 @@ const fn allocation_size<K: Key, V>(num_slots: usize) -> usize {
 
 const CHUNK: usize = 4;
 
+// NB: `handle_alloc_error` is permitted to unwind.
+//
 #[inline(always)]
 unsafe fn allocate<A: Allocator>(alloc: &A, layout: Layout) -> *mut u8 {
   if let Ok(p) = alloc.allocate(layout) {
@@ -498,7 +500,7 @@ impl<K: Key, V, A: Allocator> IntMap<K, V, A> {
   #[cold]
   fn insert_grow(&mut self, p: *mut Slot<K, V>, h: K::Word) -> *mut V {
     // Stash the item in the last written-to slot so that the table is in a
-    // valid state, even if we panic.
+    // valid state, even if allocation fails.
     let stashed_slot = p;
     let stashed_hash = unsafe { slot_hash(stashed_slot).replace(K::Word::MAX) };
     // Retrieve values for the old table.
@@ -556,7 +558,7 @@ impl<K: Key, V, A: Allocator> IntMap<K, V, A> {
       i = select_unpredictable(x != K::Word::MAX, k + 1, i);
       if p > old_z { break }
     }
-    // The map is now in a valid state, even if deallocating panics.
+    // Deallocate.
     unsafe { deallocate(&self.alloc, old_t as *mut u8, allocation_layout::<K, V>(old_w)) };
     // Find the newly-inserted value. Note, this was not necessarily at
     // stashed_slot.
@@ -726,8 +728,8 @@ impl<K: Key, V, A: Allocator> IntMap<K, V, A> {
   ///
   /// # Panics
   ///
-  /// Panics if [`drop`]ping a value or deallocating memory panics. If that
-  /// happens, the map will be in a valid but otherwise unspecified state.
+  /// Panics if [`drop`]ping a value panics. If that happens, the map will be in
+  /// a valid but otherwise unspecified state.
   pub fn reset(&mut self) {
     let t = self.table.cast_mut();
     let s = self.shift;
@@ -765,11 +767,11 @@ impl<K: Key, V, A: Allocator> IntMap<K, V, A> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.hash;
+    let m = &self.hash;
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
-      f: move |a, x| unsafe { (invert_hash(x, &m), &*slot_data(a)) }
+      f: move |a, x| unsafe { (invert_hash(x, m), &*slot_data(a)) }
     }
   }
 
@@ -780,11 +782,11 @@ impl<K: Key, V, A: Allocator> IntMap<K, V, A> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.hash;
+    let m = &self.hash;
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
-      f: move |a, x| unsafe { (invert_hash(x, &m), &mut *slot_data(a)) }
+      f: move |a, x| unsafe { (invert_hash(x, m), &mut *slot_data(a)) }
     }
   }
 
@@ -794,11 +796,11 @@ impl<K: Key, V, A: Allocator> IntMap<K, V, A> {
     let t = self.table.cast_mut();
     let s = self.shift;
     let r = self.slack;
-    let m = self.hash;
+    let m = &self.hash;
     Iter {
       len: capacity::<K, V>(s) - r,
       pos: t,
-      f: move |_, x| unsafe { invert_hash(x, &m) }
+      f: move |_, x| unsafe { invert_hash(x, m) }
     }
   }
 

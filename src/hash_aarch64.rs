@@ -1,5 +1,8 @@
 use crate::hash::Hash;
-use crate::minv;
+use crate::invert_mul::invert_mul_u16;
+use crate::invert_mul::invert_mul_u32;
+use crate::invert_mul::invert_mul_u64;
+use crate::invert_mul::invert_mul_u8;
 
 #[inline(always)]
 const fn widening_cat(x: u32, y: u32) -> u64 {
@@ -59,7 +62,7 @@ impl Hash<u8> for HashU8 {
   #[inline(always)]
   fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u32() as u8;
-    let b = minv::invert_mul_u8(a);
+    let b = invert_mul_u8(a);
     Self(a, b)
   }
 
@@ -88,7 +91,7 @@ impl Hash<u16> for HashU16 {
   #[inline(always)]
   fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u32() as u16;
-    let b = minv::invert_mul_u16(a);
+    let b = invert_mul_u16(a);
     Self(a, b)
   }
 
@@ -119,8 +122,8 @@ impl Hash<u32> for HashU32 {
   #[inline(always)]
   fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u32();
-    let c = minv::invert_mul_u32(a);
-    let u = u32::MAX.wrapping_mul(c);
+    let c = invert_mul_u32(a);
+    let u = c.wrapping_mul(u32::MAX);
     let b = invert_crc32c_32(u);
     let d = invert_crc32c_96(u);
     Self(a, b, c, d)
@@ -149,7 +152,7 @@ impl Hash<u64> for HashU64 {
   #[inline(always)]
   fn seed(g: &mut impl rand_core::Rng) -> Self {
     let a = 1 | g.next_u64();
-    let b = minv::invert_mul_u64(a);
+    let b = invert_mul_u64(a);
     Self(a, b)
   }
 

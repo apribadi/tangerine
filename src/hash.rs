@@ -1,6 +1,6 @@
 use rand_core::Rng;
 
-pub(crate) trait Hash<T>: Copy {
+pub(crate) trait Hash<T> {
   fn seed(_: &mut impl Rng) -> Self;
 
   fn hash(&self, _: T) -> T;
@@ -9,12 +9,10 @@ pub(crate) trait Hash<T>: Copy {
 }
 
 // TODO: x86-64
+
 cfg_select! {
-  feature = "anyarch-hash" => {
-    #[path = "hash_anyarch.rs"]
-    pub(crate) mod backend;
-  }
   all(
+      not(feature = "anyarch-hash"),
       target_arch = "aarch64",
       target_feature = "aes",
       target_feature = "crc",
